@@ -26,6 +26,10 @@ private val Context.dataStore by preferencesDataStore(name = "wakesteps")
 enum class CalorieMode { TOTAL, ACTIVE }
 enum class DistanceUnit { AUTO, KILOMETERS, MILES }
 
+/**
+ * Only [goal] is chosen in the app. Everything else is tuned in code (the user asks for changes
+ * rather than fiddling with settings), so those values are never read from storage.
+ */
 data class AppSettings(
     val goal: Int = 10_000,
     /** Sleep mostly during the user's night counts (starts a new day) from this long. */
@@ -35,7 +39,7 @@ data class AppSettings(
     val fallbackMinuteOfDay: Int = 5 * 60,
     /** Package whose data to use, or null for all sources (Health Connect's priority order). */
     val sourcePackage: String? = null,
-    /** Refresh the widget as soon as the screen turns on, then every minute while it stays on. */
+    /** Refresh the widget as soon as the screen turns on, then watch for new data while it's on. */
     val liveMode: Boolean = true,
     val calorieMode: CalorieMode = CalorieMode.TOTAL,
     val distanceUnit: DistanceUnit = DistanceUnit.AUTO,
@@ -76,13 +80,6 @@ private const val SYNC_LOG_SIZE = 60
 class Prefs(private val context: Context) {
     private object K {
         val goal = intPreferencesKey("goal")
-        val minNightSleep = intPreferencesKey("min_night_sleep_minutes")
-        val minDaySleep = intPreferencesKey("min_day_sleep_minutes")
-        val fallback = intPreferencesKey("fallback_minute_of_day")
-        val source = stringPreferencesKey("source_package")
-        val live = booleanPreferencesKey("live_refresh")
-        val calorieMode = stringPreferencesKey("calorie_mode")
-        val distanceUnit = stringPreferencesKey("distance_unit")
 
         val snapSteps = longPreferencesKey("snap_steps")
         val snapCalories = doublePreferencesKey("snap_calories")
@@ -185,17 +182,7 @@ class Prefs(private val context: Context) {
     suspend fun currentSnapshot(): Snapshot? = snapshot.first()
 
     suspend fun update(transform: (AppSettings) -> AppSettings) {
-        context.dataStore.edit { p ->
-            val s = transform(p.toSettings())
-            p[K.goal] = s.goal
-            p[K.minNightSleep] = s.minNightSleepMinutes
-            p[K.minDaySleep] = s.minDaySleepMinutes
-            p[K.fallback] = s.fallbackMinuteOfDay
-            if (s.sourcePackage == null) p.remove(K.source) else p[K.source] = s.sourcePackage
-            p[K.live] = s.liveMode
-            p[K.calorieMode] = s.calorieMode.name
-            p[K.distanceUnit] = s.distanceUnit.name
-        }
+        context.dataStore.edit { p -> p[K.goal] = transform(p.toSettings()).goal }
     }
 
     suspend fun saveSnapshot(s: Snapshot) {
@@ -224,19 +211,7 @@ class Prefs(private val context: Context) {
         if (value == null) remove(key) else set(key, value)
     }
 
-    private fun Preferences.toSettings(): AppSettings {
-        val d = AppSettings()
-        return AppSettings(
-            goal = this[K.goal] ?: d.goal,
-            minNightSleepMinutes = this[K.minNightSleep] ?: d.minNightSleepMinutes,
-            minDaySleepMinutes = this[K.minDaySleep] ?: d.minDaySleepMinutes,
-            fallbackMinuteOfDay = this[K.fallback] ?: d.fallbackMinuteOfDay,
-            sourcePackage = this[K.source],
-            liveMode = this[K.live] ?: d.liveMode,
-            calorieMode = enumOr(this[K.calorieMode], d.calorieMode),
-            distanceUnit = enumOr(this[K.distanceUnit], d.distanceUnit),
-        )
-    }
+    private fun Preferences.toSettings(): AppSettings = AppSettings(goal = this[K.goal] ?: AppSettings().goal)
 
     private fun Preferences.toSnapshot(): Snapshot? {
         val start = this[K.snapStart] ?: return null

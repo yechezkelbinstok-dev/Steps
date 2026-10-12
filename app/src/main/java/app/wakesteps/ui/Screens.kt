@@ -1,11 +1,8 @@
 package app.wakesteps.ui
 
-import android.app.TimePickerDialog
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
-import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -28,22 +24,19 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -61,19 +54,15 @@ import app.wakesteps.R
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.EndReason
 import app.wakesteps.core.Format
-import app.wakesteps.core.NightWindow
 import app.wakesteps.core.Overrides
 import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalorieMode
-import app.wakesteps.data.DistanceUnit
 import app.wakesteps.data.TodaySummary
 import app.wakesteps.widget.StepsWidgetReceiver
 import java.time.Duration
 import java.time.Instant
-import java.time.LocalTime
 
-private const val FITBIT_PACKAGE = "com.fitbit.FitbitMobile"
 
 // ---------------------------------------------------------------- Today
 
@@ -153,13 +142,6 @@ private fun TodayContent(t: TodaySummary, settings: AppSettings, onAdjust: (DayW
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (w.startReason == StartReason.FALLBACK) {
-                Text(
-                    stringResource(R.string.today_fallback_note, Format.time(w.start)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-            }
         }
     }
 
@@ -211,11 +193,6 @@ private fun TodayContent(t: TodaySummary, settings: AppSettings, onAdjust: (DayW
 
     AddWidgetCard()
 
-    Text(
-        stringResource(R.string.sync_note),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 /** Offers to pin the widget straight onto the home screen if none is placed yet. */
@@ -358,13 +335,6 @@ private fun CalendarDays(state: UiState, settings: AppSettings) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            Text(
-                stringResource(R.string.history_calendar_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         items(state.calendar, key = { it.date.toEpochDay() }) { day ->
             val progress = if (settings.goal > 0) (day.totals.steps.toFloat() / settings.goal).coerceIn(0f, 1f) else 0f
             Card(Modifier.fillMaxWidth()) {
@@ -485,7 +455,6 @@ private fun AwakeDays(state: UiState, settings: AppSettings, overrides: Override
 
 @Composable
 fun SettingsScreen(
-    state: UiState,
     settings: AppSettings,
     update: ((AppSettings) -> AppSettings) -> Unit,
     actions: Actions,
@@ -496,109 +465,21 @@ fun SettingsScreen(
         Modifier
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Section(stringResource(R.string.set_goal)) {
-            var goal by remember(settings.goal) { mutableFloatStateOf(settings.goal.toFloat()) }
-            Text(Format.number(goal.toLong()), style = MaterialTheme.typography.headlineSmall)
-            Slider(
-                value = goal,
-                onValueChange = { goal = (it / 500f).toInt() * 500f },
-                onValueChangeFinished = { update { s -> s.copy(goal = goal.toInt()) } },
-                valueRange = 1000f..30000f,
-            )
+        var goal by remember(settings.goal) { mutableFloatStateOf(settings.goal.toFloat()) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.set_goal), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(Format.number(goal.toLong()), style = MaterialTheme.typography.titleLarge)
         }
-
-        Section(stringResource(R.string.set_naps), stringResource(R.string.set_naps_help)) {
-            val night = state.today?.night ?: NightWindow.DEFAULT
-            val range = "${Format.clock(night.start)} – ${Format.clock(night.end)}"
-            Text(
-                stringResource(if (night.learned) R.string.set_night_learned else R.string.set_night_default, range),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.height(4.dp))
-            MinutesSlider(
-                label = stringResource(R.string.set_night_min),
-                minutes = settings.minNightSleepMinutes,
-                range = 30f..180f,
-                step = 15,
-                onChange = { m -> update { it.copy(minNightSleepMinutes = m) } },
-            )
-            MinutesSlider(
-                label = stringResource(R.string.set_day_min),
-                minutes = settings.minDaySleepMinutes,
-                range = 180f..480f,
-                step = 30,
-                onChange = { m -> update { it.copy(minDaySleepMinutes = m) } },
-            )
-        }
-
-        Section(stringResource(R.string.set_fallback), stringResource(R.string.set_fallback_help)) {
-            val t = settings.fallbackTime
-            OutlinedButton(onClick = {
-                TimePickerDialog(
-                    context,
-                    { _, h, m -> update { s -> s.copy(fallbackMinuteOfDay = h * 60 + m) } },
-                    t.hour, t.minute, DateFormat.is24HourFormat(context),
-                ).show()
-            }) {
-                Text(
-                    Format.clock(LocalTime.of(t.hour, t.minute)),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
-        }
-
-        Section(stringResource(R.string.set_source), stringResource(R.string.set_source_help)) {
-            val options = buildList {
-                add(null)
-                addAll(state.sources)
-                settings.sourcePackage?.let { if (it !in state.sources) add(it) }
-            }
-            Choice(
-                options = options.map { it to sourceLabel(it) },
-                selected = settings.sourcePackage,
-                onSelect = { pkg -> update { it.copy(sourcePackage = pkg) } },
-            )
-        }
-
-        Section(stringResource(R.string.set_calories), stringResource(R.string.set_calories_help)) {
-            Choice(
-                options = listOf(
-                    CalorieMode.TOTAL to stringResource(R.string.calories_total),
-                    CalorieMode.ACTIVE to stringResource(R.string.calories_active),
-                ),
-                selected = settings.calorieMode,
-                onSelect = { mode -> update { it.copy(calorieMode = mode) } },
-            )
-        }
-
-        Section(stringResource(R.string.set_distance)) {
-            Choice(
-                options = listOf(
-                    DistanceUnit.AUTO to stringResource(R.string.distance_auto),
-                    DistanceUnit.KILOMETERS to stringResource(R.string.distance_km),
-                    DistanceUnit.MILES to stringResource(R.string.distance_mi),
-                ),
-                selected = settings.distanceUnit,
-                onSelect = { unit -> update { it.copy(distanceUnit = unit) } },
-            )
-        }
-
-        Section(stringResource(R.string.set_live), stringResource(R.string.set_live_help)) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { actions.setLiveMode(!settings.liveMode) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.set_live_toggle), Modifier.weight(1f))
-                Switch(checked = settings.liveMode, onCheckedChange = actions.setLiveMode)
-            }
-        }
-
+        Slider(
+            value = goal,
+            onValueChange = { goal = (it / 500f).toInt() * 500f },
+            onValueChangeFinished = { update { s -> s.copy(goal = goal.toInt()) } },
+            valueRange = 1000f..30000f,
+        )
         HorizontalDivider()
-        OutlinedButton(onClick = actions.openHealthConnect) { Text(stringResource(R.string.set_open_hc)) }
+        TextButton(onClick = actions.openHealthConnect) { Text(stringResource(R.string.set_open_hc)) }
         TextButton(onClick = onShowSyncLog) { Text(stringResource(R.string.sync_log_open)) }
         val version = remember {
             runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
@@ -607,68 +488,8 @@ fun SettingsScreen(
             stringResource(R.string.app_version, version ?: "?"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp),
         )
     }
 }
 
-@Composable
-private fun sourceLabel(pkg: String?): String = when (pkg) {
-    null -> stringResource(R.string.source_all)
-    FITBIT_PACKAGE -> "Fitbit"
-    else -> {
-        val pm = LocalContext.current.packageManager
-        runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
-    }
-}
-
-/** A labelled slider over a duration, snapping to [step] minutes; saves when released. */
-@Composable
-private fun MinutesSlider(
-    label: String,
-    minutes: Int,
-    range: ClosedFloatingPointRange<Float>,
-    step: Int,
-    onChange: (Int) -> Unit,
-) {
-    var value by remember(minutes) { mutableFloatStateOf(minutes.toFloat()) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Text(Format.duration(Duration.ofMinutes(value.toLong())), style = MaterialTheme.typography.titleMedium)
-    }
-    Slider(
-        value = value,
-        onValueChange = { value = (it / step).toInt() * step.toFloat() },
-        onValueChangeFinished = { onChange(value.toInt()) },
-        valueRange = range,
-    )
-}
-
-@Composable
-private fun <T> Choice(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
-    Column {
-        options.forEach { (value, label) ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .selectable(selected = value == selected) { onSelect(value) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(selected = value == selected, onClick = null)
-                Spacer(Modifier.size(8.dp))
-                Text(label)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Section(title: String, help: String? = null, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        help?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        content()
-    }
-}

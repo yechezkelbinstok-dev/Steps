@@ -12,8 +12,10 @@ android {
         applicationId = "app.wakesteps"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
-        versionName = "2.3"
+        // versionCode only ever goes up (Android needs that to install updates); versionName
+        // was renumbered at 1.3, when the early 2.x builds were relabelled 1.x.
+        versionCode = 6
+        versionName = "1.4"
     }
 
     buildTypes {

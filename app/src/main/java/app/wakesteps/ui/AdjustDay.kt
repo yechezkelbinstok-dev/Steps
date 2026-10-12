@@ -100,7 +100,6 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
                                 OutlinedButton(onClick = { act { vm.setSleepCall(sleep, main = false) } }) {
                                     Text(stringResource(R.string.adjust_was_nap))
                                 }
-                                Caption(stringResource(R.string.adjust_was_nap_help))
                             }
                         }
                     }
@@ -109,7 +108,6 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
                         OutlinedButton(onClick = { act { vm.setResetSkipped(day.start, skipped = true) } }) {
                             Text(stringResource(R.string.adjust_skip_reset))
                         }
-                        Caption(stringResource(R.string.adjust_skip_reset_help))
                     }
                     StartReason.MANUAL -> {
                         Text(stringResource(R.string.adjust_manual, Format.time(day.start)))
@@ -123,7 +121,6 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
             if (day.naps.isNotEmpty()) {
                 Section(stringResource(R.string.adjust_naps)) {
                     day.naps.forEach { nap -> NapRow(nap, overrides.callFor(nap) == false, vm, ::act) }
-                    Caption(stringResource(R.string.adjust_naps_help))
                 }
             }
 
@@ -168,7 +165,6 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
                 }) {
                     Text(stringResource(R.string.adjust_manual_button))
                 }
-                Caption(stringResource(R.string.adjust_manual_help))
             }
 
             if (overrides.touches(day, now)) {
@@ -208,9 +204,4 @@ private fun Section(title: String, content: @Composable () -> Unit) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         content()
     }
-}
-
-@Composable
-private fun Caption(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

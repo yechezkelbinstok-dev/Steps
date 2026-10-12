@@ -8,15 +8,18 @@ Fitbit / Google Health app. It never writes anything back.
 
 ## How a "day" is defined
 
+These rules are tuned in code (`DayRules` and `AppSettings`), not exposed as settings. The app
+only lets you set your daily goal.
+
 * **A day starts when you wake up** from your main sleep, and **ends when you go to sleep**.
   Steps at 1 AM before bed still count toward the day you woke up on.
 * **Sleep or nap? Time of day and how long you've been up matter, not just length.**
-  * Sleep mostly during **your night** starts a new day even if it's short: 1 h or more
-    (adjustable). 4–6 AM is sleep.
+  * Sleep mostly during **your night** starts a new day even if it's short: 1 h or more.
+    4–6 AM is sleep.
   * After being up **18 hours or more**, any sleep of 1 h or more is your night's sleep,
     whatever the time. Going to bed at 6 AM and sleeping until 9 is a late night, not a nap.
-  * Other **daytime** sleep is a nap unless it's long: 5 h or more (adjustable). 4–6 PM after
-    a normal morning is a nap.
+  * Other **daytime** sleep is a nap unless it's long: 5 h or more. 4–6 PM after a normal
+    morning is a nap.
   * **Your night is learned** from your last two weeks of sleep: 4 hours either side of your
     usual mid-sleep time, plus midnight–6 AM, which always counts. If you usually sleep
     3 AM–11 AM, a short 9–11 AM sleep counts as sleep for you.
@@ -74,8 +77,7 @@ arrived, and how far behind it was, so you can see Fitbit's real cadence on your
 it frequent, turn on all-day sync in the Fitbit app and leave it unrestricted in battery
 settings.
 
-The minute-by-minute part ("Keep the widget live" in Settings, on by default) runs as a
-background service. Android requires services like this to have a notification, but the app
+The live part runs as a background service. Android requires services like this to have a notification, but the app
 never asks for notification permission, so on Android 13+ that notification is never shown.
 You'll only see Awake Steps listed under "active apps" in quick settings.
 
@@ -87,9 +89,9 @@ calories, distance), the way the Fitbit / Google Health app counts them, so you 
 ## Calories and distance
 
 Both are counted over the same wake-to-sleep window as steps. Calories are **total burned**
-by default (resting + active, like Fitbit), or **active only** (set in Settings). Because sleep
+(resting + active, like Fitbit). Because sleep
 hours are excluded, the total is lower than Fitbit's midnight-to-midnight number. Distance is
-shown in km or miles based on your region, or whichever you choose.
+shown in km or miles based on your region.
 
 ## Setup
 
@@ -100,8 +102,6 @@ shown in km or miles based on your region, or whichever you choose.
 4. Allow **"access data in the background"** when asked. Without it the widget only updates
    while the app is open.
 5. Tap **Add widget** in the app, or long-press the home screen → Widgets → Awake Steps.
-6. Optional: in Settings, set the step source to **Fitbit** if your phone also counts steps
-   and the totals look inflated.
 
 ## Build
 

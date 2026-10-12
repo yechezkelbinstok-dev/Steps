@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.Instant
 
 sealed interface Access {
@@ -48,7 +47,6 @@ data class UiState(
     val history: List<DaySummary> = emptyList(),
     /** Midnight-to-midnight totals, for comparing with the Fitbit / Google app. */
     val calendar: List<CalendarDay> = emptyList(),
-    val sources: List<String> = emptyList(),
     val error: String? = null,
 )
 
@@ -110,10 +108,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 app.engine.refresh(today)
                 val history = app.engine.history(s)
                 val calendar = runCatching { app.engine.calendarDays(s) }.getOrDefault(emptyList())
-                val now = Instant.now()
-                val sources = runCatching { health.recentStepSources(now.minus(Duration.ofDays(2)), now) }
-                    .getOrDefault(emptyList())
-                _state.update { it.copy(history = history, calendar = calendar, sources = sources, loading = false) }
+                _state.update { it.copy(history = history, calendar = calendar, loading = false) }
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = e.message ?: e.javaClass.simpleName) }
             }
@@ -138,13 +133,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSettings(transform: (AppSettings) -> AppSettings) {
         viewModelScope.launch {
-            val before = app.prefs.currentSettings()
             app.prefs.update(transform)
-            val after = app.prefs.currentSettings()
-            if (after.liveMode != before.liveMode) {
-                if (after.liveMode) LiveModeService.start(app) else LiveModeService.stop(app)
-            }
-            if (after.copy(liveMode = before.liveMode) != before) reload()
+            reload()
         }
     }
 

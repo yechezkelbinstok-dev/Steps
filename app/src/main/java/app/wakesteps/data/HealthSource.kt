@@ -207,25 +207,4 @@ class HealthSource(private val context: Context) {
         )
         return resp.records.firstOrNull()?.endTime
     }
-
-    /** Apps that wrote steps recently, so the user can pin one source (e.g. Fitbit). */
-    suspend fun recentStepSources(since: Instant, now: Instant): List<String> {
-        val packages = linkedSetOf<String>()
-        var token: String? = null
-        var pages = 0
-        do {
-            val resp = client.readRecords(
-                ReadRecordsRequest(
-                    recordType = StepsRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(since, now),
-                    ascendingOrder = false,
-                    pageSize = 1000,
-                    pageToken = token,
-                )
-            )
-            resp.records.mapTo(packages) { it.metadata.dataOrigin.packageName }
-            token = resp.pageToken
-        } while (token != null && ++pages < 5)
-        return packages.toList()
-    }
 }

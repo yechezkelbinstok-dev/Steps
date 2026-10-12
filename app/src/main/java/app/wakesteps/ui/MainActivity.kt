@@ -95,7 +95,6 @@ private fun App(vm: MainViewModel) {
         installHealthConnect = activity::installHealthConnect,
         requestCore = { permissionLauncher.launch(vm.permissionsToRequest()) },
         requestBackground = { permissionLauncher.launch(vm.backgroundPermission()) },
-        setLiveMode = { on -> vm.updateSettings { it.copy(liveMode = on) } },
     )
 
     Scaffold(
@@ -126,7 +125,7 @@ private fun App(vm: MainViewModel) {
             when (tab) {
                 Tab.TODAY -> TodayScreen(state, settings, actions, onAdjust = { adjusting = it })
                 Tab.HISTORY -> HistoryScreen(state, settings, overrides, onAdjust = { adjusting = it })
-                Tab.SETTINGS -> SettingsScreen(state, settings, vm::updateSettings, actions, onShowSyncLog = { showSyncLog = true })
+                Tab.SETTINGS -> SettingsScreen(settings, vm::updateSettings, actions, onShowSyncLog = { showSyncLog = true })
             }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         }
@@ -140,5 +139,4 @@ class Actions(
     val installHealthConnect: () -> Unit,
     val requestCore: () -> Unit,
     val requestBackground: () -> Unit,
-    val setLiveMode: (Boolean) -> Unit,
 )
