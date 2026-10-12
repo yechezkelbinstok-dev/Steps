@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Soft light inside the ring; tinted with the ring color, which keeps this falling alpha. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient
+        android:type="radial"
+        android:gradientRadius="50%p"
+        android:startColor="#38FFFFFF"
+        android:centerColor="#14FFFFFF"
+        android:endColor="#00FFFFFF" />
+</shape>

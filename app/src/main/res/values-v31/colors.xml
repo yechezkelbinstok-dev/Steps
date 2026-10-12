@@ -1,0 +1,9 @@
+<resources>
+    <!-- Material You: the card in a deep tone of the wallpaper's main color, with a bright ring. -->
+    <color name="widget_bg">@android:color/system_accent1_800</color>
+    <color name="widget_track">@android:color/system_accent1_700</color>
+    <color name="widget_text">@android:color/system_accent1_10</color>
+    <color name="widget_muted">@android:color/system_accent2_200</color>
+    <color name="widget_accent">@android:color/system_accent1_200</color>
+    <color name="widget_accent_goal">@android:color/system_accent3_100</color>
+</resources>

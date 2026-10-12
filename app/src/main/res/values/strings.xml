@@ -68,6 +68,10 @@
     <string name="tag_no_sleep">No sleep logged</string>
 
     <string name="set_goal">Daily step goal</string>
+    <string name="set_widget">Widget</string>
+    <string name="widget_style_soft">Soft</string>
+    <string name="widget_style_fade">Fade</string>
+    <string name="widget_style_vivid">Vivid</string>
     <string name="set_open_hc">Manage Health Connect access</string>
     <string name="app_version">Awake Steps %1$s</string>
     <string name="sync_log_open">Sync log: how often Fitbit data arrives</string>
@@ -78,6 +82,9 @@
     <string name="sync_log_up_to">steps recorded up to %1$s</string>
 
     <string name="widget_description">Steps, calories and distance for your waking day</string>
+    <string name="widget_label_calories">calories</string>
+    <string name="widget_label_active_calories">active calories</string>
+    <string name="widget_label_distance">distance</string>
     <string name="widget_setup">Open Awake Steps to set up</string>
 
     <!-- Sample values for the widget-picker preview. -->

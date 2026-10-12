@@ -1,8 +1,11 @@
 package app.wakesteps.widget
 
 import android.content.Context
+import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
@@ -39,6 +42,7 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.text.FontFamily
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
@@ -46,7 +50,9 @@ import app.wakesteps.R
 import app.wakesteps.app
 import app.wakesteps.core.Format
 import app.wakesteps.data.AppSettings
+import app.wakesteps.data.CalorieMode
 import app.wakesteps.data.Snapshot
+import app.wakesteps.data.WidgetStyle
 import app.wakesteps.ui.MainActivity
 
 /**
@@ -73,7 +79,9 @@ class StepsWidget : GlanceAppWidget() {
         provideContent {
             val snapshot by app.prefs.snapshot.collectAsState(initialSnapshot)
             val settings by app.prefs.settings.collectAsState(initialSettings)
-            WidgetBody(snapshot, settings)
+            CompositionLocalProvider(LocalPalette provides WidgetPalette(context, settings.widgetStyle)) {
+                WidgetBody(snapshot, settings)
+            }
         }
     }
 }
@@ -86,20 +94,37 @@ private val TALL_HEIGHT = 110.dp
 private val TOWER_HEIGHT = 240.dp
 
 /**
- * The widget's signature look: smoked glass that lets the wallpaper through, white type, an
- * aqua-to-blue goal ring (gold once the goal is met) and a colour per stat. Fixed rather than
- * wallpaper-derived, so it looks the same, and vivid, on any home or lock screen.
+ * A deep card in a dark tone of the wallpaper colour (Android 12+, teal before that), the same
+ * in light and dark mode. The ring and icons depend on the chosen [WidgetStyle]: soft and fade use
+ * a bright wallpaper tone, vivid uses a fixed aqua-to-blue gradient (gold once the goal is met)
+ * with coral calories and sky-blue distance. See widget_* in values/colors.xml and values-v31.
+ * Resolved on every render, so a new wallpaper shows up on the next refresh.
  */
-private object Palette {
-    // Card and ring track are translucent, so they're baked into widget_glass / ring_track.
-    val text = ColorProvider(Color(0xFFFFFFFF))
-    val muted = ColorProvider(Color(0xB3FFFFFF))
-    val aqua = ColorProvider(Color(0xFF2BE7C8))
-    val gold = ColorProvider(Color(0xFFFFC94D))
-    val calories = ColorProvider(Color(0xFFFF7A59))
-    val distance = ColorProvider(Color(0xFF5CB8FF))
-    val error = ColorProvider(Color(0xFFFFB4AB))
+private class WidgetPalette(private val context: Context, val style: WidgetStyle) {
+    private fun of(@ColorRes id: Int) = ColorProvider(Color(context.getColor(id)))
+    val background = of(R.color.widget_bg)
+    val track = of(R.color.widget_track)
+    val text = of(R.color.widget_text)
+    val muted = of(R.color.widget_muted)
+    val error = of(R.color.widget_error)
+
+    private val vivid = style == WidgetStyle.VIVID
+    /** Footprints, ring glow and (soft/fade) the ring itself. */
+    val accent = of(if (vivid) R.color.widget_aqua else R.color.widget_accent)
+    val goal = of(if (vivid) R.color.widget_gold else R.color.widget_accent_goal)
+    val calories = if (vivid) of(R.color.widget_calories) else accent
+    val distance = if (vivid) of(R.color.widget_distance) else accent
 }
+
+private val LocalPalette = staticCompositionLocalOf<WidgetPalette> { error("No palette") }
+
+/** Shorthand for the current palette inside widget composables. */
+private val Palette: WidgetPalette
+    @Composable get() = LocalPalette.current
+
+/** Google Sans on Pixels; any other device quietly falls back to its default sans-serif. */
+private val Display = FontFamily("google-sans")
+private val Body = FontFamily("google-sans-text")
 
 @Composable
 private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings) {
@@ -108,7 +133,11 @@ private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings) {
         modifier = GlanceModifier
             .fillMaxSize()
             .appWidgetBackground()
-            .background(ImageProvider(R.drawable.widget_glass), contentScale = ContentScale.FillBounds)
+            .background(
+                ImageProvider(R.drawable.widget_bg),
+                contentScale = ContentScale.FillBounds,
+                colorFilter = ColorFilter.tint(Palette.background),
+            )
             .clickable(actionStartActivity<MainActivity>()),
     ) {
         // Soft light from the top-left so the card has depth instead of a flat fill.
@@ -135,7 +164,7 @@ private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize) {
         )
         return
     }
-    val m = WidgetModel(context, snapshot, settings)
+    val m = WidgetModel(context, snapshot, settings, Palette)
     val wide = size.width >= WIDE_WIDTH
     val tall = size.height >= TALL_HEIGHT
     when {
@@ -148,24 +177,47 @@ private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize) {
 }
 
 /** Pre-formatted values so the layouts stay purely declarative. */
-private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings) {
+private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings, palette: WidgetPalette) {
     private val pct = (s.totals.steps * 100 / settings.goal.coerceAtLeast(1)).toInt()
     val ringPercent = pct.coerceIn(0, 100)
     val goalReached = pct >= 100
+    /** Past the goal, how far round the current extra lap is (1..100), drawn over the full ring. */
+    val lapPercent = if (pct > 100) (pct - 1) % 100 + 1 else 0
     val steps = Format.number(s.totals.steps)
     val error = s.error
     val calories: Stat? = s.totals.calories?.let {
-        Stat(R.drawable.ic_fire, Palette.calories, Format.number(Math.round(it)), "cal")
+        Stat(
+            R.drawable.ic_fire, palette.calories, Format.number(Math.round(it)), unit = "cal",
+            label = context.getString(
+                if (settings.calorieMode == CalorieMode.ACTIVE) R.string.widget_label_active_calories
+                else R.string.widget_label_calories
+            ),
+            unitWithLabel = false, // "1,284 / calories", not "1,284 cal / calories"
+        )
     }
     val distance: Stat? = s.totals.distanceMeters?.let {
         val text = Format.distance(it, settings.distanceUnit) // "3.8 mi"
-        Stat(R.drawable.ic_distance, Palette.distance, text.substringBeforeLast(' '), text.substringAfterLast(' '))
+        Stat(
+            R.drawable.ic_distance, palette.distance, text.substringBeforeLast(' '), unit = text.substringAfterLast(' '),
+            label = context.getString(R.string.widget_label_distance),
+            unitWithLabel = true,
+        )
     }
     val stats = listOfNotNull(calories, distance)
 }
 
-/** One secondary number: icon, value and unit ("cal", "mi"). */
-private class Stat(@DrawableRes val icon: Int, val tint: ColorProvider, val value: String, val unit: String)
+/**
+ * One secondary number. Compact layouts show "value unit" ("1,284 cal"); the roomy ones show the
+ * value over a word ("1,284" / "calories"), keeping the unit only where the word doesn't say it.
+ */
+private class Stat(
+    @DrawableRes val icon: Int,
+    val tint: ColorProvider,
+    val value: String,
+    val unit: String,
+    val label: String,
+    val unitWithLabel: Boolean,
+)
 
 // ---------------------------------------------------------------- layouts
 
@@ -179,7 +231,7 @@ private fun CompactLayout(m: WidgetModel, size: DpSize) {
         Spacer(GlanceModifier.width(12.dp))
         Column {
             Text(m.steps, style = number(24.sp), maxLines = 1)
-            m.error?.let { Text(it, style = TextStyle(color = Palette.error, fontSize = 11.sp), maxLines = 1) }
+            m.error?.let { Text(it, style = TextStyle(color = Palette.error, fontSize = 11.sp, fontFamily = Body), maxLines = 1) }
         }
     }
 }
@@ -238,7 +290,7 @@ private fun SplitLayout(m: WidgetModel, size: DpSize) {
                 ErrorText(m.error, 3)
             } else {
                 m.stats.forEachIndexed { i, stat ->
-                    if (i > 0) Spacer(GlanceModifier.height(16.dp))
+                    if (i > 0) Spacer(GlanceModifier.height(14.dp))
                     LabeledStat(stat, value)
                 }
             }
@@ -249,7 +301,7 @@ private fun SplitLayout(m: WidgetModel, size: DpSize) {
 /** 4×3 and taller: a big centered ring with the stats in columns underneath. */
 @Composable
 private fun TowerLayout(m: WidgetModel, size: DpSize) {
-    val ring = minOf(size.width - 40.dp, size.height - 104.dp).coerceIn(110.dp, 190.dp)
+    val ring = minOf(size.width - 40.dp, size.height - 124.dp).coerceIn(110.dp, 190.dp)
     val value = (size.width.value / 16f).coerceIn(17f, 23f).sp
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 20.dp),
@@ -270,25 +322,48 @@ private fun TowerLayout(m: WidgetModel, size: DpSize) {
 
 // ---------------------------------------------------------------- pieces
 
-/** Goal ring: a faint track with the gradient arc on top, [content] centered inside. */
+/**
+ * Goal ring: a soft glow and a track in the card's tone, the arc on top, [content] inside. Past
+ * the goal the ring is full and the next lap runs over it, casting a shadow ahead of its tip.
+ */
 @Composable
 private fun Ring(m: WidgetModel, size: Dp, content: @Composable ColumnScope.() -> Unit) {
+    val accent = if (m.goalReached) Palette.goal else Palette.accent
+    val style = Palette.style
+    // Vivid arcs carry their own colours; the others take one tone (keeping the fade).
+    val tint = if (style == WidgetStyle.VIVID) null else ColorFilter.tint(accent)
     Box(modifier = GlanceModifier.size(size), contentAlignment = Alignment.Center) {
-        Image(
-            provider = ImageProvider(R.drawable.ring_track),
-            contentDescription = null,
-            modifier = GlanceModifier.fillMaxSize(),
-        )
-        val arc = when {
-            m.goalReached -> R.drawable.ring_goal
-            m.ringPercent > 0 -> RING_ARCS[m.ringPercent]
-            else -> null
+        RingLayer(R.drawable.ring_glow, ColorFilter.tint(accent))
+        RingLayer(R.drawable.ring_track, ColorFilter.tint(Palette.track))
+        if (m.ringPercent > 0) {
+            val arc = when {
+                style == WidgetStyle.FADE -> FADE_ARCS[m.ringPercent]
+                m.goalReached -> R.drawable.ring_goal
+                else -> RING_ARCS[m.ringPercent]
+            }
+            RingLayer(arc, tint)
         }
-        if (arc != null) {
-            Image(provider = ImageProvider(arc), contentDescription = null, modifier = GlanceModifier.fillMaxSize())
+        if (m.lapPercent > 0) {
+            RingLayer(LAP_SHADOWS[m.lapPercent], null)
+            val lap = when (style) {
+                WidgetStyle.VIVID -> LAP_ARCS[m.lapPercent]
+                WidgetStyle.FADE -> FADE_ARCS[m.lapPercent]
+                WidgetStyle.SOFT -> RING_ARCS[m.lapPercent]
+            }
+            RingLayer(lap, tint)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, content = content)
     }
+}
+
+@Composable
+private fun RingLayer(@DrawableRes drawable: Int, colorFilter: ColorFilter?) {
+    Image(
+        provider = ImageProvider(drawable),
+        contentDescription = null,
+        colorFilter = colorFilter,
+        modifier = GlanceModifier.fillMaxSize(),
+    )
 }
 
 /**
@@ -297,10 +372,10 @@ private fun Ring(m: WidgetModel, size: Dp, content: @Composable ColumnScope.() -
  */
 @Composable
 private fun RingCenter(m: WidgetModel, ring: Dp) {
-    val icon = (ring.value * 0.13f).coerceIn(16f, 24f).dp
+    val icon = (ring.value * 0.15f).coerceIn(18f, 28f).dp
     StepsIcon(m, icon)
     Spacer(GlanceModifier.height(3.dp))
-    Text(m.steps, style = number(numberSize(ring, m.steps) * 1.08f), maxLines = 1)
+    Text(m.steps, style = number(numberSize(ring, m.steps)), maxLines = 1)
     Spacer(GlanceModifier.height(icon * 0.55f))
 }
 
@@ -309,12 +384,12 @@ private fun StepsIcon(m: WidgetModel, size: Dp) {
     Image(
         provider = ImageProvider(R.drawable.ic_steps),
         contentDescription = null,
-        colorFilter = ColorFilter.tint(if (m.goalReached) Palette.gold else Palette.aqua),
+        colorFilter = ColorFilter.tint(if (m.goalReached) Palette.goal else Palette.accent),
         modifier = GlanceModifier.size(size),
     )
 }
 
-/** "🔥 1,284 cal   📍 3.8 mi": value in white, unit quiet. */
+/** "🔥 1,284 cal   📍 3.8 mi" */
 @Composable
 private fun InlineStats(m: WidgetModel) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -325,40 +400,48 @@ private fun InlineStats(m: WidgetModel) {
     }
 }
 
+/** Quiet one-liner: the step count stays the star, so these sit back in soft gray. */
 @Composable
 private fun InlineStat(stat: Stat) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         StatIcon(stat, 14.dp)
-        Spacer(GlanceModifier.width(4.dp))
-        Text(stat.value, style = number(13.sp), maxLines = 1)
-        Spacer(GlanceModifier.width(3.dp))
-        Text(stat.unit, style = label(11.sp), maxLines = 1)
+        Spacer(GlanceModifier.width(5.dp))
+        Text("${stat.value} ${stat.unit}", style = label(12.sp), maxLines = 1)
     }
 }
 
-/** Larger icon + value + unit (4×2). */
+/** Icon beside a big value, with the word underneath (4×2). */
 @Composable
 private fun LabeledStat(stat: Stat, valueSize: TextUnit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         StatIcon(stat, 18.dp)
         Spacer(GlanceModifier.width(10.dp))
-        Text(stat.value, style = number(valueSize), maxLines = 1)
-        Spacer(GlanceModifier.width(4.dp))
-        Text(stat.unit, style = label(13.sp), maxLines = 1)
+        Column {
+            ValueWithUnit(stat, valueSize)
+            Text(stat.label, style = label(11.sp), maxLines = 1)
+        }
     }
 }
 
-/** Icon over value + unit, centred: one column of the 4×3 stats row. */
+@Composable
+private fun ValueWithUnit(stat: Stat, valueSize: TextUnit) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(stat.value, style = number(valueSize), maxLines = 1)
+        if (stat.unitWithLabel) {
+            Spacer(GlanceModifier.width(4.dp))
+            Text(stat.unit, style = label(12.sp), maxLines = 1)
+        }
+    }
+}
+
+/** Icon over value over word, centred: one column of the 4×3 stats row. */
 @Composable
 private fun RowScope.StatColumn(stat: Stat, valueSize: TextUnit) {
     Column(modifier = GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {
         StatIcon(stat, 18.dp)
         Spacer(GlanceModifier.height(4.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(stat.value, style = number(valueSize), maxLines = 1)
-            Spacer(GlanceModifier.width(4.dp))
-            Text(stat.unit, style = label(12.sp), maxLines = 1)
-        }
+        ValueWithUnit(stat, valueSize)
+        Text(stat.label, style = label(11.sp), maxLines = 1)
     }
 }
 
@@ -374,7 +457,7 @@ private fun StatIcon(stat: Stat, size: Dp) {
 
 @Composable
 private fun ErrorText(text: String, lines: Int) {
-    Text(text, style = TextStyle(color = Palette.error, fontSize = 12.sp), maxLines = lines)
+    Text(text, style = TextStyle(color = Palette.error, fontSize = 12.sp, fontFamily = Body), maxLines = lines)
 }
 
 /** Step count sized to sit comfortably inside a ring of the given diameter. */
@@ -383,7 +466,10 @@ private fun numberSize(ring: Dp, steps: String): TextUnit {
     return (ring.value * perChar * 5.5f).coerceIn(16f, 34f).sp
 }
 
-/** Numbers: the device's own sans, so it feels native on Pixel and Samsung alike. */
-private fun number(size: TextUnit) = TextStyle(color = Palette.text, fontSize = size)
+/** Google Sans at its regular weight: light and roomy, the way the big numbers read best. */
+@Composable
+private fun number(size: TextUnit) =
+    TextStyle(color = Palette.text, fontSize = size, fontFamily = Display)
 
-private fun label(size: TextUnit) = TextStyle(color = Palette.muted, fontSize = size)
+@Composable
+private fun label(size: TextUnit) = TextStyle(color = Palette.muted, fontSize = size, fontFamily = Body)

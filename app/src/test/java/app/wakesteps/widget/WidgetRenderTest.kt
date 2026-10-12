@@ -16,6 +16,7 @@ import app.wakesteps.WakeStepsApp
 import app.wakesteps.core.StartReason
 import app.wakesteps.data.DayTotals
 import app.wakesteps.data.Snapshot
+import app.wakesteps.data.WidgetStyle
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,8 +35,8 @@ class RenderTestApp : WakeStepsApp() {
 }
 
 /**
- * Renders the real widget at its four sizes to PNGs under build/widget-renders so the layouts
- * can be eyeballed without a device. Not an assertion test.
+ * Renders the real widget in each style at every size to PNGs under build/widget-renders, so
+ * layouts can be eyeballed without a device. Not an assertion test.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -43,18 +44,19 @@ class RenderTestApp : WakeStepsApp() {
 class WidgetRenderTest {
 
     @Test
-    fun renderAllSizes() = renderAll("light", steps = 8432)
+    fun renderAllSizes() = WidgetStyle.entries.forEach { renderAll(it.name.lowercase(), it, steps = 8432) }
 
     @Test
     @Config(qualifiers = "+night")
-    fun renderAllSizesDark() = renderAll("dark", steps = 8432)
+    fun renderAllSizesDark() = renderAll("dark", WidgetStyle.VIVID, steps = 8432)
 
     @Test
-    fun renderGoalReached() = renderAll("goal", steps = 11250)
+    fun renderPastGoal() = WidgetStyle.entries.forEach { renderAll("lap_${it.name.lowercase()}", it, steps = 13400) }
 
-    private fun renderAll(tag: String, steps: Long) = runBlocking {
+    private fun renderAll(tag: String, style: WidgetStyle, steps: Long) = runBlocking {
         val app = ApplicationProvider.getApplicationContext<WakeStepsApp>()
         val now = Instant.now()
+        app.prefs.update { it.copy(widgetStyle = style) }
         app.prefs.saveSnapshot(
             Snapshot(
                 totals = DayTotals(steps = steps, calories = 1284.0, distanceMeters = 6120.0),
@@ -81,7 +83,9 @@ class WidgetRenderTest {
 
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
     private suspend fun render(app: WakeStepsApp, size: DpSize, file: File) {
-        val rv = StepsWidget().compose(app, size = size)
+        // The Pixel launcher reports a widget about 14dp smaller than the card it draws, and the
+        // layout is composed for the reported size, then stretched to the real one.
+        val rv = StepsWidget().compose(app, size = DpSize(size.width - 14.dp, size.height - 13.dp))
         val parent = FrameLayout(app)
         val view: View = rv.apply(app, parent)
         val d = app.resources.displayMetrics.density

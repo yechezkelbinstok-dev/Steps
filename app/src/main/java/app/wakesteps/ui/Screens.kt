@@ -41,9 +41,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -62,6 +68,8 @@ import app.wakesteps.data.TodaySummary
 import app.wakesteps.widget.StepsWidgetReceiver
 import java.time.Duration
 import java.time.Instant
+import kotlin.math.cos
+import kotlin.math.sin
 
 
 // ---------------------------------------------------------------- Today
@@ -210,9 +218,12 @@ private fun AddWidgetCard() {
     )
 }
 
+/** Goal gauge. Past the goal it stays full and the next lap runs over it, shadowed at its tip. */
 @Composable
 private fun StepsRing(steps: Long, goal: Int) {
-    val progress = if (goal > 0) (steps.toFloat() / goal).coerceIn(0f, 1f) else 0f
+    val ratio = if (goal > 0) steps.toFloat() / goal else 0f
+    val progress = ratio.coerceIn(0f, 1f)
+    val lap = if (ratio > 1f) ((ratio - 1f) % 1f).let { if (it == 0f) 1f else it } else 0f
     val track = MaterialTheme.colorScheme.secondaryContainer
     val fill = MaterialTheme.colorScheme.primary
     Box(Modifier.size(240.dp), contentAlignment = Alignment.Center) {
@@ -223,6 +234,27 @@ private fun StepsRing(steps: Long, goal: Int) {
             drawArc(track, 135f, 270f, false, Offset(inset, inset), arcSize, style = stroke)
             if (progress > 0f) {
                 drawArc(fill, 135f, 270f * progress, false, Offset(inset, inset), arcSize, style = stroke)
+            }
+            if (lap > 0f) {
+                // A soft shadow just past the lap's tip, kept on the ring, then the lap itself.
+                val radius = arcSize.width / 2
+                val tip = Math.toRadians(135.0 + 270.0 * lap) + (stroke.width / 4) / radius
+                val at = center + Offset(radius * cos(tip).toFloat(), radius * sin(tip).toFloat())
+                val ring = Path().apply {
+                    fillType = PathFillType.EvenOdd
+                    addOval(Rect(center, radius + stroke.width / 2))
+                    addOval(Rect(center, radius - stroke.width / 2))
+                }
+                clipPath(ring) {
+                    drawCircle(
+                        Brush.radialGradient(
+                            0f to Color.Black.copy(alpha = 0.45f), 0.55f to Color.Black.copy(alpha = 0.2f), 1f to Color.Transparent,
+                            center = at, radius = stroke.width,
+                        ),
+                        radius = stroke.width, center = at,
+                    )
+                }
+                drawArc(fill, 135f, 270f * lap, false, Offset(inset, inset), arcSize, style = stroke)
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -478,6 +510,9 @@ fun SettingsScreen(
             onValueChangeFinished = { update { s -> s.copy(goal = goal.toInt()) } },
             valueRange = 1000f..30000f,
         )
+        HorizontalDivider()
+        Text(stringResource(R.string.set_widget), style = MaterialTheme.typography.titleMedium)
+        WidgetStylePicker(settings.widgetStyle) { style -> update { s -> s.copy(widgetStyle = style) } }
         HorizontalDivider()
         TextButton(onClick = actions.openHealthConnect) { Text(stringResource(R.string.set_open_hc)) }
         TextButton(onClick = onShowSyncLog) { Text(stringResource(R.string.sync_log_open)) }

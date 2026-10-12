@@ -15,6 +15,7 @@ import app.wakesteps.data.HealthSource
 import app.wakesteps.data.SyncEvent
 import app.wakesteps.data.TodaySummary
 import app.wakesteps.sync.LiveModeService
+import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -134,6 +135,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSettings(transform: (AppSettings) -> AppSettings) {
         viewModelScope.launch {
             app.prefs.update(transform)
+            // Redraw the widget right away (new goal or style), without waiting on a data read.
+            WidgetPusher.pushAll(app)
             reload()
         }
     }

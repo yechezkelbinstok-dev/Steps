@@ -26,12 +26,23 @@ private val Context.dataStore by preferencesDataStore(name = "wakesteps")
 enum class CalorieMode { TOTAL, ACTIVE }
 enum class DistanceUnit { AUTO, KILOMETERS, MILES }
 
+/** How the widget's goal ring is drawn. */
+enum class WidgetStyle {
+    /** One soft colour from the wallpaper. */
+    SOFT,
+    /** Wallpaper colour that fades in toward the tip. */
+    FADE,
+    /** Aqua-to-blue gradient with coloured stat icons. */
+    VIVID,
+}
+
 /**
- * Only [goal] is chosen in the app. Everything else is tuned in code (the user asks for changes
- * rather than fiddling with settings), so those values are never read from storage.
+ * Only [goal] and [widgetStyle] are chosen in the app. Everything else is tuned in code (the user
+ * asks for changes rather than fiddling with settings), so those values are never read from storage.
  */
 data class AppSettings(
     val goal: Int = 10_000,
+    val widgetStyle: WidgetStyle = WidgetStyle.VIVID,
     /** Sleep mostly during the user's night counts (starts a new day) from this long. */
     val minNightSleepMinutes: Int = 60,
     /** Sleep mostly during the day is a nap unless it's at least this long. */
@@ -80,6 +91,7 @@ private const val SYNC_LOG_SIZE = 60
 class Prefs(private val context: Context) {
     private object K {
         val goal = intPreferencesKey("goal")
+        val widgetStyle = stringPreferencesKey("widget_style")
 
         val snapSteps = longPreferencesKey("snap_steps")
         val snapCalories = doublePreferencesKey("snap_calories")
@@ -182,7 +194,11 @@ class Prefs(private val context: Context) {
     suspend fun currentSnapshot(): Snapshot? = snapshot.first()
 
     suspend fun update(transform: (AppSettings) -> AppSettings) {
-        context.dataStore.edit { p -> p[K.goal] = transform(p.toSettings()).goal }
+        context.dataStore.edit { p ->
+            val s = transform(p.toSettings())
+            p[K.goal] = s.goal
+            p[K.widgetStyle] = s.widgetStyle.name
+        }
     }
 
     suspend fun saveSnapshot(s: Snapshot) {
@@ -211,7 +227,10 @@ class Prefs(private val context: Context) {
         if (value == null) remove(key) else set(key, value)
     }
 
-    private fun Preferences.toSettings(): AppSettings = AppSettings(goal = this[K.goal] ?: AppSettings().goal)
+    private fun Preferences.toSettings(): AppSettings = AppSettings(
+        goal = this[K.goal] ?: AppSettings().goal,
+        widgetStyle = enumOr(this[K.widgetStyle], AppSettings().widgetStyle),
+    )
 
     private fun Preferences.toSnapshot(): Snapshot? {
         val start = this[K.snapStart] ?: return null

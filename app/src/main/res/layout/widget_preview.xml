@@ -4,8 +4,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_glass"
+    android:background="@drawable/widget_bg"
+    android:backgroundTint="@color/widget_bg"
     android:baselineAligned="false"
+    android:foreground="@drawable/widget_sheen"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingHorizontal="20dp"
@@ -26,7 +28,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:importantForAccessibility="no"
-                android:src="@drawable/ring_track" />
+                android:src="@drawable/ring_glow"
+                android:tint="@color/widget_aqua" />
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ring_track"
+                android:tint="@color/widget_track" />
 
             <ImageView
                 android:layout_width="match_parent"
@@ -43,8 +53,8 @@
                 tools:ignore="UseCompoundDrawables">
 
                 <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
                     android:importantForAccessibility="no"
                     android:src="@drawable/ic_steps"
                     android:tint="@color/widget_aqua" />
@@ -52,7 +62,8 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="9dp"
+                    android:layout_marginBottom="10dp"
+                    android:fontFamily="google-sans"
                     android:text="@string/preview_steps"
                     android:textColor="@color/widget_text"
                     android:textSize="27sp" />

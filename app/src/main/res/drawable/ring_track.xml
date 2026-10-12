@@ -4,5 +4,5 @@
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="100dp" android:height="100dp"
     android:viewportWidth="100" android:viewportHeight="100">
-    <path android:strokeColor="#26FFFFFF" android:strokeWidth="9" android:pathData="M95.5,50.0 A45.5,45.5 0 1,1 4.5,50.0 A45.5,45.5 0 1,1 95.5,50.0" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="11" android:pathData="M94.5,50.0 A44.5,44.5 0 1,1 5.5,50.0 A44.5,44.5 0 1,1 94.5,50.0" />
 </vector>

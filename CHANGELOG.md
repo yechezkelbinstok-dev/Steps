@@ -4,6 +4,16 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 → 200.
 
+## 1.6
+- Widget card is solid again, in a deep tone of your wallpaper colour with a soft light from
+  the top-left (the 1.4 look), instead of see-through glass.
+- Three ring styles, picked in Settings → Widget: Soft (one wallpaper tone), Fade (wallpaper
+  tone fading in toward the tip) and Vivid (aqua-to-blue with coral calories and sky-blue
+  distance, the default). The widget redraws as soon as you pick.
+- Past the goal the ring keeps going: the next lap runs over the full ring with a shadow at its
+  tip, so you can see how far past the goal you are. The Today gauge in the app does the same.
+- Thicker ring with a faint glow inside, numbers in Google Sans (on Pixels).
+
 ## 1.5
 - Widget redesign: smoked-glass card that lets the wallpaper show through, an aqua-to-blue
   gradient goal ring (gold when the goal is met), the footprints icon over the step count,
