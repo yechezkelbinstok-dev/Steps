@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.glance.appwidget.updateAll
 import app.wakesteps.core.DayCalculator
 import app.wakesteps.core.DayWindow
+import app.wakesteps.core.NightWindow
+import app.wakesteps.core.SleepSpan
 import app.wakesteps.widget.StepsWidget
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -13,6 +15,8 @@ import java.time.ZoneId
 
 data class TodaySummary(
     val window: DayWindow,
+    /** When the user's night is, as learned from recent sleep. */
+    val night: NightWindow,
     val totals: DayTotals,
     val hourly: List<Pair<Instant, Long>>,
     val latestDataAt: Instant?,
@@ -20,6 +24,9 @@ data class TodaySummary(
 )
 
 data class DaySummary(val window: DayWindow, val totals: DayTotals)
+
+/** Days of sleep history used to learn when the user's night is. */
+private const val LEARN_DAYS = 14L
 
 /** Turns raw Health Connect data into awake-day totals and keeps the widget in sync. */
 class StepsEngine(
@@ -29,18 +36,18 @@ class StepsEngine(
 ) {
     private val refreshLock = Mutex()
 
-    private suspend fun windows(settings: AppSettings, lookback: Duration, now: Instant): List<DayWindow> {
-        val from = now.minus(lookback)
-        // Read a bit further back so a sleep that started before `from` is still seen.
-        val sleeps = health.sleeps(from.minus(Duration.ofDays(1)), now, settings.sourcePackage)
-        return DayCalculator.windows(sleeps, from, now, ZoneId.systemDefault(), settings.rules())
-    }
+    /** Recent sleep: enough history to learn when the user's night is. */
+    private suspend fun recentSleeps(settings: AppSettings, now: Instant, days: Long): List<SleepSpan> =
+        health.sleeps(now.minus(Duration.ofDays(maxOf(days, LEARN_DAYS) + 1)), now, settings.sourcePackage)
 
     suspend fun today(settings: AppSettings, includeHourly: Boolean): TodaySummary {
         val now = Instant.now()
         val granted = health.grantedPermissions()
-        val window = windows(settings, Duration.ofDays(3), now).lastOrNull()
-            ?: DayCalculator.current(emptyList(), now, now, ZoneId.systemDefault(), settings.rules())
+        val zone = ZoneId.systemDefault()
+        val sleeps = recentSleeps(settings, now, days = 3)
+        val overrides = prefs.currentOverrides()
+        val window = DayCalculator.current(sleeps, now.minus(Duration.ofDays(3)), now, zone, settings.rules(), overrides)
+        val night = DayCalculator.nightWindow(sleeps, zone, settings.rules())
         val end = window.endOr(now)
         val totals = health.totals(window.start, end, settings.sourcePackage, granted, settings.calorieMode)
         val hourly = if (includeHourly) {
@@ -51,13 +58,17 @@ class StepsEngine(
         val latest = runCatching {
             health.latestStepTime(now.minus(Duration.ofDays(2)), now, settings.sourcePackage)
         }.getOrNull()
-        return TodaySummary(window, totals, hourly, latest, now)
+        return TodaySummary(window, night, totals, hourly, latest, now)
     }
 
     suspend fun history(settings: AppSettings, days: Long = 14): List<DaySummary> {
         val now = Instant.now()
         val granted = health.grantedPermissions()
-        return windows(settings, Duration.ofDays(days + 1), now)
+        val sleeps = recentSleeps(settings, now, days)
+        val overrides = prefs.currentOverrides()
+        return DayCalculator.windows(
+            sleeps, now.minus(Duration.ofDays(days + 1)), now, ZoneId.systemDefault(), settings.rules(), overrides,
+        )
             .map {
                 DaySummary(
                     it,

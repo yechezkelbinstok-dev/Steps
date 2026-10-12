@@ -8,8 +8,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.wakesteps.core.DayRules
+import app.wakesteps.core.Overrides
+import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.StartReason
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -25,7 +28,10 @@ enum class DistanceUnit { AUTO, KILOMETERS, MILES }
 
 data class AppSettings(
     val goal: Int = 10_000,
-    val minSleepMinutes: Int = 180,
+    /** Sleep mostly during the user's night counts (starts a new day) from this long. */
+    val minNightSleepMinutes: Int = 60,
+    /** Sleep mostly during the day is a nap unless it's at least this long. */
+    val minDaySleepMinutes: Int = 300,
     val fallbackMinuteOfDay: Int = 5 * 60,
     /** Package whose data to use, or null for all sources (Health Connect's priority order). */
     val sourcePackage: String? = null,
@@ -37,7 +43,8 @@ data class AppSettings(
     val fallbackTime: LocalTime get() = LocalTime.of(fallbackMinuteOfDay / 60, fallbackMinuteOfDay % 60)
 
     fun rules() = DayRules(
-        minSleep = Duration.ofMinutes(minSleepMinutes.toLong()),
+        minNightSleep = Duration.ofMinutes(minNightSleepMinutes.toLong()),
+        minDaySleep = Duration.ofMinutes(minDaySleepMinutes.toLong()),
         fallbackTime = fallbackTime,
     )
 }
@@ -64,7 +71,8 @@ data class Snapshot(
 class Prefs(private val context: Context) {
     private object K {
         val goal = intPreferencesKey("goal")
-        val minSleep = intPreferencesKey("min_sleep_minutes")
+        val minNightSleep = intPreferencesKey("min_night_sleep_minutes")
+        val minDaySleep = intPreferencesKey("min_day_sleep_minutes")
         val fallback = intPreferencesKey("fallback_minute_of_day")
         val source = stringPreferencesKey("source_package")
         val live = booleanPreferencesKey("live_refresh")
@@ -80,20 +88,81 @@ class Prefs(private val context: Context) {
         val snapUpdated = longPreferencesKey("snap_updated")
         val snapLatest = longPreferencesKey("snap_latest")
         val snapError = stringPreferencesKey("snap_error")
+
+        /** Entries: "S|<epochSec>|1" main sleep, "S|<epochSec>|0" nap, "R|<epochSec>" skipped reset,
+         *  "M|<epochSec>" manual day start. */
+        val overrides = stringSetPreferencesKey("overrides")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
 
     val snapshot: Flow<Snapshot?> = context.dataStore.data.map { it.toSnapshot() }
 
+    val overrides: Flow<Overrides> = context.dataStore.data.map { parseOverrides(it[K.overrides].orEmpty()) }
+
     suspend fun currentSettings(): AppSettings = settings.first()
+    suspend fun currentOverrides(): Overrides = overrides.first()
+
+    /** Rule a sleep main (true) or a nap (false), replacing any earlier call on it. */
+    suspend fun setSleepCall(span: SleepSpan, main: Boolean) = editOverrides { entries ->
+        entries.removeAll { it.startsWith("S|") && epoch(it) in span.start.epochSecond..span.end.epochSecond }
+        val mid = span.start.plus(Duration.between(span.start, span.end).dividedBy(2))
+        entries += "S|${mid.epochSecond}|${if (main) 1 else 0}"
+    }
+
+    suspend fun clearSleepCall(span: SleepSpan) = editOverrides { entries ->
+        entries.removeAll { it.startsWith("S|") && epoch(it) in span.start.epochSecond..span.end.epochSecond }
+    }
+
+    suspend fun setResetSkipped(at: Instant, skipped: Boolean) = editOverrides { entries ->
+        if (skipped) entries += "R|${at.epochSecond}" else entries -= "R|${at.epochSecond}"
+    }
+
+    suspend fun setManualStart(at: Instant, present: Boolean) = editOverrides { entries ->
+        if (present) entries += "M|${at.epochSecond}" else entries -= "M|${at.epochSecond}"
+    }
+
+    /** Drops every call the user made between [from] and [to] (inclusive). */
+    suspend fun clearOverrides(from: Instant, to: Instant) = editOverrides { entries ->
+        entries.removeAll { epoch(it) in from.epochSecond..to.epochSecond }
+    }
+
+    private suspend fun editOverrides(change: (MutableSet<String>) -> Unit) {
+        context.dataStore.edit { p ->
+            val entries = p[K.overrides].orEmpty().toMutableSet()
+            change(entries)
+            // Keep a couple of months; older days aren't shown anywhere.
+            val cutoff = Instant.now().minus(Duration.ofDays(60)).epochSecond
+            entries.removeAll { epoch(it) < cutoff }
+            p[K.overrides] = entries
+        }
+    }
+
+    private fun epoch(entry: String): Long = entry.split('|').getOrNull(1)?.toLongOrNull() ?: 0
+
+    private fun parseOverrides(entries: Set<String>): Overrides {
+        val calls = mutableMapOf<Instant, Boolean>()
+        val skipped = mutableSetOf<Instant>()
+        val manual = mutableSetOf<Instant>()
+        for (e in entries) {
+            val parts = e.split('|')
+            val at = parts.getOrNull(1)?.toLongOrNull()?.let(Instant::ofEpochSecond) ?: continue
+            when (parts[0]) {
+                "S" -> calls[at] = parts.getOrNull(2) == "1"
+                "R" -> skipped += at
+                "M" -> manual += at
+            }
+        }
+        return Overrides(calls, skipped, manual)
+    }
     suspend fun currentSnapshot(): Snapshot? = snapshot.first()
 
     suspend fun update(transform: (AppSettings) -> AppSettings) {
         context.dataStore.edit { p ->
             val s = transform(p.toSettings())
             p[K.goal] = s.goal
-            p[K.minSleep] = s.minSleepMinutes
+            p[K.minNightSleep] = s.minNightSleepMinutes
+            p[K.minDaySleep] = s.minDaySleepMinutes
             p[K.fallback] = s.fallbackMinuteOfDay
             if (s.sourcePackage == null) p.remove(K.source) else p[K.source] = s.sourcePackage
             p[K.live] = s.liveMode
@@ -132,7 +201,8 @@ class Prefs(private val context: Context) {
         val d = AppSettings()
         return AppSettings(
             goal = this[K.goal] ?: d.goal,
-            minSleepMinutes = this[K.minSleep] ?: d.minSleepMinutes,
+            minNightSleepMinutes = this[K.minNightSleep] ?: d.minNightSleepMinutes,
+            minDaySleepMinutes = this[K.minDaySleep] ?: d.minDaySleepMinutes,
             fallbackMinuteOfDay = this[K.fallback] ?: d.fallbackMinuteOfDay,
             sourcePackage = this[K.source],
             liveMode = this[K.live] ?: d.liveMode,

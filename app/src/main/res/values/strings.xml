@@ -10,6 +10,7 @@
     <string name="of_goal">of %1$s</string>
     <string name="today_since_wake">Awake since %1$s</string>
     <string name="today_since_reset">Day started %1$s (fallback)</string>
+    <string name="today_since_manual">Day started %1$s (set by you)</string>
     <string name="today_asleep">Asleep · day ran %1$s – %2$s</string>
     <string name="today_awake_for">%1$s into your day</string>
     <string name="today_fallback_note">No sleep was logged, so a new day was started at your %1$s fallback time.</string>
@@ -36,14 +37,48 @@
     <string name="bg_body">Grant “access data in the background” so the widget can refresh while this app is closed.</string>
 
     <string name="history_empty">No days to show yet.</string>
+    <string name="tag_edited">Edited by you</string>
+    <plurals name="tag_naps">
+        <item quantity="one">%d nap</item>
+        <item quantity="other">%d naps</item>
+    </plurals>
+
+    <string name="adjust">Adjust</string>
+    <string name="adjust_title">Adjust %1$s</string>
+    <string name="adjust_start">How this day started</string>
+    <string name="adjust_woke_up">You woke up at %1$s after sleeping %2$s – %3$s.</string>
+    <string name="adjust_your_call_sleep">You counted this as sleep.</string>
+    <string name="adjust_was_nap">That was a nap, not my sleep</string>
+    <string name="adjust_was_nap_help">Merges this day into the one before it.</string>
+    <string name="adjust_fallback">No sleep was logged, so a new day started at %1$s.</string>
+    <string name="adjust_skip_reset">Don’t start a new day here</string>
+    <string name="adjust_skip_reset_help">Keeps the previous day going through the all-nighter.</string>
+    <string name="adjust_manual">You started this day at %1$s.</string>
+    <string name="adjust_remove_start">Remove</string>
+    <string name="adjust_naps">Naps</string>
+    <string name="adjust_naps_help">Counting a nap as sleep starts a new day when you woke from it.</string>
+    <string name="adjust_count_as_sleep">Count as sleep</string>
+    <string name="adjust_your_call">your call</string>
+    <string name="adjust_undo">Undo</string>
+    <string name="adjust_kept_going">Kept going through</string>
+    <string name="adjust_kept_going_item">The %1$s reset on %2$s</string>
+    <string name="adjust_manual_title">Sleep not tracked?</string>
+    <string name="adjust_manual_button">Start a new day at…</string>
+    <string name="adjust_manual_help">Pick when you actually woke up, and a new day starts then.</string>
+    <string name="adjust_manual_out_of_range">Pick a time between %1$s and %2$s.</string>
+    <string name="adjust_reset_day">Reset this day to automatic</string>
     <string name="tag_fallback_start">Fallback start</string>
     <string name="tag_no_sleep">No sleep logged</string>
 
     <string name="set_goal">Daily step goal</string>
-    <string name="set_min_sleep">Shortest sleep that starts a new day</string>
-    <string name="set_min_sleep_help">Anything shorter is treated as a nap and doesn’t reset your count.</string>
+    <string name="set_naps">Sleep vs. naps</string>
+    <string name="set_naps_help">Sleep during your night starts a new day, even a short one. Sleep during the day is a nap and doesn’t reset your count unless it’s long. Waking up in the middle of the night doesn’t split the night.</string>
+    <string name="set_night_learned">Your nights, learned from the last two weeks: about %1$s (midnight – 6 AM always counts too)</string>
+    <string name="set_night_default">Your nights: assuming %1$s until there’s more sleep data (midnight – 6 AM always counts)</string>
+    <string name="set_night_min">At night, sleep counts from</string>
+    <string name="set_day_min">During the day, sleep counts from</string>
     <string name="set_fallback">All-nighter fallback</string>
-    <string name="set_fallback_help">If you haven’t slept, a new day starts at this time (once you’ve been up at least 6 hours).</string>
+    <string name="set_fallback_help">If you haven’t slept (naps don’t count), a new day starts at this time once you’ve been up at least 6 hours.</string>
     <string name="set_source">Step source</string>
     <string name="set_source_help">“All sources” uses Health Connect’s app priority. Pick Fitbit to ignore your phone’s own step counting.</string>
     <string name="source_all">All sources (Health Connect priority)</string>

@@ -33,6 +33,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -46,13 +47,17 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
+import app.wakesteps.core.DayWindow
 import app.wakesteps.core.EndReason
 import app.wakesteps.core.Format
+import app.wakesteps.core.NightWindow
+import app.wakesteps.core.Overrides
 import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalorieMode
@@ -68,7 +73,7 @@ private const val FITBIT_PACKAGE = "com.fitbit.FitbitMobile"
 // ---------------------------------------------------------------- Today
 
 @Composable
-fun TodayScreen(state: UiState, settings: AppSettings, actions: Actions) {
+fun TodayScreen(state: UiState, settings: AppSettings, actions: Actions, onAdjust: (DayWindow) -> Unit) {
     Column(
         Modifier
             .verticalScroll(rememberScrollState())
@@ -77,7 +82,7 @@ fun TodayScreen(state: UiState, settings: AppSettings, actions: Actions) {
     ) {
         AccessCards(state.access, actions)
         state.error?.let { ErrorCard(it) }
-        state.today?.let { TodayContent(it, settings) }
+        state.today?.let { TodayContent(it, settings, onAdjust) }
     }
 }
 
@@ -119,7 +124,7 @@ private fun AccessCards(access: Access, actions: Actions) {
 }
 
 @Composable
-private fun TodayContent(t: TodaySummary, settings: AppSettings) {
+private fun TodayContent(t: TodaySummary, settings: AppSettings, onAdjust: (DayWindow) -> Unit) {
     val w = t.window
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         StepsRing(t.totals.steps, settings.goal)
@@ -131,9 +136,13 @@ private fun TodayContent(t: TodaySummary, settings: AppSettings) {
             val title = when {
                 !w.isOngoing -> stringResource(R.string.today_asleep, start, Format.time(w.endOr(t.now)))
                 w.startReason == StartReason.FALLBACK -> stringResource(R.string.today_since_reset, start)
+                w.startReason == StartReason.MANUAL -> stringResource(R.string.today_since_manual, start)
                 else -> stringResource(R.string.today_since_wake, start)
             }
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = { onAdjust(w) }) { Text(stringResource(R.string.adjust)) }
+            }
             Text(
                 stringResource(R.string.today_awake_for, Format.duration(Duration.between(w.start, w.endOr(t.now)))),
                 style = MaterialTheme.typography.bodyMedium,
@@ -309,7 +318,7 @@ private fun ErrorCard(message: String) {
 // ---------------------------------------------------------------- History
 
 @Composable
-fun HistoryScreen(state: UiState, settings: AppSettings) {
+fun HistoryScreen(state: UiState, settings: AppSettings, overrides: Overrides, onAdjust: (DayWindow) -> Unit) {
     if (state.history.isEmpty()) {
         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
             Text(
@@ -327,7 +336,7 @@ fun HistoryScreen(state: UiState, settings: AppSettings) {
         items(state.history, key = { it.window.start.toEpochMilli() }) { day ->
             val w = day.window
             val progress = if (settings.goal > 0) (day.totals.steps.toFloat() / settings.goal).coerceIn(0f, 1f) else 0f
-            Card(Modifier.fillMaxWidth()) {
+            Card(onClick = { onAdjust(w) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -364,8 +373,10 @@ fun HistoryScreen(state: UiState, settings: AppSettings) {
                         strokeCap = StrokeCap.Round,
                     )
                     val tags = buildList {
+                        if (overrides.touches(w, now)) add(stringResource(R.string.tag_edited))
                         if (w.startReason == StartReason.FALLBACK) add(stringResource(R.string.tag_fallback_start))
                         if (w.endReason == EndReason.FALLBACK) add(stringResource(R.string.tag_no_sleep))
+                        if (w.naps.isNotEmpty()) add(pluralStringResource(R.plurals.tag_naps, w.naps.size, w.naps.size))
                     }
                     if (tags.isNotEmpty()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -405,14 +416,27 @@ fun SettingsScreen(
             )
         }
 
-        Section(stringResource(R.string.set_min_sleep), stringResource(R.string.set_min_sleep_help)) {
-            var minutes by remember(settings.minSleepMinutes) { mutableFloatStateOf(settings.minSleepMinutes.toFloat()) }
-            Text(Format.duration(Duration.ofMinutes(minutes.toLong())), style = MaterialTheme.typography.headlineSmall)
-            Slider(
-                value = minutes,
-                onValueChange = { minutes = (it / 15f).toInt() * 15f },
-                onValueChangeFinished = { update { s -> s.copy(minSleepMinutes = minutes.toInt()) } },
-                valueRange = 60f..360f,
+        Section(stringResource(R.string.set_naps), stringResource(R.string.set_naps_help)) {
+            val night = state.today?.night ?: NightWindow.DEFAULT
+            val range = "${Format.clock(night.start)} – ${Format.clock(night.end)}"
+            Text(
+                stringResource(if (night.learned) R.string.set_night_learned else R.string.set_night_default, range),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            MinutesSlider(
+                label = stringResource(R.string.set_night_min),
+                minutes = settings.minNightSleepMinutes,
+                range = 30f..180f,
+                step = 15,
+                onChange = { m -> update { it.copy(minNightSleepMinutes = m) } },
+            )
+            MinutesSlider(
+                label = stringResource(R.string.set_day_min),
+                minutes = settings.minDaySleepMinutes,
+                range = 180f..480f,
+                step = 30,
+                onChange = { m -> update { it.copy(minDaySleepMinutes = m) } },
             )
         }
 
@@ -426,8 +450,7 @@ fun SettingsScreen(
                 ).show()
             }) {
                 Text(
-                    java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
-                        .format(LocalTime.of(t.hour, t.minute)),
+                    Format.clock(LocalTime.of(t.hour, t.minute)),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -502,6 +525,28 @@ private fun sourceLabel(pkg: String?): String = when (pkg) {
         val pm = LocalContext.current.packageManager
         runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
     }
+}
+
+/** A labelled slider over a duration, snapping to [step] minutes; saves when released. */
+@Composable
+private fun MinutesSlider(
+    label: String,
+    minutes: Int,
+    range: ClosedFloatingPointRange<Float>,
+    step: Int,
+    onChange: (Int) -> Unit,
+) {
+    var value by remember(minutes) { mutableFloatStateOf(minutes.toFloat()) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(Format.duration(Duration.ofMinutes(value.toLong())), style = MaterialTheme.typography.titleMedium)
+    }
+    Slider(
+        value = value,
+        onValueChange = { value = (it / step).toInt() * step.toFloat() },
+        onValueChangeFinished = { onChange(value.toInt()) },
+        valueRange = range,
+    )
 }
 
 @Composable

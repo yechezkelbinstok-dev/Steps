@@ -5,6 +5,9 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.wakesteps.app
+import app.wakesteps.core.DayWindow
+import app.wakesteps.core.Overrides
+import app.wakesteps.core.SleepSpan
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.DaySummary
 import app.wakesteps.data.HealthSource
@@ -48,6 +51,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val settings: StateFlow<AppSettings> =
         app.prefs.settings.stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+
+    val overrides: StateFlow<Overrides> =
+        app.prefs.overrides.stateIn(viewModelScope, SharingStarted.Eagerly, Overrides.NONE)
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -108,6 +114,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (after.liveMode) LiveModeService.start(app) else LiveModeService.stop(app)
             }
             if (after.copy(liveMode = before.liveMode) != before) reload()
+        }
+    }
+
+    // ---------------------------------------------------------------- judgement calls
+
+    /** Count [sleep] as main sleep (starts a new day) or as a nap. */
+    fun setSleepCall(sleep: SleepSpan, main: Boolean) = adjust { app.prefs.setSleepCall(sleep, main) }
+
+    fun clearSleepCall(sleep: SleepSpan) = adjust { app.prefs.clearSleepCall(sleep) }
+
+    /** Keep going past an all-nighter reset instead of starting a new day there. */
+    fun setResetSkipped(at: Instant, skipped: Boolean) = adjust { app.prefs.setResetSkipped(at, skipped) }
+
+    fun setManualStart(at: Instant, present: Boolean) = adjust { app.prefs.setManualStart(at, present) }
+
+    /** Undo every call made within [day], including on the sleep that started it. */
+    fun resetDay(day: DayWindow) = adjust {
+        val from = day.wokeFrom?.start ?: day.start
+        app.prefs.clearOverrides(from, day.end ?: Instant.now())
+    }
+
+    private fun adjust(change: suspend () -> Unit) {
+        viewModelScope.launch {
+            change()
+            reload()
         }
     }
 

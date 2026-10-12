@@ -29,6 +29,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,6 +42,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wakesteps.R
+import app.wakesteps.core.DayWindow
 import app.wakesteps.data.HealthSource
 import app.wakesteps.ui.theme.WakeStepsTheme
 
@@ -75,6 +77,8 @@ class MainActivity : ComponentActivity() {
 private fun App(vm: MainViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val overrides by vm.overrides.collectAsStateWithLifecycle()
+    var adjusting by remember { mutableStateOf<DayWindow?>(null) }
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.reload() }
@@ -118,12 +122,13 @@ private fun App(vm: MainViewModel) {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (tab) {
-                Tab.TODAY -> TodayScreen(state, settings, actions)
-                Tab.HISTORY -> HistoryScreen(state, settings)
+                Tab.TODAY -> TodayScreen(state, settings, actions, onAdjust = { adjusting = it })
+                Tab.HISTORY -> HistoryScreen(state, settings, overrides, onAdjust = { adjusting = it })
                 Tab.SETTINGS -> SettingsScreen(state, settings, vm::updateSettings, actions)
             }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         }
+        adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
     }
 }
 

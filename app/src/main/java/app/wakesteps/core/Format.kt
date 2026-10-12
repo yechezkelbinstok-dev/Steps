@@ -6,6 +6,7 @@ import app.wakesteps.data.DistanceUnit
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -17,6 +18,8 @@ object Format {
     fun number(n: Long): String = NumberFormat.getIntegerInstance().format(n)
 
     fun time(i: Instant): String = timeFmt.format(i.atZone(ZoneId.systemDefault()))
+
+    fun clock(t: LocalTime): String = timeFmt.format(t)
 
     fun day(i: Instant): String = dayFmt.format(i.atZone(ZoneId.systemDefault()))
 

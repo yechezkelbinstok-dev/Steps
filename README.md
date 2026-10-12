@@ -8,16 +8,26 @@ Fitbit / Google Health app. It never writes anything back.
 
 ## How a "day" is defined
 
-* **A day starts when you wake up.** That's the end of your last *main* sleep. Sleep sessions
-  less than 60 minutes apart are merged into one night, and sleeps shorter than the minimum
-  (default 3 h, adjustable) count as naps and don't reset anything.
-* **A day ends when you go to sleep.** Steps taken at 1 AM before bed still count toward the
-  day you woke up on.
-* **All-nighter fallback.** If no sleep is logged, a new day starts at the fallback time
-  (default 5:00 AM, adjustable), but only once you've been awake at least 6 hours, so an early
-  4:30 wake-up isn't cut off at 5:00.
-* **No sleep data at all?** Days line up on the fallback time, which works like a normal
-  calendar day that rolls over at 5 AM.
+* **A day starts when you wake up** from your main sleep, and **ends when you go to sleep**.
+  Steps at 1 AM before bed still count toward the day you woke up on.
+* **Sleep or nap? Time of day matters, not just length.**
+  * Sleep mostly during **your night** starts a new day even if it's short: 1 h or more
+    (adjustable). 4–6 AM is sleep.
+  * Sleep mostly during the **day** is a nap unless it's long: 5 h or more (adjustable), e.g.
+    recovery sleep after an all-nighter. 4–6 PM is a nap.
+  * **Your night is learned** from your last two weeks of sleep: 4 hours either side of your
+    usual mid-sleep time, plus midnight–6 AM, which always counts. If you usually sleep
+    3 AM–11 AM, a short 9–11 AM sleep counts as sleep for you.
+  * Waking up for up to 3 hours in the middle of the night doesn't split the night.
+* **All-nighter fallback.** If you don't sleep (naps don't count), a new day starts at the
+  fallback time (default 5:00 AM), but only once you've been awake at least 6 hours.
+* **You have the final say.** Tap any day in History, or *Adjust* on Today, to:
+  * call the sleep that started the day a nap (merges it into the day before),
+  * count a nap as sleep (starts a new day when you woke from it),
+  * keep a day going through an all-nighter reset,
+  * start a new day at a time you pick (for when your watch didn't track sleep).
+
+  Your calls beat the automatic rules, can each be undone, and the widget follows them.
 
 The logic is in [`DayCalculator.kt`](app/src/main/java/app/wakesteps/core/DayCalculator.kt) and
 covered by unit tests.
