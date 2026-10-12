@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.WakeSteps" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.WakeSteps.Invisible" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoDisplay">false</item>
+    </style>
+</resources>

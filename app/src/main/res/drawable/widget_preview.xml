@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FFE6F2F2" />
+            <corners android:radius="24dp" />
+            <size android:width="220dp" android:height="110dp" />
+        </shape>
+    </item>
+    <item
+        android:width="56dp"
+        android:height="56dp"
+        android:drawable="@drawable/ic_steps_teal"
+        android:gravity="center" />
+</layer-list>

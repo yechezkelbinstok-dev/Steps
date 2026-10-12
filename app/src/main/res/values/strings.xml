@@ -1,0 +1,62 @@
+<resources>
+    <string name="app_name">Awake Steps</string>
+    <string name="refresh">Refresh</string>
+    <string name="tab_today">Today</string>
+    <string name="tab_history">History</string>
+    <string name="tab_settings">Settings</string>
+    <string name="loading">Loading…</string>
+    <string name="now">now</string>
+
+    <string name="of_goal">of %1$s</string>
+    <string name="today_since_wake">Awake since %1$s</string>
+    <string name="today_since_reset">Day started %1$s (fallback)</string>
+    <string name="today_asleep">Asleep · day ran %1$s – %2$s</string>
+    <string name="today_awake_for">%1$s into your day</string>
+    <string name="today_fallback_note">No sleep was logged, so a new day was started at your %1$s fallback time.</string>
+    <string name="stat_per_hour">Steps per awake hour</string>
+    <string name="stat_synced">Tracker last synced</string>
+    <string name="hourly_title">Your day, hour by hour</string>
+    <string name="sync_note">Counts come from Health Connect. Fitbit pushes data there each time it syncs with your tracker, so totals can lag a few minutes behind your wrist.</string>
+
+    <string name="hc_missing_title">Health Connect needed</string>
+    <string name="hc_missing_body">This app reads your Fitbit steps and sleep through Health Connect. Install or update it, then turn on Health Connect sync in the Fitbit app.</string>
+    <string name="hc_install">Get Health Connect</string>
+    <string name="perm_title">Allow access to steps and sleep</string>
+    <string name="perm_body">Sleep is used to find when your day starts and ends; steps are counted between those times.</string>
+    <string name="perm_grant">Allow</string>
+    <string name="bg_title">Let the widget update on its own</string>
+    <string name="bg_body">Grant “access data in the background” so the widget can refresh while this app is closed.</string>
+
+    <string name="history_empty">No days to show yet.</string>
+    <string name="tag_fallback_start">Fallback start</string>
+    <string name="tag_no_sleep">No sleep logged</string>
+
+    <string name="set_goal">Daily step goal</string>
+    <string name="set_min_sleep">Shortest sleep that starts a new day</string>
+    <string name="set_min_sleep_help">Anything shorter is treated as a nap and doesn’t reset your count.</string>
+    <string name="set_fallback">All-nighter fallback</string>
+    <string name="set_fallback_help">If you haven’t slept, a new day starts at this time (once you’ve been up at least 6 hours).</string>
+    <string name="set_source">Step source</string>
+    <string name="set_source_help">“All sources” uses Health Connect’s app priority. Pick Fitbit to ignore your phone’s own step counting.</string>
+    <string name="source_all">All sources (Health Connect priority)</string>
+    <string name="set_live">Live mode</string>
+    <string name="set_live_help">Refreshes the widget every minute while your screen is on and shows a quiet notification with your count. Pauses while the screen is off. Without it the widget refreshes every 15 minutes, plus whenever you open the app or tap refresh.</string>
+    <string name="set_live_toggle">Refresh every minute</string>
+    <string name="set_open_hc">Manage Health Connect access</string>
+
+    <string name="widget_description">Steps since you woke up</string>
+    <string name="widget_setup">Open Awake Steps to set up</string>
+    <string name="widget_of_goal">/ %1$s</string>
+    <string name="since_time">since %1$s</string>
+    <string name="since_reset">since %1$s reset</string>
+    <string name="asleep">Asleep</string>
+    <string name="synced_at">synced %1$s</string>
+    <string name="updated_at">updated %1$s</string>
+
+    <string name="channel_live">Live step count</string>
+    <string name="notif_steps">%1$s steps</string>
+    <string name="notif_starting">Checking steps…</string>
+
+    <string name="privacy_title">How Awake Steps uses your data</string>
+    <string name="privacy_body">Awake Steps reads your steps and sleep sessions from Health Connect. Sleep is used only to work out when your day starts (when you wake up) and ends (when you go to sleep); steps are added up between those times.\n\nEverything is processed on your phone. Nothing is uploaded, shared, or sent anywhere, and the app never writes to Health Connect.\n\nYou can revoke access at any time in Health Connect settings.</string>
+</resources>
