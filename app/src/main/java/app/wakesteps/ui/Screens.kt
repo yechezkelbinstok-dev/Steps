@@ -31,13 +31,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -319,13 +324,100 @@ private fun ErrorCard(message: String) {
 
 @Composable
 fun HistoryScreen(state: UiState, settings: AppSettings, overrides: Overrides, onAdjust: (DayWindow) -> Unit) {
-    if (state.history.isEmpty()) {
-        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+    var calendar by rememberSaveable { mutableStateOf(false) }
+    Column {
+        SingleChoiceSegmentedButtonRow(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+        ) {
+            SegmentedButton(
+                selected = !calendar,
+                onClick = { calendar = false },
+                shape = SegmentedButtonDefaults.itemShape(0, 2),
+            ) { Text(stringResource(R.string.history_awake_days)) }
+            SegmentedButton(
+                selected = calendar,
+                onClick = { calendar = true },
+                shape = SegmentedButtonDefaults.itemShape(1, 2),
+            ) { Text(stringResource(R.string.history_calendar_days)) }
+        }
+        if (calendar) CalendarDays(state, settings) else AwakeDays(state, settings, overrides, onAdjust)
+    }
+}
+
+/** Midnight-to-midnight totals, the way Fitbit / Google count them, for comparison. */
+@Composable
+private fun CalendarDays(state: UiState, settings: AppSettings) {
+    if (state.calendar.isEmpty()) {
+        EmptyHistory(state.loading)
+        return
+    }
+    val today = java.time.LocalDate.now()
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
             Text(
-                stringResource(if (state.loading) R.string.loading else R.string.history_empty),
-                textAlign = TextAlign.Center,
+                stringResource(R.string.history_calendar_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        items(state.calendar, key = { it.date.toEpochDay() }) { day ->
+            val progress = if (settings.goal > 0) (day.totals.steps.toFloat() / settings.goal).coerceIn(0f, 1f) else 0f
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (day.date == today) stringResource(R.string.history_today_so_far)
+                            else day.date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d")),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            Format.number(day.totals.steps),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    val extras = listOfNotNull(
+                        day.totals.calories?.let { Format.calories(it) },
+                        day.totals.distanceMeters?.let { Format.distance(it, settings.distanceUnit) },
+                    )
+                    if (extras.isNotEmpty()) {
+                        Text(
+                            extras.joinToString("  ·  "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                        strokeCap = StrokeCap.Round,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyHistory(loading: Boolean) {
+    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+        Text(
+            stringResource(if (loading) R.string.loading else R.string.history_empty),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun AwakeDays(state: UiState, settings: AppSettings, overrides: Overrides, onAdjust: (DayWindow) -> Unit) {
+    if (state.history.isEmpty()) {
+        EmptyHistory(state.loading)
         return
     }
     val now = Instant.now()
@@ -397,6 +489,7 @@ fun SettingsScreen(
     settings: AppSettings,
     update: ((AppSettings) -> AppSettings) -> Unit,
     actions: Actions,
+    onShowSyncLog: () -> Unit,
 ) {
     val context = LocalContext.current
     Column(
@@ -506,6 +599,7 @@ fun SettingsScreen(
 
         HorizontalDivider()
         OutlinedButton(onClick = actions.openHealthConnect) { Text(stringResource(R.string.set_open_hc)) }
+        TextButton(onClick = onShowSyncLog) { Text(stringResource(R.string.sync_log_open)) }
         val version = remember {
             runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
         }

@@ -68,6 +68,11 @@ data class Snapshot(
     val error: String?,
 )
 
+/** New tracker data was found: seen at [seenAt], covering steps up to [dataUpTo]. */
+data class SyncEvent(val seenAt: Instant, val dataUpTo: Instant, val stepsDelta: Long)
+
+private const val SYNC_LOG_SIZE = 60
+
 class Prefs(private val context: Context) {
     private object K {
         val goal = intPreferencesKey("goal")
@@ -92,6 +97,9 @@ class Prefs(private val context: Context) {
         /** Entries: "S|<epochSec>|1" main sleep, "S|<epochSec>|0" nap, "R|<epochSec>" skipped reset,
          *  "M|<epochSec>" manual day start. */
         val overrides = stringSetPreferencesKey("overrides")
+
+        /** Newline-separated "<seenAtEpochSec>|<dataUpToEpochSec>|<stepsDelta>", newest first. */
+        val syncLog = stringPreferencesKey("sync_log")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -99,6 +107,25 @@ class Prefs(private val context: Context) {
     val snapshot: Flow<Snapshot?> = context.dataStore.data.map { it.toSnapshot() }
 
     val overrides: Flow<Overrides> = context.dataStore.data.map { parseOverrides(it[K.overrides].orEmpty()) }
+
+    /** Each time new tracker data showed up in Health Connect, newest first. */
+    val syncLog: Flow<List<SyncEvent>> = context.dataStore.data.map { p ->
+        p[K.syncLog].orEmpty().lineSequence().mapNotNull { line ->
+            val parts = line.split('|')
+            val seen = parts.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
+            val upTo = parts.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
+            SyncEvent(Instant.ofEpochSecond(seen), Instant.ofEpochSecond(upTo), parts.getOrNull(2)?.toLongOrNull() ?: 0)
+        }.toList()
+    }
+
+    suspend fun logSync(event: SyncEvent) {
+        context.dataStore.edit { p ->
+            val line = "${event.seenAt.epochSecond}|${event.dataUpTo.epochSecond}|${event.stepsDelta}"
+            p[K.syncLog] = (listOf(line) + p[K.syncLog].orEmpty().lines().filter { it.isNotBlank() })
+                .take(SYNC_LOG_SIZE)
+                .joinToString("\n")
+        }
+    }
 
     suspend fun currentSettings(): AppSettings = settings.first()
     suspend fun currentOverrides(): Overrides = overrides.first()

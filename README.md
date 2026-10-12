@@ -51,18 +51,33 @@ widgets under Settings → Display → Lock screen, then swipe over on the lock 
 | When | What happens |
 |---|---|
 | Screen turns on | Immediate refresh, so it's current when you look |
-| Screen stays on | Refresh every 60 s |
+| Screen stays on | Checks Health Connect for new data every 15 s, and redraws the moment any arrives |
 | Screen off | Refresh every 15 min (the Android minimum) |
 | You open the app | Immediate refresh |
 
-The minute-by-minute part ("Keep the widget live" in Settings, on by default) runs as a
-background service. Android requires services like this to have a notification. The app never
-asks for notification permission, so on Android 13+ that notification is never shown. You'll
-only see Awake Steps listed under "active apps" in quick settings.
+The widget is drawn directly through `AppWidgetManager` (`WidgetPusher`), not through Glance's
+`update()`, which queues the redraw as a WorkManager job that Android can delay for minutes
+while the app is in the background.
 
-The widget can only be as fresh as the data in Health Connect. The Fitbit app writes to Health
-Connect whenever it syncs with your tracker. To keep that frequent, turn on **All-day sync** in
-the Fitbit app and leave Fitbit unrestricted in battery settings.
+The 15-second check is Health Connect's change log: one cheap call that reports whether anything
+was written. Totals are only re-read when it says something changed, which keeps well clear of
+Health Connect's rate limits.
+
+The widget can only be as fresh as the data in Health Connect, and the Fitbit / Google Health
+app decides when to write there. **Settings → Sync log** records each time new data actually
+arrived, and how far behind it was, so you can see Fitbit's real cadence on your phone. To keep
+it frequent, turn on all-day sync in the Fitbit app and leave it unrestricted in battery
+settings.
+
+The minute-by-minute part ("Keep the widget live" in Settings, on by default) runs as a
+background service. Android requires services like this to have a notification, but the app
+never asks for notification permission, so on Android 13+ that notification is never shown.
+You'll only see Awake Steps listed under "active apps" in quick settings.
+
+## Comparing with the Fitbit / Google app
+
+History has a **Midnight to midnight** toggle that shows plain calendar-day totals (steps,
+calories, distance), the way the Fitbit / Google Health app counts them, so you can compare.
 
 ## Calories and distance
 

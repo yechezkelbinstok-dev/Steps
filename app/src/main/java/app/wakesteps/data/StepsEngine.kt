@@ -1,16 +1,17 @@
 package app.wakesteps.data
 
 import android.content.Context
-import androidx.glance.appwidget.updateAll
 import app.wakesteps.core.DayCalculator
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.NightWindow
 import app.wakesteps.core.SleepSpan
-import app.wakesteps.widget.StepsWidget
+import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 
 data class TodaySummary(
@@ -24,6 +25,9 @@ data class TodaySummary(
 )
 
 data class DaySummary(val window: DayWindow, val totals: DayTotals)
+
+/** A plain midnight-to-midnight day, for comparing with Fitbit / Google. */
+data class CalendarDay(val date: LocalDate, val totals: DayTotals)
 
 /** Days of sleep history used to learn when the user's night is. */
 private const val LEARN_DAYS = 14L
@@ -78,6 +82,14 @@ class StepsEngine(
             .reversed()
     }
 
+    suspend fun calendarDays(settings: AppSettings, days: Long = 14): List<CalendarDay> {
+        val now = LocalDateTime.now()
+        return health.calendarDays(
+            now.toLocalDate().minusDays(days - 1), now, settings.sourcePackage,
+            health.grantedPermissions(), settings.calorieMode,
+        ).map { (date, totals) -> CalendarDay(date, totals) }
+    }
+
     /**
      * Recomputes today's totals, stores them for the widget and redraws every widget instance.
      * Safe to call from the app, a worker, the live service or a widget tap.
@@ -88,6 +100,12 @@ class StepsEngine(
             check(health.isAvailable) { "Health Connect isn't available" }
             check(health.hasCorePermissions()) { "Open the app to grant Health Connect access" }
             val t = knownSummary ?: today(settings, includeHourly = false)
+            val previous = prefs.currentSnapshot()
+            val newest = t.latestDataAt
+            if (newest != null && (previous?.latestDataAt == null || newest > previous.latestDataAt)) {
+                val delta = if (previous != null && previous.dayStart == t.window.start) t.totals.steps - previous.totals.steps else 0
+                prefs.logSync(SyncEvent(seenAt = t.now, dataUpTo = newest, stepsDelta = delta))
+            }
             Snapshot(
                 totals = t.totals,
                 dayStart = t.window.start,
@@ -101,7 +119,7 @@ class StepsEngine(
             prefs.saveError(e.message ?: e.javaClass.simpleName)
             null
         }
-        StepsWidget().updateAll(context)
+        WidgetPusher.pushAll(context)
         snapshot
     }
 }

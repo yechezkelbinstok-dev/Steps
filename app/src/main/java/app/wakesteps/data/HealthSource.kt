@@ -5,6 +5,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.aggregate.AggregateMetric
+import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -12,13 +13,19 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.AggregateGroupByDurationRequest
+import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.AggregateRequest
+import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Length
 import app.wakesteps.core.SleepSpan
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.Period
 
 /** Thin wrapper around Health Connect for the handful of reads the app needs. */
 class HealthSource(private val context: Context) {
@@ -87,26 +94,61 @@ class HealthSource(private val context: Context) {
         granted: Set<String>,
         calorieMode: CalorieMode,
     ): DayTotals {
-        val calorieMetric: AggregateMetric<Energy>? = when {
-            calorieMode == CalorieMode.TOTAL && TOTAL_CALORIES in granted -> TotalCaloriesBurnedRecord.ENERGY_TOTAL
-            calorieMode == CalorieMode.ACTIVE && ACTIVE_CALORIES in granted -> ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL
-            else -> null
-        }
-        val distanceMetric = if (DISTANCE in granted) DistanceRecord.DISTANCE_TOTAL else null
-        if (!to.isAfter(from)) {
-            return DayTotals(0, calorieMetric?.let { 0.0 }, distanceMetric?.let { 0.0 })
-        }
+        val m = Metrics(granted, calorieMode)
+        if (!to.isAfter(from)) return m.empty()
         val result = client.aggregate(
             AggregateRequest(
-                metrics = setOfNotNull(StepsRecord.COUNT_TOTAL, calorieMetric, distanceMetric),
+                metrics = m.all,
                 timeRangeFilter = TimeRangeFilter.between(from, to),
                 dataOriginFilter = origins(sourcePackage),
             )
         )
-        return DayTotals(
-            steps = result[StepsRecord.COUNT_TOTAL] ?: 0,
-            calories = calorieMetric?.let { result[it]?.inKilocalories ?: 0.0 },
-            distanceMeters = distanceMetric?.let { result[it]?.inMeters ?: 0.0 },
+        return m.read(result)
+    }
+
+    /**
+     * Midnight-to-midnight totals for each calendar day from [firstDay] through today, the way
+     * Fitbit / Google count them. One Health Connect call for the whole range.
+     */
+    suspend fun calendarDays(
+        firstDay: LocalDate,
+        now: LocalDateTime,
+        sourcePackage: String?,
+        granted: Set<String>,
+        calorieMode: CalorieMode,
+    ): List<Pair<LocalDate, DayTotals>> {
+        val m = Metrics(granted, calorieMode)
+        val byDay = client.aggregateGroupByPeriod(
+            AggregateGroupByPeriodRequest(
+                metrics = m.all,
+                timeRangeFilter = TimeRangeFilter.between(firstDay.atStartOfDay(), now),
+                timeRangeSlicer = Period.ofDays(1),
+                dataOriginFilter = origins(sourcePackage),
+            )
+        ).associate { it.startTime.toLocalDate() to m.read(it.result) }
+        // Days with no data at all come back missing; show them as zero rather than skipping.
+        return generateSequence(now.toLocalDate()) { it.minusDays(1) }
+            .takeWhile { !it.isBefore(firstDay) }
+            .map { it to (byDay[it] ?: m.empty()) }
+            .toList()
+    }
+
+    /** Which metrics to aggregate given the user's grants and calorie preference. */
+    private class Metrics(granted: Set<String>, calorieMode: CalorieMode) {
+        val calories: AggregateMetric<Energy>? = when {
+            calorieMode == CalorieMode.TOTAL && TOTAL_CALORIES in granted -> TotalCaloriesBurnedRecord.ENERGY_TOTAL
+            calorieMode == CalorieMode.ACTIVE && ACTIVE_CALORIES in granted -> ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL
+            else -> null
+        }
+        val distance: AggregateMetric<Length>? = if (DISTANCE in granted) DistanceRecord.DISTANCE_TOTAL else null
+        val all: Set<AggregateMetric<*>> = setOfNotNull(StepsRecord.COUNT_TOTAL, calories, distance)
+
+        fun empty() = DayTotals(0, calories?.let { 0.0 }, distance?.let { 0.0 })
+
+        fun read(r: AggregationResult) = DayTotals(
+            steps = r[StepsRecord.COUNT_TOTAL] ?: 0,
+            calories = calories?.let { r[it]?.inKilocalories ?: 0.0 },
+            distanceMeters = distance?.let { r[it]?.inMeters ?: 0.0 },
         )
     }
 
@@ -126,6 +168,30 @@ class HealthSource(private val context: Context) {
                 dataOriginFilter = origins(sourcePackage),
             )
         ).map { it.startTime to (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) }
+    }
+
+    /** A bookmark in Health Connect's change log for steps and sleep. */
+    suspend fun changesToken(sourcePackage: String?): String = client.getChangesToken(
+        ChangesTokenRequest(
+            recordTypes = setOf(StepsRecord::class, SleepSessionRecord::class),
+            dataOriginFilters = origins(sourcePackage),
+        )
+    )
+
+    /**
+     * Whether anything was written since [token], plus the bookmark for next time (null if the
+     * old one expired). The cheap call Health Connect recommends for frequent checks.
+     */
+    suspend fun pollChanges(token: String): Pair<Boolean, String?> {
+        var next = token
+        var changed = false
+        do {
+            val response = client.getChanges(next)
+            if (response.changesTokenExpired) return true to null
+            changed = changed || response.changes.isNotEmpty()
+            next = response.nextChangesToken
+        } while (response.hasMore)
+        return changed to next
     }
 
     /** End time of the most recent step record, to show how fresh the tracker's sync is. */

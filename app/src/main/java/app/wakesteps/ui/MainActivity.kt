@@ -79,6 +79,8 @@ private fun App(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val overrides by vm.overrides.collectAsStateWithLifecycle()
     var adjusting by remember { mutableStateOf<DayWindow?>(null) }
+    var showSyncLog by remember { mutableStateOf(false) }
+    val syncLog by vm.syncLog.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.reload() }
@@ -124,11 +126,12 @@ private fun App(vm: MainViewModel) {
             when (tab) {
                 Tab.TODAY -> TodayScreen(state, settings, actions, onAdjust = { adjusting = it })
                 Tab.HISTORY -> HistoryScreen(state, settings, overrides, onAdjust = { adjusting = it })
-                Tab.SETTINGS -> SettingsScreen(state, settings, vm::updateSettings, actions)
+                Tab.SETTINGS -> SettingsScreen(state, settings, vm::updateSettings, actions, onShowSyncLog = { showSyncLog = true })
             }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         }
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
+        if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
     }
 }
 

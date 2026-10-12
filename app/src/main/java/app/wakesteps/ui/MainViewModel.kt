@@ -9,8 +9,10 @@ import app.wakesteps.core.DayWindow
 import app.wakesteps.core.Overrides
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.data.AppSettings
+import app.wakesteps.data.CalendarDay
 import app.wakesteps.data.DaySummary
 import app.wakesteps.data.HealthSource
+import app.wakesteps.data.SyncEvent
 import app.wakesteps.data.TodaySummary
 import app.wakesteps.sync.LiveModeService
 import kotlinx.coroutines.Job
@@ -18,6 +20,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -41,6 +46,8 @@ data class UiState(
     val loading: Boolean = false,
     val today: TodaySummary? = null,
     val history: List<DaySummary> = emptyList(),
+    /** Midnight-to-midnight totals, for comparing with the Fitbit / Google app. */
+    val calendar: List<CalendarDay> = emptyList(),
     val sources: List<String> = emptyList(),
     val error: String? = null,
 )
@@ -58,7 +65,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    val syncLog: StateFlow<List<SyncEvent>> =
+        app.prefs.syncLog.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private var reloadJob: Job? = null
+
+    init {
+        // The live service refreshes the widget in the background; when it finds new data
+        // while the app is open, update Today too (without redoing history).
+        viewModelScope.launch {
+            app.prefs.snapshot
+                .map { it?.updatedAt }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { refreshToday() }
+        }
+    }
+
+    private fun refreshToday() {
+        if (reloadJob?.isActive == true || _state.value.access !is Access.Ready) return
+        viewModelScope.launch {
+            runCatching { app.engine.today(app.prefs.currentSettings(), includeHourly = true) }
+                .onSuccess { today -> _state.update { it.copy(today = today) } }
+        }
+    }
 
     fun reload() {
         reloadJob?.cancel()
@@ -79,10 +109,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // We're in the foreground, so this read always works: push it to the widget too.
                 app.engine.refresh(today)
                 val history = app.engine.history(s)
+                val calendar = runCatching { app.engine.calendarDays(s) }.getOrDefault(emptyList())
                 val now = Instant.now()
                 val sources = runCatching { health.recentStepSources(now.minus(Duration.ofDays(2)), now) }
                     .getOrDefault(emptyList())
-                _state.update { it.copy(history = history, sources = sources, loading = false) }
+                _state.update { it.copy(history = history, calendar = calendar, sources = sources, loading = false) }
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = e.message ?: e.javaClass.simpleName) }
             }

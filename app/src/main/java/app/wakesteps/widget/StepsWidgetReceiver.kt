@@ -1,16 +1,39 @@
 package app.wakesteps.widget
 
 import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
 import android.content.Context
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import android.os.Bundle
 import app.wakesteps.sync.RefreshWorker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-class StepsWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = StepsWidget()
+/**
+ * Plain AppWidgetProvider rather than GlanceAppWidgetReceiver: we draw with [WidgetPusher]
+ * so updates never wait in Glance's WorkManager queue.
+ */
+class StepsWidgetReceiver : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        push(context)
         RefreshWorker.refreshNow(context)
+    }
+
+    /** Resized: lay it out again for the new size. */
+    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
+        push(context)
+    }
+
+    private fun push(context: Context) {
+        // Null when called outside onReceive (e.g. directly in tests).
+        val pending: PendingResult? = goAsync()
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                WidgetPusher.pushAll(context.applicationContext)
+            } finally {
+                pending?.finish()
+            }
+        }
     }
 }

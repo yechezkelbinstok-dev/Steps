@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -29,8 +30,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Live refresh: re-reads Health Connect the moment the screen turns on (so the widget is current
- * when you look at it) and then every minute while it stays on. Does nothing while the screen
- * is off.
+ * when you look at it), then watches for new data every few seconds while it stays on.
+ * Does nothing while the screen is off.
  *
  * Android requires a notification for any long-running service, but this app never asks for
  * notification permission, so on Android 13+ the notification is never shown. The service only
@@ -65,12 +66,40 @@ class LiveModeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
+    /**
+     * While the screen is on: refresh right away, then ask Health Connect every few seconds
+     * whether anything new was written (one cheap change-log call) and only re-read and redraw
+     * when it was. A full refresh still runs every few minutes so the day boundary and
+     * "steps to go" stay current even when no new data arrives.
+     */
     private fun startLoop() {
         if (loop?.isActive == true) return
         loop = scope.launch {
+            val health = app.health
+            var token: String? = null
+            var tokenSource: String? = null
+            var lastFull = 0L
             while (isActive) {
-                app.engine.refresh()
-                delay(INTERVAL_MS)
+                val source = app.prefs.currentSettings().sourcePackage
+                if (source != tokenSource) token = null // the bookmark is per data source
+                var changed = false
+                var failed = false
+                token?.let { t ->
+                    runCatching { health.pollChanges(t) }
+                        .onSuccess { (c, next) -> changed = c; token = next }
+                        .onFailure { failed = true }
+                }
+                if (token == null && !failed) {
+                    token = runCatching { health.changesToken(source) }.getOrNull()
+                    tokenSource = source
+                }
+                val now = SystemClock.elapsedRealtime()
+                if (changed || lastFull == 0L || now - lastFull >= FULL_REFRESH_MS) {
+                    app.engine.refresh()
+                    lastFull = now
+                }
+                // Back off if Health Connect pushed back (e.g. rate limiting).
+                delay(if (failed) BACKOFF_MS else POLL_MS)
             }
         }
     }
@@ -108,7 +137,9 @@ class LiveModeService : Service() {
     companion object {
         private const val CHANNEL_ID = "live_silent"
         private const val NOTIFICATION_ID = 1
-        private const val INTERVAL_MS = 60_000L
+        private const val POLL_MS = 15_000L
+        private const val FULL_REFRESH_MS = 5 * 60_000L
+        private const val BACKOFF_MS = 2 * 60_000L
 
         fun createChannel(context: Context) {
             val nm = context.getSystemService(NotificationManager::class.java)

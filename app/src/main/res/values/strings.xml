@@ -37,6 +37,10 @@
     <string name="bg_body">Grant “access data in the background” so the widget can refresh while this app is closed.</string>
 
     <string name="history_empty">No days to show yet.</string>
+    <string name="history_awake_days">Your days</string>
+    <string name="history_calendar_days">Midnight to midnight</string>
+    <string name="history_calendar_note">For comparing with the Fitbit / Google Health app: plain calendar days from 12 AM to 12 AM.</string>
+    <string name="history_today_so_far">Today so far</string>
     <string name="tag_edited">Edited by you</string>
     <plurals name="tag_naps">
         <item quantity="one">%d nap</item>
@@ -95,6 +99,12 @@
     <string name="set_live_toggle">Keep the widget live</string>
     <string name="set_open_hc">Manage Health Connect access</string>
     <string name="app_version">Awake Steps %1$s</string>
+    <string name="sync_log_open">Sync log: how often Fitbit data arrives</string>
+    <string name="sync_log_title">Sync log</string>
+    <string name="sync_log_summary">New Fitbit data has been arriving about every %1$s, roughly %2$s after the steps happened.</string>
+    <string name="sync_log_note">Each line is a moment new step data showed up in Health Connect. While your screen is on this app checks every 15 seconds, so times are accurate to about that; with the screen off it checks every 15 minutes.</string>
+    <string name="sync_log_empty">Nothing yet. Entries appear as new data arrives.</string>
+    <string name="sync_log_up_to">steps recorded up to %1$s</string>
 
     <string name="widget_description">Steps, calories and distance for your waking day</string>
     <string name="widget_setup">Open Awake Steps to set up</string>
