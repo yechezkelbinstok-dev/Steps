@@ -4,6 +4,14 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 → 200.
 
+## 1.5
+- Widget redesign: smoked-glass card that lets the wallpaper show through, an aqua-to-blue
+  gradient goal ring (gold when the goal is met), the footprints icon over the step count,
+  coral calories and sky-blue distance. Fixed palette instead of wallpaper-derived colours,
+  which came out muddy.
+- Dropped redundant text: no percentage, no "steps to go", no "steps"/"calories" words. The
+  ring shows progress and the icons and units say what each number is.
+
 ## 1.4
 - Settings trimmed to the daily goal, Health Connect access and the sync log. Sleep/nap rules,
   the all-nighter cutoff, data source, units and live refresh are tuned in code instead.

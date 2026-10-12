@@ -39,7 +39,7 @@ class RenderTestApp : WakeStepsApp() {
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], application = RenderTestApp::class, qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(sdk = [35], application = RenderTestApp::class, qualifiers = "w411dp-h891dp-420dpi")
 class WidgetRenderTest {
 
     @Test
@@ -70,7 +70,7 @@ class WidgetRenderTest {
         // Roughly Pixel launcher cell sizes.
         listOf(
             "2x1" to DpSize(170.dp, 80.dp),
-            "2x2" to DpSize(170.dp, 180.dp),
+            "2x2" to DpSize(167.dp, 190.dp),
             "4x1" to DpSize(350.dp, 90.dp),
             "4x2" to DpSize(350.dp, 190.dp),
             "4x3" to DpSize(350.dp, 290.dp),
@@ -89,11 +89,10 @@ class WidgetRenderTest {
         val h = (size.height.value * d).toInt()
         view.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
         view.layout(0, 0, w, h)
-        val bmp = Bitmap.createBitmap(w + 40, h + 40, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        canvas.drawColor(Color.rgb(54, 62, 80)) // stand-in wallpaper
-        canvas.translate(20f, 20f)
-        view.draw(canvas)
+        // Transparent, so the renders can be laid over a real wallpaper.
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bmp.eraseColor(Color.TRANSPARENT)
+        view.draw(Canvas(bmp))
         file.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         Log.i("WidgetRender", "wrote ${file.absolutePath}")
     }

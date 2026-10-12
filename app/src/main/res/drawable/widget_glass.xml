@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Smoked glass card. Translucency is baked in here: a tinted shape can't be see-through,
+     because widget image tinting blends the tint over the shape instead of replacing it. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#990B1117" />
+    <corners android:radius="@dimen/widget_radius" />
+</shape>

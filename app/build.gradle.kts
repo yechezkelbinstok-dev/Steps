@@ -5,7 +5,7 @@ plugins {
 }
 
 /** The one place to bump the version. */
-val appVersion = "1.4"
+val appVersion = "1.5"
 
 android {
     namespace = "app.wakesteps"

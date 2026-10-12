@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Shown in the widget picker (Android 12+). Mirrors the 4×2 split layout in StepsWidget. -->
+<!-- Shown in the widget picker (Android 12+). Mirrors the 4×2 layout in StepsWidget. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
-    android:backgroundTint="@color/widget_bg"
+    android:background="@drawable/widget_glass"
     android:baselineAligned="false"
     android:gravity="center_vertical"
     android:orientation="horizontal"
@@ -27,30 +26,36 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:importantForAccessibility="no"
-                android:src="@drawable/preview_ring" />
+                android:src="@drawable/ring_track" />
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ring_p084" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:gravity="center_horizontal"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                tools:ignore="UseCompoundDrawables">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_steps"
+                    android:tint="@color/widget_aqua" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:fontFamily="google-sans"
+                    android:layout_marginBottom="9dp"
                     android:text="@string/preview_steps"
                     android:textColor="@color/widget_text"
-                    android:textSize="26sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="google-sans-text"
-                    android:text="@string/widget_steps"
-                    android:textColor="@color/widget_muted"
-                    android:textSize="11sp" />
+                    android:textSize="27sp" />
             </LinearLayout>
         </FrameLayout>
     </FrameLayout>
@@ -65,18 +70,15 @@
         <TextView
             style="@style/WidgetPreviewMetric"
             android:drawableStart="@drawable/ic_fire"
+            android:drawableTint="@color/widget_calories"
             android:text="@string/preview_calories" />
 
         <TextView
             style="@style/WidgetPreviewMetric"
             android:layout_marginTop="8dp"
             android:drawableStart="@drawable/ic_distance"
+            android:drawableTint="@color/widget_distance"
             android:text="@string/preview_distance" />
 
-        <TextView
-            style="@style/WidgetPreviewMetric"
-            android:layout_marginTop="8dp"
-            android:drawableStart="@drawable/ic_flag"
-            android:text="@string/preview_to_go" />
     </LinearLayout>
 </LinearLayout>

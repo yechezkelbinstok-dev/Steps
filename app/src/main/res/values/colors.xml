@@ -1,13 +1,9 @@
 <resources>
     <color name="ic_launcher_background">#00696E</color>
 
-    <!-- Widget palette. Fixed deep tones so the card looks the same in light and dark mode.
-         Android 12+ overrides these with wallpaper-based colors (values-v31). -->
-    <color name="widget_bg">#FF00373A</color>
-    <color name="widget_track">#FF004F53</color>
-    <color name="widget_accent">#FF6FF6FC</color>
-    <color name="widget_goal">#FFFFD480</color>
+    <!-- Widget palette (also in Palette in StepsWidget.kt); used by the widget-picker preview. -->
     <color name="widget_text">#FFFFFFFF</color>
-    <color name="widget_muted">#FFA9C9CA</color>
-    <color name="widget_error">#FFFFB4AB</color>
+    <color name="widget_aqua">#FF2BE7C8</color>
+    <color name="widget_calories">#FFFF7A59</color>
+    <color name="widget_distance">#FF5CB8FF</color>
 </resources>
