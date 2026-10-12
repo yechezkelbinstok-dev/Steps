@@ -10,17 +10,22 @@ Fitbit / Google Health app. It never writes anything back.
 
 * **A day starts when you wake up** from your main sleep, and **ends when you go to sleep**.
   Steps at 1 AM before bed still count toward the day you woke up on.
-* **Sleep or nap? Time of day matters, not just length.**
+* **Sleep or nap? Time of day and how long you've been up matter, not just length.**
   * Sleep mostly during **your night** starts a new day even if it's short: 1 h or more
     (adjustable). 4–6 AM is sleep.
-  * Sleep mostly during the **day** is a nap unless it's long: 5 h or more (adjustable), e.g.
-    recovery sleep after an all-nighter. 4–6 PM is a nap.
+  * After being up **18 hours or more**, any sleep of 1 h or more is your night's sleep,
+    whatever the time. Going to bed at 6 AM and sleeping until 9 is a late night, not a nap.
+  * Other **daytime** sleep is a nap unless it's long: 5 h or more (adjustable). 4–6 PM after
+    a normal morning is a nap.
   * **Your night is learned** from your last two weeks of sleep: 4 hours either side of your
     usual mid-sleep time, plus midnight–6 AM, which always counts. If you usually sleep
     3 AM–11 AM, a short 9–11 AM sleep counts as sleep for you.
   * Waking up for up to 3 hours in the middle of the night doesn't split the night.
-* **All-nighter fallback.** If you don't sleep (naps don't count), a new day starts at the
-  fallback time (default 5:00 AM), but only once you've been awake at least 6 hours.
+* **All-nighters are decided in hindsight.** Being awake at the cutoff (default 5:00 AM) only
+  marks a *possible* all-nighter. Go to sleep within 6 hours of it and it was just a late night:
+  your day runs until you fall asleep. Still up 6 hours later (or only dozed briefly)? Then it
+  was an all-nighter, and a new day starts back at 5:00 AM. The cutoff also needs you to have
+  been awake 6+ hours, so waking at 4:30 isn't cut off at 5.
 * **You have the final say.** Tap any day in History, or *Adjust* on Today, to:
   * call the sleep that started the day a nap (merges it into the day before),
   * count a nap as sleep (starts a new day when you woke from it),

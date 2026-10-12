@@ -37,7 +37,8 @@ class DayCalculatorTest {
     @Test
     fun allNighterFallsBackAtFallbackTime() {
         val sleeps = listOf(sleep("2026-10-11T01:00", "2026-10-11T09:00"))
-        val day = DayCalculator.current(sleeps, t("2026-10-10T00:00"), t("2026-10-12T10:00"), zone, rules)
+        // Still up at noon, more than 6 h past 5 AM: an all-nighter, back-dated to 5 AM.
+        val day = DayCalculator.current(sleeps, t("2026-10-10T00:00"), t("2026-10-12T12:00"), zone, rules)
         assertEquals(t("2026-10-12T05:00"), day.start)
         assertEquals(StartReason.FALLBACK, day.startReason)
     }
@@ -183,13 +184,68 @@ class DayCalculatorTest {
     }
 
     @Test
-    fun typicalSleeperShortMorningSleepIsNap() {
-        // Same 9–11 AM sleep for someone whose nights are 11 PM – 7 AM: a nap after an all-nighter.
+    fun morningSleepAfterLongNightIsTheNightsSleep() {
+        // Usually 11 PM – 7 AM, but up since 7 AM yesterday and asleep 9–11 AM: that's the
+        // night's sleep, not a nap, and there's no all-nighter reset at 5.
         val usual = (5..9).map { d -> sleep("2026-10-0${d}T23:00", "2026-10-${"%02d".format(d + 1)}T07:00") }
         val sleeps = usual + sleep("2026-10-11T09:00", "2026-10-11T11:00")
-        val day = DayCalculator.current(sleeps, t("2026-10-08T00:00"), t("2026-10-11T15:00"), zone, rules)
-        assertEquals(StartReason.FALLBACK, day.startReason)
-        assertEquals(t("2026-10-11T05:00"), day.start)
+        val windows = DayCalculator.windows(sleeps, t("2026-10-08T00:00"), t("2026-10-11T15:00"), zone, rules)
+        assertEquals(t("2026-10-11T11:00"), windows.last().start)
+        assertEquals(t("2026-10-10T07:00"), windows[windows.size - 2].start)
+        assertEquals(t("2026-10-11T09:00"), windows[windows.size - 2].end)
+    }
+
+    // ------------------------------------------------------------ late nights vs. all-nighters
+
+    @Test
+    fun bedAt6AmIsALateNightNotAnAllNighter() {
+        // Woke 7 AM, stayed up, slept 6–9 AM: yesterday runs until 6 AM, today starts at 9.
+        val sleeps = listOf(
+            sleep("2026-10-10T23:00", "2026-10-11T07:00"),
+            sleep("2026-10-12T06:00", "2026-10-12T09:00"),
+        )
+        val windows = DayCalculator.windows(sleeps, t("2026-10-10T00:00"), t("2026-10-12T13:00"), zone, rules)
+        assertEquals(t("2026-10-12T09:00"), windows.last().start)
+        assertEquals(StartReason.WOKE_UP, windows.last().startReason)
+        val yesterday = windows[windows.size - 2]
+        assertEquals(t("2026-10-11T07:00"), yesterday.start)
+        assertEquals(t("2026-10-12T06:00"), yesterday.end)
+        assertTrue(windows.none { it.startReason == StartReason.FALLBACK && it.start == t("2026-10-12T05:00") })
+    }
+
+    @Test
+    fun allNighterIsOnlyDecidedAfterTheGracePeriod() {
+        val sleeps = listOf(sleep("2026-10-10T23:00", "2026-10-11T07:00"))
+        // 8 AM, still up: could still go to bed, so it's still yesterday's day.
+        val early = DayCalculator.current(sleeps, t("2026-10-10T00:00"), t("2026-10-12T08:00"), zone, rules)
+        assertEquals(t("2026-10-11T07:00"), early.start)
+        // 11:30 AM, still up: now it's an all-nighter and the new day counts from 5 AM.
+        val late = DayCalculator.current(sleeps, t("2026-10-10T00:00"), t("2026-10-12T11:30"), zone, rules)
+        assertEquals(t("2026-10-12T05:00"), late.start)
+    }
+
+    @Test
+    fun shortDozeDoesNotRescueAnAllNighter() {
+        val sleeps = listOf(
+            sleep("2026-10-10T23:00", "2026-10-11T07:00"),
+            sleep("2026-10-12T06:00", "2026-10-12T06:40"),
+        )
+        val day = DayCalculator.current(sleeps, t("2026-10-10T00:00"), t("2026-10-12T12:00"), zone, rules)
+        assertEquals(t("2026-10-12T05:00"), day.start)
+        assertEquals(listOf(t("2026-10-12T06:00")), day.naps.map { it.start })
+    }
+
+    @Test
+    fun crashSleepLongAfterAllNighterStartsNewDay() {
+        // Up all night and all morning (reset confirmed), then 2–4 PM: after 31 h up that's
+        // real sleep, so a new day starts at 4.
+        val sleeps = listOf(
+            sleep("2026-10-10T23:00", "2026-10-11T07:00"),
+            sleep("2026-10-12T14:00", "2026-10-12T16:00"),
+        )
+        val windows = DayCalculator.windows(sleeps, t("2026-10-10T00:00"), t("2026-10-12T20:00"), zone, rules)
+        assertEquals(t("2026-10-12T16:00"), windows.last().start)
+        assertEquals(t("2026-10-12T05:00"), windows[windows.size - 2].start)
     }
 
     // ------------------------------------------------------------ judgement calls
@@ -222,7 +278,7 @@ class DayCalculatorTest {
     fun skippedResetKeepsDayGoing() {
         val sleeps = listOf(sleep("2026-10-10T23:00", "2026-10-11T07:00"))
         val overrides = Overrides(skippedResets = setOf(t("2026-10-12T05:00")))
-        val day = DayCalculator.current(sleeps, t("2026-10-10T00:00"), t("2026-10-12T10:00"), zone, rules, overrides)
+        val day = DayCalculator.current(sleeps, t("2026-10-10T00:00"), t("2026-10-12T14:00"), zone, rules, overrides)
         assertEquals(t("2026-10-11T07:00"), day.start)
     }
 

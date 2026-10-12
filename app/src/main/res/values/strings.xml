@@ -13,7 +13,7 @@
     <string name="today_since_manual">Day started %1$s (set by you)</string>
     <string name="today_asleep">Asleep · day ran %1$s – %2$s</string>
     <string name="today_awake_for">%1$s into your day</string>
-    <string name="today_fallback_note">No sleep was logged, so a new day was started at your %1$s fallback time.</string>
+    <string name="today_fallback_note">You stayed up all night, so a new day started at your %1$s cutoff.</string>
     <string name="stat_calories">Calories burned</string>
     <string name="stat_active_calories">Active calories</string>
     <string name="stat_distance">Distance</string>
@@ -54,7 +54,7 @@
     <string name="adjust_your_call_sleep">You counted this as sleep.</string>
     <string name="adjust_was_nap">That was a nap, not my sleep</string>
     <string name="adjust_was_nap_help">Merges this day into the one before it.</string>
-    <string name="adjust_fallback">No sleep was logged, so a new day started at %1$s.</string>
+    <string name="adjust_fallback">You were still up 6 hours after %1$s without sleeping, so a new day started then.</string>
     <string name="adjust_skip_reset">Don’t start a new day here</string>
     <string name="adjust_skip_reset_help">Keeps the previous day going through the all-nighter.</string>
     <string name="adjust_manual">You started this day at %1$s.</string>
@@ -76,13 +76,13 @@
 
     <string name="set_goal">Daily step goal</string>
     <string name="set_naps">Sleep vs. naps</string>
-    <string name="set_naps_help">Sleep during your night starts a new day, even a short one. Sleep during the day is a nap and doesn’t reset your count unless it’s long. Waking up in the middle of the night doesn’t split the night.</string>
+    <string name="set_naps_help">Sleep during your night starts a new day, even a short one. So does any real sleep after you’ve been up 18 hours or more, like going to bed at 6 AM. Other daytime sleep is a nap unless it’s long. Waking up in the middle of the night doesn’t split the night.</string>
     <string name="set_night_learned">Your nights, learned from the last two weeks: about %1$s (midnight – 6 AM always counts too)</string>
     <string name="set_night_default">Your nights: assuming %1$s until there’s more sleep data (midnight – 6 AM always counts)</string>
     <string name="set_night_min">At night, sleep counts from</string>
     <string name="set_day_min">During the day, sleep counts from</string>
-    <string name="set_fallback">All-nighter fallback</string>
-    <string name="set_fallback_help">If you haven’t slept (naps don’t count), a new day starts at this time once you’ve been up at least 6 hours.</string>
+    <string name="set_fallback">All-nighter cutoff</string>
+    <string name="set_fallback_help">If you’re still up 6 hours after this time without sleeping, it was an all-nighter and a new day starts from this time. Go to bed before then and it was just a late night: your day runs until you fall asleep.</string>
     <string name="set_source">Step source</string>
     <string name="set_source_help">“All sources” uses Health Connect’s app priority. Pick Fitbit to ignore your phone’s own step counting.</string>
     <string name="source_all">All sources (Health Connect priority)</string>

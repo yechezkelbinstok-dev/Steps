@@ -20,13 +20,19 @@ data class SleepSpan(val start: Instant, val end: Instant) {
  * Rules that decide where one "awake day" ends and the next begins.
  *
  * A day starts when you wake from a main sleep and ends when you next go to sleep. Whether a
- * sleep is "main" or a nap depends on when it happens as well as how long it is:
- *  - mostly during your night ([NightWindow]): main sleep once it reaches [minNightSleep]
- *  - mostly during the day: a nap unless it reaches [minDaySleep]
+ * sleep is "main" or a nap depends on when it happens and how long you'd been up, as well as
+ * how long it is:
+ *  - [minDaySleep] or longer: always main sleep
+ *  - [minNightSleep] or longer and mostly during your night ([NightWindow]): main sleep
+ *  - [minNightSleep] or longer after being up [longAwake] or more: main sleep, whatever the
+ *    time (going to bed at 6 AM after a long night is still your night's sleep)
+ *  - anything else is a nap
  *
- * If you never sleep (an all-nighter), a new day is forced at [fallbackTime], but only once
- * you've been awake for at least [minAwakeBeforeFallback] so that waking at 4:30 doesn't
- * get cut off by a 5:00 fallback half an hour later.
+ * An all-nighter is only decided in hindsight. Passing [fallbackTime] awake marks a possible
+ * all-nighter; if you then go to sleep within [fallbackGrace] it was just a late night and the
+ * day runs until bedtime. Only if you're still up after the grace period does a new day start,
+ * back-dated to [fallbackTime]. The fallback also needs you to have been awake at least
+ * [minAwakeBeforeFallback], so waking at 4:30 isn't cut off by a 5:00 fallback.
  */
 data class DayRules(
     val minNightSleep: Duration = Duration.ofHours(1),
@@ -38,6 +44,10 @@ data class DayRules(
     /** Being up this long in the middle of the night still doesn't split the night. */
     val nightMergeGap: Duration = Duration.ofHours(3),
     val minAwakeBeforeFallback: Duration = Duration.ofHours(6),
+    /** Going to sleep within this long after [fallbackTime] means it wasn't an all-nighter. */
+    val fallbackGrace: Duration = Duration.ofHours(6),
+    /** After being up this long, any real sleep is your night's sleep, whatever the time. */
+    val longAwake: Duration = Duration.ofHours(18),
 )
 
 /**
@@ -158,14 +168,28 @@ object DayCalculator {
                     (gap <= rules.nightMergeGap && nightFraction(a.end, b.start, zone, night) == 1.0)
                 )
         }
+        // Walk forward in time so each sleep knows how long you'd been up before it.
+        var lastWake: Instant? = null
         return merged.map { s ->
-            s to (
-                overrides.callFor(s) ?: (
-                    s.duration >= rules.minDaySleep ||
-                        (s.duration >= rules.minNightSleep && nightFraction(s.start, s.end, zone, night) > 0.5)
+            lastWake = maxOfNullable(lastWake, overrides.manualStarts.filter { it <= s.start }.maxOrNull())
+            val upFor = lastWake?.let { Duration.between(it, s.start) }
+            val auto = s.duration >= rules.minDaySleep ||
+                (
+                    s.duration >= rules.minNightSleep && (
+                        nightFraction(s.start, s.end, zone, night) > 0.5 ||
+                            (upFor != null && upFor >= rules.longAwake)
+                        )
                     )
-                )
+            val main = overrides.callFor(s) ?: auto
+            if (main) lastWake = s.end
+            s to main
         }
+    }
+
+    private fun maxOfNullable(a: Instant?, b: Instant?): Instant? = when {
+        a == null -> b
+        b == null -> a
+        else -> maxOf(a, b)
     }
 
     /**
@@ -232,7 +256,9 @@ object DayCalculator {
             while (true) {
                 var f = nextFallback(cur.plus(rules.minAwakeBeforeFallback), zone, rules)
                 while (suppressed(f, manualEnd)) f = nextFallback(f.plusSeconds(60), zone, rules)
-                if (f < limit) {
+                // Only an all-nighter once you've stayed up through the grace period: going to
+                // sleep before then (or it simply not being that late yet) means a late night.
+                if (f < limit && limit > f.plus(rules.fallbackGrace)) {
                     out += DayWindow(cur, f, curReason, EndReason.FALLBACK, curWoke, napsIn(cur, f))
                     cur = f
                     curReason = StartReason.FALLBACK
