@@ -1,3 +1,8 @@
 <resources>
     <color name="ic_launcher_background">#00696E</color>
+    <color name="preview_bg">#FFEFF5F5</color>
+    <color name="preview_text">#FF161D1D</color>
+    <color name="preview_muted">#FF3F4949</color>
+    <color name="preview_accent">#FF00696E</color>
+    <color name="preview_track">#FFCCE8E9</color>
 </resources>

@@ -30,6 +30,16 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { test ->
+            // Optional: point Robolectric at pre-downloaded android-all jars (offline / proxied machines).
+            providers.gradleProperty("robolectricDepsDir").orNull?.let { dir ->
+                test.systemProperty("robolectric.offline", "true")
+                test.systemProperty("robolectric.dependency.dir", dir)
+            }
+        }
+    }
 }
 
 kotlin {
@@ -55,4 +65,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.work.testing)
 }

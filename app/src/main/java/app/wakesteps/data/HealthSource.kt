@@ -4,13 +4,18 @@ import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.aggregate.AggregateMetric
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Energy
 import app.wakesteps.core.SleepSpan
 import java.time.Duration
 import java.time.Instant
@@ -23,6 +28,12 @@ class HealthSource(private val context: Context) {
             HealthPermission.getReadPermission(StepsRecord::class),
             HealthPermission.getReadPermission(SleepSessionRecord::class),
         )
+        val TOTAL_CALORIES = HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class)
+        val ACTIVE_CALORIES = HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class)
+        val DISTANCE = HealthPermission.getReadPermission(DistanceRecord::class)
+
+        /** Nice to have: the app still works on steps alone if these are declined. */
+        val EXTRA_PERMISSIONS = setOf(TOTAL_CALORIES, ACTIVE_CALORIES, DISTANCE)
         const val BACKGROUND_PERMISSION = HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
         const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
     }
@@ -64,16 +75,39 @@ class HealthSource(private val context: Context) {
         return out
     }
 
-    suspend fun steps(from: Instant, to: Instant, sourcePackage: String?): Long {
-        if (!to.isAfter(from)) return 0
+    /**
+     * Steps plus whichever of calories/distance we're allowed to read, in one aggregate call.
+     * Pass the result of [grantedPermissions] so metrics without access are skipped instead
+     * of failing the whole read.
+     */
+    suspend fun totals(
+        from: Instant,
+        to: Instant,
+        sourcePackage: String?,
+        granted: Set<String>,
+        calorieMode: CalorieMode,
+    ): DayTotals {
+        val calorieMetric: AggregateMetric<Energy>? = when {
+            calorieMode == CalorieMode.TOTAL && TOTAL_CALORIES in granted -> TotalCaloriesBurnedRecord.ENERGY_TOTAL
+            calorieMode == CalorieMode.ACTIVE && ACTIVE_CALORIES in granted -> ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL
+            else -> null
+        }
+        val distanceMetric = if (DISTANCE in granted) DistanceRecord.DISTANCE_TOTAL else null
+        if (!to.isAfter(from)) {
+            return DayTotals(0, calorieMetric?.let { 0.0 }, distanceMetric?.let { 0.0 })
+        }
         val result = client.aggregate(
             AggregateRequest(
-                metrics = setOf(StepsRecord.COUNT_TOTAL),
+                metrics = setOfNotNull(StepsRecord.COUNT_TOTAL, calorieMetric, distanceMetric),
                 timeRangeFilter = TimeRangeFilter.between(from, to),
                 dataOriginFilter = origins(sourcePackage),
             )
         )
-        return result[StepsRecord.COUNT_TOTAL] ?: 0
+        return DayTotals(
+            steps = result[StepsRecord.COUNT_TOTAL] ?: 0,
+            calories = calorieMetric?.let { result[it]?.inKilocalories ?: 0.0 },
+            distanceMeters = distanceMetric?.let { result[it]?.inMeters ?: 0.0 },
+        )
     }
 
     /** Steps bucketed by [bucket], starting at [from]. */

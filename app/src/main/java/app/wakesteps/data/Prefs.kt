@@ -3,6 +3,7 @@ package app.wakesteps.data
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -19,13 +20,19 @@ import java.time.LocalTime
 
 private val Context.dataStore by preferencesDataStore(name = "wakesteps")
 
+enum class CalorieMode { TOTAL, ACTIVE }
+enum class DistanceUnit { AUTO, KILOMETERS, MILES }
+
 data class AppSettings(
     val goal: Int = 10_000,
     val minSleepMinutes: Int = 180,
     val fallbackMinuteOfDay: Int = 5 * 60,
     /** Package whose data to use, or null for all sources (Health Connect's priority order). */
     val sourcePackage: String? = null,
-    val liveMode: Boolean = false,
+    /** Refresh the widget as soon as the screen turns on, then every minute while it stays on. */
+    val liveMode: Boolean = true,
+    val calorieMode: CalorieMode = CalorieMode.TOTAL,
+    val distanceUnit: DistanceUnit = DistanceUnit.AUTO,
 ) {
     val fallbackTime: LocalTime get() = LocalTime.of(fallbackMinuteOfDay / 60, fallbackMinuteOfDay % 60)
 
@@ -35,9 +42,16 @@ data class AppSettings(
     )
 }
 
-/** Last computed result, shared between the app, the widget and the live notification. */
-data class Snapshot(
+/** Totals for one awake day. Calories/distance are null when access wasn't granted. */
+data class DayTotals(
     val steps: Long,
+    val calories: Double?,
+    val distanceMeters: Double?,
+)
+
+/** Last computed result, shared between the app and the widget. */
+data class Snapshot(
+    val totals: DayTotals,
     val dayStart: Instant,
     val startReason: StartReason,
     val asleep: Boolean,
@@ -53,9 +67,13 @@ class Prefs(private val context: Context) {
         val minSleep = intPreferencesKey("min_sleep_minutes")
         val fallback = intPreferencesKey("fallback_minute_of_day")
         val source = stringPreferencesKey("source_package")
-        val live = booleanPreferencesKey("live_mode")
+        val live = booleanPreferencesKey("live_refresh")
+        val calorieMode = stringPreferencesKey("calorie_mode")
+        val distanceUnit = stringPreferencesKey("distance_unit")
 
         val snapSteps = longPreferencesKey("snap_steps")
+        val snapCalories = doublePreferencesKey("snap_calories")
+        val snapDistance = doublePreferencesKey("snap_distance")
         val snapStart = longPreferencesKey("snap_start")
         val snapReason = stringPreferencesKey("snap_reason")
         val snapAsleep = booleanPreferencesKey("snap_asleep")
@@ -79,24 +97,35 @@ class Prefs(private val context: Context) {
             p[K.fallback] = s.fallbackMinuteOfDay
             if (s.sourcePackage == null) p.remove(K.source) else p[K.source] = s.sourcePackage
             p[K.live] = s.liveMode
+            p[K.calorieMode] = s.calorieMode.name
+            p[K.distanceUnit] = s.distanceUnit.name
         }
     }
 
     suspend fun saveSnapshot(s: Snapshot) {
         context.dataStore.edit { p ->
-            p[K.snapSteps] = s.steps
+            p[K.snapSteps] = s.totals.steps
+            p.putOrRemove(K.snapCalories, s.totals.calories)
+            p.putOrRemove(K.snapDistance, s.totals.distanceMeters)
             p[K.snapStart] = s.dayStart.toEpochMilli()
             p[K.snapReason] = s.startReason.name
             p[K.snapAsleep] = s.asleep
             p[K.snapUpdated] = s.updatedAt.toEpochMilli()
-            if (s.latestDataAt == null) p.remove(K.snapLatest) else p[K.snapLatest] = s.latestDataAt.toEpochMilli()
-            if (s.error == null) p.remove(K.snapError) else p[K.snapError] = s.error
+            p.putOrRemove(K.snapLatest, s.latestDataAt?.toEpochMilli())
+            p.putOrRemove(K.snapError, s.error)
         }
     }
 
     /** Records a failed refresh without throwing away the last good numbers. */
     suspend fun saveError(message: String) {
         context.dataStore.edit { p -> p[K.snapError] = message }
+    }
+
+    private fun <T> androidx.datastore.preferences.core.MutablePreferences.putOrRemove(
+        key: Preferences.Key<T>,
+        value: T?,
+    ) {
+        if (value == null) remove(key) else set(key, value)
     }
 
     private fun Preferences.toSettings(): AppSettings {
@@ -107,20 +136,28 @@ class Prefs(private val context: Context) {
             fallbackMinuteOfDay = this[K.fallback] ?: d.fallbackMinuteOfDay,
             sourcePackage = this[K.source],
             liveMode = this[K.live] ?: d.liveMode,
+            calorieMode = enumOr(this[K.calorieMode], d.calorieMode),
+            distanceUnit = enumOr(this[K.distanceUnit], d.distanceUnit),
         )
     }
 
     private fun Preferences.toSnapshot(): Snapshot? {
         val start = this[K.snapStart] ?: return null
         return Snapshot(
-            steps = this[K.snapSteps] ?: 0,
+            totals = DayTotals(
+                steps = this[K.snapSteps] ?: 0,
+                calories = this[K.snapCalories],
+                distanceMeters = this[K.snapDistance],
+            ),
             dayStart = Instant.ofEpochMilli(start),
-            startReason = runCatching { StartReason.valueOf(this[K.snapReason] ?: "") }
-                .getOrDefault(StartReason.WOKE_UP),
+            startReason = enumOr(this[K.snapReason], StartReason.WOKE_UP),
             asleep = this[K.snapAsleep] ?: false,
             updatedAt = Instant.ofEpochMilli(this[K.snapUpdated] ?: start),
             latestDataAt = this[K.snapLatest]?.let(Instant::ofEpochMilli),
             error = this[K.snapError],
         )
     }
+
+    private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
+        enumValues<E>().firstOrNull { it.name == name } ?: default
 }

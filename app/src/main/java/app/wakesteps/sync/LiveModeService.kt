@@ -17,8 +17,6 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import app.wakesteps.R
 import app.wakesteps.app
-import app.wakesteps.core.Format
-import app.wakesteps.data.Snapshot
 import app.wakesteps.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +28,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Optional "live mode": while the screen is on, refreshes the widget every minute and keeps
- * a quiet notification with today's count. Pauses completely while the screen is off.
+ * Live refresh: re-reads Health Connect the moment the screen turns on (so the widget is current
+ * when you look at it) and then every minute while it stays on. Does nothing while the screen
+ * is off.
+ *
+ * Android requires a notification for any long-running service, but this app never asks for
+ * notification permission, so on Android 13+ the notification is never shown. The service only
+ * appears in the quick-settings "active apps" list.
  */
 class LiveModeService : Service() {
 
@@ -50,7 +53,7 @@ class LiveModeService : Service() {
     override fun onCreate() {
         super.onCreate()
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(null), type)
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), type)
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -66,9 +69,7 @@ class LiveModeService : Service() {
         if (loop?.isActive == true) return
         loop = scope.launch {
             while (isActive) {
-                val snap = app.engine.refresh() ?: app.prefs.currentSnapshot()
-                getSystemService(NotificationManager::class.java)
-                    .notify(NOTIFICATION_ID, buildNotification(snap))
+                app.engine.refresh()
                 delay(INTERVAL_MS)
             }
         }
@@ -79,25 +80,20 @@ class LiveModeService : Service() {
         loop = null
     }
 
-    private fun buildNotification(snap: Snapshot?): android.app.Notification {
+    private fun buildNotification(): android.app.Notification {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val title = snap?.let { getString(R.string.notif_steps, Format.number(it.steps)) }
-            ?: getString(R.string.notif_starting)
-        val text = snap?.let { getString(R.string.since_time, Format.time(it.dayStart)) }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_steps)
-            .setContentTitle(title)
-            .setContentText(text)
+            .setContentTitle(getString(R.string.notif_live))
             .setContentIntent(open)
             .setOngoing(true)
-            .setOnlyAlertOnce(true)
             .setSilent(true)
             .setShowWhen(false)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
     }
 
@@ -110,17 +106,22 @@ class LiveModeService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        private const val CHANNEL_ID = "live"
+        private const val CHANNEL_ID = "live_silent"
         private const val NOTIFICATION_ID = 1
         private const val INTERVAL_MS = 60_000L
 
         fun createChannel(context: Context) {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm.deleteNotificationChannel("live") // old, more visible channel from v1
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 context.getString(R.string.channel_live),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply { setShowBadge(false) }
-            context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+                NotificationManager.IMPORTANCE_MIN,
+            ).apply {
+                setShowBadge(false)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
+            }
+            nm.createNotificationChannel(channel)
         }
 
         fun start(context: Context) {

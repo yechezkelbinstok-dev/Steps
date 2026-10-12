@@ -1,15 +1,12 @@
 package app.wakesteps.ui
 
-import android.Manifest
 import android.content.Intent
 import androidx.core.net.toUri
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -85,9 +82,6 @@ private fun App(vm: MainViewModel) {
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { vm.reload() }
-    val notificationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { }
 
     val activity = LocalActivity.current as MainActivity
     val actions = Actions(
@@ -95,12 +89,7 @@ private fun App(vm: MainViewModel) {
         installHealthConnect = activity::installHealthConnect,
         requestCore = { permissionLauncher.launch(vm.permissionsToRequest()) },
         requestBackground = { permissionLauncher.launch(vm.backgroundPermission()) },
-        setLiveMode = { on ->
-            if (on && Build.VERSION.SDK_INT >= 33) {
-                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            vm.updateSettings { it.copy(liveMode = on) }
-        },
+        setLiveMode = { on -> vm.updateSettings { it.copy(liveMode = on) } },
     )
 
     Scaffold(

@@ -13,15 +13,15 @@ import java.time.ZoneId
 
 data class TodaySummary(
     val window: DayWindow,
-    val steps: Long,
+    val totals: DayTotals,
     val hourly: List<Pair<Instant, Long>>,
     val latestDataAt: Instant?,
     val now: Instant,
 )
 
-data class DaySteps(val window: DayWindow, val steps: Long)
+data class DaySummary(val window: DayWindow, val totals: DayTotals)
 
-/** Turns raw Health Connect data into awake-day step totals and keeps the widget in sync. */
+/** Turns raw Health Connect data into awake-day totals and keeps the widget in sync. */
 class StepsEngine(
     private val context: Context,
     private val prefs: Prefs,
@@ -38,10 +38,11 @@ class StepsEngine(
 
     suspend fun today(settings: AppSettings, includeHourly: Boolean): TodaySummary {
         val now = Instant.now()
+        val granted = health.grantedPermissions()
         val window = windows(settings, Duration.ofDays(3), now).lastOrNull()
             ?: DayCalculator.current(emptyList(), now, now, ZoneId.systemDefault(), settings.rules())
         val end = window.endOr(now)
-        val steps = health.steps(window.start, end, settings.sourcePackage)
+        val totals = health.totals(window.start, end, settings.sourcePackage, granted, settings.calorieMode)
         val hourly = if (includeHourly) {
             health.stepsBuckets(window.start, end, Duration.ofHours(1), settings.sourcePackage)
         } else {
@@ -50,18 +51,24 @@ class StepsEngine(
         val latest = runCatching {
             health.latestStepTime(now.minus(Duration.ofDays(2)), now, settings.sourcePackage)
         }.getOrNull()
-        return TodaySummary(window, steps, hourly, latest, now)
+        return TodaySummary(window, totals, hourly, latest, now)
     }
 
-    suspend fun history(settings: AppSettings, days: Long = 14): List<DaySteps> {
+    suspend fun history(settings: AppSettings, days: Long = 14): List<DaySummary> {
         val now = Instant.now()
+        val granted = health.grantedPermissions()
         return windows(settings, Duration.ofDays(days + 1), now)
-            .map { DaySteps(it, health.steps(it.start, it.endOr(now), settings.sourcePackage)) }
+            .map {
+                DaySummary(
+                    it,
+                    health.totals(it.start, it.endOr(now), settings.sourcePackage, granted, settings.calorieMode),
+                )
+            }
             .reversed()
     }
 
     /**
-     * Recomputes today's total, stores it for the widget and redraws every widget instance.
+     * Recomputes today's totals, stores them for the widget and redraws every widget instance.
      * Safe to call from the app, a worker, the live service or a widget tap.
      */
     suspend fun refresh(knownSummary: TodaySummary? = null): Snapshot? = refreshLock.withLock {
@@ -71,7 +78,7 @@ class StepsEngine(
             check(health.hasCorePermissions()) { "Open the app to grant Health Connect access" }
             val t = knownSummary ?: today(settings, includeHourly = false)
             Snapshot(
-                steps = t.steps,
+                totals = t.totals,
                 dayStart = t.window.start,
                 startReason = t.window.startReason,
                 asleep = !t.window.isOngoing,

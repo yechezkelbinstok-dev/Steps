@@ -8,7 +8,7 @@ import app.wakesteps.data.StepsEngine
 import app.wakesteps.sync.LiveModeService
 import app.wakesteps.sync.RefreshWorker
 
-class WakeStepsApp : Application() {
+open class WakeStepsApp : Application() {
     val prefs by lazy { Prefs(this) }
     val health by lazy { HealthSource(this) }
     val engine by lazy { StepsEngine(this, prefs, health) }

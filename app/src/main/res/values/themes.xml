@@ -1,7 +1,14 @@
 <resources>
     <style name="Theme.WakeSteps" parent="android:Theme.Material.Light.NoActionBar" />
-    <style name="Theme.WakeSteps.Invisible" parent="android:Theme.Translucent.NoTitleBar">
-        <item name="android:windowAnimationStyle">@null</item>
-        <item name="android:windowNoDisplay">false</item>
+
+    <style name="WidgetPreviewMetric">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:drawablePadding">10dp</item>
+        <item name="android:drawableTint">@color/preview_accent</item>
+        <item name="android:fontFamily">google-sans</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:textColor">@color/preview_text</item>
+        <item name="android:textSize">18sp</item>
     </style>
 </resources>

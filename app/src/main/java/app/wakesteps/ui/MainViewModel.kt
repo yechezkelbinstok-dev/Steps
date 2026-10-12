@@ -6,7 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.wakesteps.app
 import app.wakesteps.data.AppSettings
-import app.wakesteps.data.DaySteps
+import app.wakesteps.data.DaySummary
 import app.wakesteps.data.HealthSource
 import app.wakesteps.data.TodaySummary
 import app.wakesteps.sync.LiveModeService
@@ -25,14 +25,19 @@ sealed interface Access {
     data object Checking : Access
     data class Unavailable(val updateRequired: Boolean) : Access
     data object NeedsPermission : Access
-    data class Ready(val backgroundSupported: Boolean, val backgroundGranted: Boolean) : Access
+    data class Ready(
+        val backgroundSupported: Boolean,
+        val backgroundGranted: Boolean,
+        /** None of calories/distance granted yet (e.g. upgraded from a version without them). */
+        val extrasMissing: Boolean,
+    ) : Access
 }
 
 data class UiState(
     val access: Access = Access.Checking,
     val loading: Boolean = false,
     val today: TodaySummary? = null,
-    val history: List<DaySteps> = emptyList(),
+    val history: List<DaySummary> = emptyList(),
     val sources: List<String> = emptyList(),
     val error: String? = null,
 )
@@ -81,10 +86,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun checkAccess(): Access {
         return when (health.sdkStatus()) {
             HealthConnectClient.SDK_AVAILABLE -> {
-                if (!health.hasCorePermissions()) return Access.NeedsPermission
+                val granted = health.grantedPermissions()
+                if (!granted.containsAll(HealthSource.CORE_PERMISSIONS)) return Access.NeedsPermission
                 Access.Ready(
                     backgroundSupported = runCatching { health.backgroundReadSupported() }.getOrDefault(false),
-                    backgroundGranted = health.hasBackgroundPermission(),
+                    backgroundGranted = HealthSource.BACKGROUND_PERMISSION in granted,
+                    extrasMissing = HealthSource.EXTRA_PERMISSIONS.none { it in granted },
                 )
             }
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> Access.Unavailable(updateRequired = true)
@@ -104,6 +111,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun permissionsToRequest(): Set<String> = HealthSource.CORE_PERMISSIONS
+    fun permissionsToRequest(): Set<String> = HealthSource.CORE_PERMISSIONS + HealthSource.EXTRA_PERMISSIONS
     fun backgroundPermission(): Set<String> = setOf(HealthSource.BACKGROUND_PERMISSION)
 }

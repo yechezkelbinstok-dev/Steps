@@ -3,11 +3,14 @@
 
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- POST_NOTIFICATIONS is deliberately not requested, so the live-refresh service stays invisible. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
@@ -35,13 +38,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".ui.RefreshActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:theme="@style/Theme.WakeSteps.Invisible" />
 
         <!-- Health Connect privacy rationale (Android 13 and below). -->
         <activity
@@ -91,7 +87,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps a home-screen step widget refreshed every minute while the screen is on, at the user's request." />
+                android:value="Refreshes the home/lock screen step widget when the screen turns on and every minute while it stays on, at the user's request." />
         </service>
     </application>
 </manifest>

@@ -1,6 +1,8 @@
 package app.wakesteps.ui
 
 import android.app.TimePickerDialog
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -53,7 +55,10 @@ import app.wakesteps.core.EndReason
 import app.wakesteps.core.Format
 import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
+import app.wakesteps.data.CalorieMode
+import app.wakesteps.data.DistanceUnit
 import app.wakesteps.data.TodaySummary
+import app.wakesteps.widget.StepsWidgetReceiver
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
@@ -91,13 +96,23 @@ private fun AccessCards(access: Access, actions: Actions) {
             button = stringResource(R.string.perm_grant),
             onClick = actions.requestCore,
         )
-        is Access.Ready -> if (access.backgroundSupported && !access.backgroundGranted) {
-            InfoCard(
-                title = stringResource(R.string.bg_title),
-                body = stringResource(R.string.bg_body),
-                button = stringResource(R.string.perm_grant),
-                onClick = actions.requestBackground,
-            )
+        is Access.Ready -> {
+            if (access.extrasMissing) {
+                InfoCard(
+                    title = stringResource(R.string.extras_title),
+                    body = stringResource(R.string.extras_body),
+                    button = stringResource(R.string.perm_grant),
+                    onClick = actions.requestCore,
+                )
+            }
+            if (access.backgroundSupported && !access.backgroundGranted) {
+                InfoCard(
+                    title = stringResource(R.string.bg_title),
+                    body = stringResource(R.string.bg_body),
+                    button = stringResource(R.string.perm_grant),
+                    onClick = actions.requestBackground,
+                )
+            }
         }
         Access.Checking -> Unit
     }
@@ -107,7 +122,7 @@ private fun AccessCards(access: Access, actions: Actions) {
 private fun TodayContent(t: TodaySummary, settings: AppSettings) {
     val w = t.window
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        StepsRing(t.steps, settings.goal)
+        StepsRing(t.totals.steps, settings.goal)
     }
 
     Card(Modifier.fillMaxWidth()) {
@@ -135,10 +150,24 @@ private fun TodayContent(t: TodaySummary, settings: AppSettings) {
     }
 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        StatCard(
+            label = stringResource(
+                if (settings.calorieMode == CalorieMode.ACTIVE) R.string.stat_active_calories else R.string.stat_calories
+            ),
+            value = Format.calories(t.totals.calories),
+            modifier = Modifier.weight(1f),
+        )
+        StatCard(
+            label = stringResource(R.string.stat_distance),
+            value = Format.distance(t.totals.distanceMeters, settings.distanceUnit),
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         val hours = Duration.between(w.start, w.endOr(t.now)).toMinutes() / 60.0
         StatCard(
             label = stringResource(R.string.stat_per_hour),
-            value = if (hours >= 0.25) Format.number((t.steps / hours).toLong()) else "–",
+            value = if (hours >= 0.25) Format.number((t.totals.steps / hours).toLong()) else "–",
             modifier = Modifier.weight(1f),
         )
         StatCard(
@@ -166,10 +195,27 @@ private fun TodayContent(t: TodaySummary, settings: AppSettings) {
         }
     }
 
+    AddWidgetCard()
+
     Text(
         stringResource(R.string.sync_note),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** Offers to pin the widget straight onto the home screen if none is placed yet. */
+@Composable
+private fun AddWidgetCard() {
+    val context = LocalContext.current
+    val manager = AppWidgetManager.getInstance(context)
+    val provider = ComponentName(context, StepsWidgetReceiver::class.java)
+    if (manager.getAppWidgetIds(provider).isNotEmpty() || !manager.isRequestPinAppWidgetSupported) return
+    InfoCard(
+        title = stringResource(R.string.add_widget_title),
+        body = stringResource(R.string.add_widget_body),
+        button = stringResource(R.string.add_widget_button),
+        onClick = { manager.requestPinAppWidget(provider, null, null) },
     )
 }
 
@@ -280,7 +326,7 @@ fun HistoryScreen(state: UiState, settings: AppSettings) {
     ) {
         items(state.history, key = { it.window.start.toEpochMilli() }) { day ->
             val w = day.window
-            val progress = if (settings.goal > 0) (day.steps.toFloat() / settings.goal).coerceIn(0f, 1f) else 0f
+            val progress = if (settings.goal > 0) (day.totals.steps.toFloat() / settings.goal).coerceIn(0f, 1f) else 0f
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -290,7 +336,7 @@ fun HistoryScreen(state: UiState, settings: AppSettings) {
                             modifier = Modifier.weight(1f),
                         )
                         Text(
-                            Format.number(day.steps),
+                            Format.number(day.totals.steps),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
@@ -301,6 +347,17 @@ fun HistoryScreen(state: UiState, settings: AppSettings) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    val extras = listOfNotNull(
+                        day.totals.calories?.let { Format.calories(it) },
+                        day.totals.distanceMeters?.let { Format.distance(it, settings.distanceUnit) },
+                    )
+                    if (extras.isNotEmpty()) {
+                        Text(
+                            extras.joinToString("  ·  "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     LinearProgressIndicator(
                         progress = { progress },
                         modifier = Modifier.fillMaxWidth().height(6.dp),
@@ -382,19 +439,34 @@ fun SettingsScreen(
                 addAll(state.sources)
                 settings.sourcePackage?.let { if (it !in state.sources) add(it) }
             }
-            options.forEach { pkg ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .selectable(selected = settings.sourcePackage == pkg) { update { it.copy(sourcePackage = pkg) } }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = settings.sourcePackage == pkg, onClick = null)
-                    Spacer(Modifier.size(8.dp))
-                    Text(sourceLabel(pkg))
-                }
-            }
+            Choice(
+                options = options.map { it to sourceLabel(it) },
+                selected = settings.sourcePackage,
+                onSelect = { pkg -> update { it.copy(sourcePackage = pkg) } },
+            )
+        }
+
+        Section(stringResource(R.string.set_calories), stringResource(R.string.set_calories_help)) {
+            Choice(
+                options = listOf(
+                    CalorieMode.TOTAL to stringResource(R.string.calories_total),
+                    CalorieMode.ACTIVE to stringResource(R.string.calories_active),
+                ),
+                selected = settings.calorieMode,
+                onSelect = { mode -> update { it.copy(calorieMode = mode) } },
+            )
+        }
+
+        Section(stringResource(R.string.set_distance)) {
+            Choice(
+                options = listOf(
+                    DistanceUnit.AUTO to stringResource(R.string.distance_auto),
+                    DistanceUnit.KILOMETERS to stringResource(R.string.distance_km),
+                    DistanceUnit.MILES to stringResource(R.string.distance_mi),
+                ),
+                selected = settings.distanceUnit,
+                onSelect = { unit -> update { it.copy(distanceUnit = unit) } },
+            )
         }
 
         Section(stringResource(R.string.set_live), stringResource(R.string.set_live_help)) {
@@ -421,6 +493,25 @@ private fun sourceLabel(pkg: String?): String = when (pkg) {
     else -> {
         val pm = LocalContext.current.packageManager
         runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+    }
+}
+
+@Composable
+private fun <T> Choice(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    Column {
+        options.forEach { (value, label) ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = value == selected) { onSelect(value) }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = value == selected, onClick = null)
+                Spacer(Modifier.size(8.dp))
+                Text(label)
+            }
+        }
     }
 }
 
