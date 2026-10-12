@@ -483,6 +483,14 @@ fun SettingsScreen(
 
         HorizontalDivider()
         OutlinedButton(onClick = actions.openHealthConnect) { Text(stringResource(R.string.set_open_hc)) }
+        val version = remember {
+            runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+        }
+        Text(
+            stringResource(R.string.app_version, version ?: "?"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

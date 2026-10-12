@@ -30,9 +30,10 @@ widgets under Settings → Display → Lock screen, then swipe over on the lock 
 * Resizable, laid out for its exact size: a compact strip (2×1, 4×1), a ring card (2×2), a
   side-by-side ring and metrics card (4×2), and a big ring with metrics underneath (4×3, the
   lock-screen size).
-* Shows a goal ring with your steps, calories burned, distance, and when you woke up.
-* Uses your wallpaper colors (Material You) and supports dark mode. The ring changes color
-  when you hit your goal.
+* Shows a goal ring with your steps, calories burned, distance, and how many steps are left
+  to your goal. It deliberately doesn't show your wake-up time.
+* A deep card in a dark tone of your wallpaper color (Material You), with a glowing goal ring
+  that changes color when you hit your goal. It looks the same in light and dark mode.
 * Tap it to open the app.
 
 **How it stays live** (no notification anywhere):
@@ -78,7 +79,7 @@ Requires JDK 17+ and the Android SDK (API 36).
 
 ```sh
 ./gradlew testDebugUnitTest assembleRelease
-# → app/build/outputs/apk/release/app-release.apk (signed with the debug key, for sideloading)
+# → app/build/outputs/apk/release/awake-steps-<version>-release.apk (debug-signed, for sideloading)
 ```
 
 `WidgetRenderTest` renders the real widget at every size (light, dark, goal reached) to

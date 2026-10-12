@@ -59,27 +59,24 @@
     <string name="set_live_help">Refreshes the widget the moment your screen turns on, then every minute while it stays on. Sleeps while the screen is off. Runs silently without a notification. With it off, the widget refreshes every 15 minutes.</string>
     <string name="set_live_toggle">Keep the widget live</string>
     <string name="set_open_hc">Manage Health Connect access</string>
+    <string name="app_version">Awake Steps %1$s</string>
 
-    <string name="widget_description">Steps, calories and distance since you woke up</string>
+    <string name="widget_description">Steps, calories and distance for your waking day</string>
     <string name="widget_setup">Open Awake Steps to set up</string>
-    <string name="widget_steps_since">steps since %1$s</string>
     <string name="widget_steps">steps</string>
     <string name="widget_goal_met">goal met</string>
+    <string name="widget_label_to_go">to go</string>
+    <string name="widget_label_over_goal">over goal</string>
+    <string name="widget_to_go_line">%1$s to go</string>
     <string name="widget_label_calories">calories</string>
     <string name="widget_label_active_calories">active calories</string>
     <string name="widget_label_distance">distance</string>
-    <string name="widget_label_woke_up">woke up</string>
-    <string name="widget_label_day_reset">day reset</string>
-    <string name="widget_label_day_started">day started</string>
-    <string name="since_time">since %1$s</string>
-    <string name="since_reset">since %1$s (reset)</string>
-    <string name="asleep">Asleep</string>
 
     <!-- Sample values for the widget-picker preview. -->
     <string name="preview_steps" translatable="false">8,432</string>
     <string name="preview_calories" translatable="false">1,284</string>
     <string name="preview_distance" translatable="false">6.1 km</string>
-    <string name="preview_wake" translatable="false">7:12 AM</string>
+    <string name="preview_to_go" translatable="false">1,568</string>
 
     <string name="channel_live">Live widget (hidden)</string>
     <string name="notif_live">Keeping your step widget live</string>

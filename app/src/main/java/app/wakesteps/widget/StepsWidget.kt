@@ -1,13 +1,13 @@
 package app.wakesteps.widget
 
 import android.content.Context
-import android.os.Build
+import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
@@ -42,7 +41,6 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.material3.ColorProviders
 import androidx.glance.text.FontFamily
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -51,7 +49,6 @@ import androidx.glance.unit.ColorProvider
 import app.wakesteps.R
 import app.wakesteps.app
 import app.wakesteps.core.Format
-import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalorieMode
 import app.wakesteps.data.Snapshot
@@ -62,7 +59,7 @@ import app.wakesteps.ui.MainActivity
  *  - compact (2×1): mini ring, steps, day start
  *  - medium (2×2): ring with steps inside, calories and distance under it
  *  - wide (4×1): ring, steps, calories and distance
- *  - split (4×2): ring with steps on the left, calories / distance / wake time on the right
+ *  - split (4×2): ring with steps on the left, calories / distance / steps to go on the right
  *  - tower (4×3, the lock-screen size): big ring on top, the three metrics in a row below
  * Everything is sized from the widget's exact dimensions.
  *
@@ -80,11 +77,8 @@ class StepsWidget : GlanceAppWidget() {
         provideContent {
             val snapshot by app.prefs.snapshot.collectAsState(initialSnapshot)
             val settings by app.prefs.settings.collectAsState(initialSettings)
-            // Material You colors on Android 12+, the app's own teal palette before that.
-            if (Build.VERSION.SDK_INT >= 31) {
-                GlanceTheme { WidgetBody(snapshot, settings) }
-            } else {
-                GlanceTheme(colors = BrandColors) { WidgetBody(snapshot, settings) }
+            CompositionLocalProvider(LocalPalette provides WidgetPalette(context)) {
+                WidgetBody(snapshot, settings)
             }
         }
     }
@@ -97,26 +91,27 @@ private val TALL_HEIGHT = 110.dp
 /** At least this tall (4×3, the lock-screen size) stacks the metrics under a big ring. */
 private val TOWER_HEIGHT = 240.dp
 
-private val BrandColors = ColorProviders(
-    light = lightColorScheme(
-        primary = Color(0xFF00696E),
-        secondaryContainer = Color(0xFFCCE8E9),
-        onSecondaryContainer = Color(0xFF051F21),
-        tertiary = Color(0xFF7A5900),
-        surface = Color(0xFFF4FBFA),
-        onSurface = Color(0xFF161D1D),
-        onSurfaceVariant = Color(0xFF3F4949),
-    ),
-    dark = darkColorScheme(
-        primary = Color(0xFF6FD6DC),
-        secondaryContainer = Color(0xFF324B4C),
-        onSecondaryContainer = Color(0xFFCCE8E9),
-        tertiary = Color(0xFFF5BE48),
-        surface = Color(0xFF0E1415),
-        onSurface = Color(0xFFDDE4E3),
-        onSurfaceVariant = Color(0xFFBEC8C8),
-    ),
-)
+/**
+ * The widget's own palette: a deep card in a dark tone of the wallpaper color (Android 12+) or
+ * teal, the same in light and dark mode. See widget_* in values/colors.xml and values-v31.
+ * Resolved on every render, so a new wallpaper shows up on the next refresh.
+ */
+private class WidgetPalette(private val context: Context) {
+    private fun of(@ColorRes id: Int) = ColorProvider(Color(context.getColor(id)))
+    val background = of(R.color.widget_bg)
+    val track = of(R.color.widget_track)
+    val accent = of(R.color.widget_accent)
+    val goal = of(R.color.widget_goal)
+    val text = of(R.color.widget_text)
+    val muted = of(R.color.widget_muted)
+    val error = of(R.color.widget_error)
+}
+
+private val LocalPalette = staticCompositionLocalOf<WidgetPalette> { error("No palette") }
+
+/** Shorthand for the current palette inside widget composables. */
+private val Palette: WidgetPalette
+    @Composable get() = LocalPalette.current
 
 /** Google Sans on Pixels; any other device quietly falls back to its default sans-serif. */
 private val Display = FontFamily("google-sans")
@@ -125,7 +120,6 @@ private val Body = FontFamily("google-sans-text")
 @Composable
 private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings) {
     val size = LocalSize.current
-    val context = LocalContext.current
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
@@ -133,29 +127,43 @@ private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings) {
             .background(
                 ImageProvider(R.drawable.widget_bg),
                 contentScale = ContentScale.FillBounds,
-                colorFilter = ColorFilter.tint(GlanceTheme.colors.widgetBackground),
+                colorFilter = ColorFilter.tint(Palette.background),
             )
             .clickable(actionStartActivity<MainActivity>()),
-        contentAlignment = Alignment.Center,
     ) {
-        if (snapshot == null) {
-            Text(
-                context.getString(R.string.widget_setup),
-                style = body(14.sp, GlanceTheme.colors.onSurfaceVariant),
-                modifier = GlanceModifier.padding(16.dp),
-            )
-            return@Box
+        // Soft light from the top-left so the card has depth instead of a flat fill.
+        Image(
+            provider = ImageProvider(R.drawable.widget_sheen),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = GlanceModifier.fillMaxSize(),
+        )
+        Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Content(snapshot, settings, size)
         }
-        val m = WidgetModel(context, snapshot, settings)
-        val wide = size.width >= WIDE_WIDTH
-        val tall = size.height >= TALL_HEIGHT
-        when {
-            wide && size.height >= TOWER_HEIGHT -> TowerLayout(m, size)
-            wide && tall -> SplitLayout(m, size)
-            wide -> WideLayout(m, size)
-            tall -> MediumLayout(m, size)
-            else -> CompactLayout(m, size)
-        }
+    }
+}
+
+@Composable
+private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize) {
+    val context = LocalContext.current
+    if (snapshot == null) {
+        Text(
+            context.getString(R.string.widget_setup),
+            style = body(14.sp, Palette.muted),
+            modifier = GlanceModifier.padding(16.dp),
+        )
+        return
+    }
+    val m = WidgetModel(context, snapshot, settings)
+    val wide = size.width >= WIDE_WIDTH
+    val tall = size.height >= TALL_HEIGHT
+    when {
+        wide && size.height >= TOWER_HEIGHT -> TowerLayout(m, size)
+        wide && tall -> SplitLayout(m, size)
+        wide -> WideLayout(m, size)
+        tall -> MediumLayout(m, size)
+        else -> CompactLayout(m, size)
     }
 }
 
@@ -168,11 +176,6 @@ private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings) 
     val calories = s.totals.calories?.let { Format.calories(it) }
     val distance = s.totals.distanceMeters?.let { Format.distance(it, settings.distanceUnit) }
     val error = s.error
-    val since = when {
-        s.asleep -> context.getString(R.string.asleep)
-        s.startReason == StartReason.FALLBACK -> context.getString(R.string.since_reset, Format.time(s.dayStart))
-        else -> context.getString(R.string.since_time, Format.time(s.dayStart))
-    }
     /** Short caption under the number inside the big ring. */
     val ringCaption = if (pct >= 100) context.getString(R.string.widget_goal_met)
         else context.getString(R.string.of_goal, Format.number(settings.goal.toLong()))
@@ -182,16 +185,13 @@ private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings) 
         else R.string.widget_label_calories
     )
     val distanceLabel = context.getString(R.string.widget_label_distance)
-    val wakeValue = Format.time(s.dayStart)
-    val wakeLabel = context.getString(
-        when {
-            s.asleep -> R.string.widget_label_day_started
-            s.startReason == StartReason.FALLBACK -> R.string.widget_label_day_reset
-            else -> R.string.widget_label_woke_up
-        }
-    )
-    val stepsSince = if (s.asleep || s.startReason == StartReason.FALLBACK) since
-        else context.getString(R.string.widget_steps_since, Format.time(s.dayStart))
+    /** "1,568 to go", or "+1,250 over goal" once the goal is met. */
+    val goalValue = if (pct >= 100) "+" + Format.number(s.totals.steps - settings.goal)
+        else Format.number(settings.goal - s.totals.steps)
+    val goalLabel = context.getString(if (pct >= 100) R.string.widget_label_over_goal else R.string.widget_label_to_go)
+    /** One-line summary for the small layouts. */
+    val goalLine = if (pct >= 100) context.getString(R.string.widget_goal_met)
+        else context.getString(R.string.widget_to_go_line, goalValue)
 }
 
 // ---------------------------------------------------------------- layouts
@@ -223,7 +223,7 @@ private fun MediumLayout(m: WidgetModel, size: DpSize) {
             Text(m.steps, style = display(numberSize(ring, m.steps)), maxLines = 1)
             Text(
                 LocalContext.current.getString(R.string.widget_steps),
-                style = body(11.sp, GlanceTheme.colors.onSurfaceVariant),
+                style = body(11.sp, Palette.muted),
             )
         }
         Spacer(GlanceModifier.height(8.dp))
@@ -246,7 +246,7 @@ private fun WideLayout(m: WidgetModel, size: DpSize) {
         Spacer(GlanceModifier.width(14.dp))
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(m.steps, style = display(30.sp), maxLines = 1)
-            Subtitle(m, 12.sp, long = true)
+            Subtitle(m, 12.sp)
         }
         Column(horizontalAlignment = Alignment.End) {
             m.calories?.let { InlineStat(R.drawable.ic_fire, it) }
@@ -273,13 +273,13 @@ private fun SplitLayout(m: WidgetModel, size: DpSize) {
         Box(modifier = GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
             Ring(m, ring) {
                 Text(m.steps, style = display(numberSize(ring, m.steps)), maxLines = 1)
-                Text(m.ringCaption, style = body(11.sp, GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
+                Text(m.ringCaption, style = body(11.sp, Palette.muted), maxLines = 1)
             }
         }
         Spacer(GlanceModifier.width(16.dp))
         Column(modifier = GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
             if (m.error != null) {
-                Text(m.error, style = body(12.sp, GlanceTheme.colors.error), maxLines = 3)
+                Text(m.error, style = body(12.sp, Palette.error), maxLines = 3)
                 return@Column
             }
             m.caloriesValue?.let {
@@ -290,7 +290,7 @@ private fun SplitLayout(m: WidgetModel, size: DpSize) {
                 Metric(R.drawable.ic_distance, it, m.distanceLabel, value)
                 Spacer(GlanceModifier.height(gap))
             }
-            Metric(R.drawable.ic_sunrise, m.wakeValue, m.wakeLabel, value)
+            Metric(R.drawable.ic_flag, m.goalValue, m.goalLabel, value)
         }
     }
 }
@@ -307,11 +307,11 @@ private fun TowerLayout(m: WidgetModel, size: DpSize) {
     ) {
         Ring(m, ring) {
             Text(m.steps, style = display(numberSize(ring, m.steps)), maxLines = 1)
-            Text(m.ringCaption, style = body(12.sp, GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
+            Text(m.ringCaption, style = body(12.sp, Palette.muted), maxLines = 1)
         }
         Spacer(GlanceModifier.height(18.dp))
         if (m.error != null) {
-            Text(m.error, style = body(12.sp, GlanceTheme.colors.error), maxLines = 2)
+            Text(m.error, style = body(12.sp, Palette.error), maxLines = 2)
             return@Column
         }
         Row(modifier = GlanceModifier.fillMaxWidth()) {
@@ -321,7 +321,7 @@ private fun TowerLayout(m: WidgetModel, size: DpSize) {
             m.distance?.let {
                 MetricColumn(R.drawable.ic_distance, it, m.distanceLabel, value, GlanceModifier.defaultWeight())
             }
-            MetricColumn(R.drawable.ic_sunrise, m.wakeValue, m.wakeLabel, value, GlanceModifier.defaultWeight())
+            MetricColumn(R.drawable.ic_flag, m.goalValue, m.goalLabel, value, GlanceModifier.defaultWeight())
         }
     }
 }
@@ -339,12 +339,12 @@ private fun MetricColumn(
         Image(
             provider = ImageProvider(icon),
             contentDescription = null,
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+            colorFilter = ColorFilter.tint(Palette.accent),
             modifier = GlanceModifier.size(18.dp),
         )
         Spacer(GlanceModifier.height(4.dp))
         Text(value, style = display(valueSize), maxLines = 1)
-        Text(label, style = body(11.sp, GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
+        Text(label, style = body(11.sp, Palette.muted), maxLines = 1)
     }
 }
 
@@ -361,13 +361,13 @@ private fun Metric(@DrawableRes icon: Int, value: String, label: String, valueSi
         Image(
             provider = ImageProvider(icon),
             contentDescription = null,
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+            colorFilter = ColorFilter.tint(Palette.accent),
             modifier = GlanceModifier.size(18.dp),
         )
         Spacer(GlanceModifier.width(10.dp))
         Column {
             Text(value, style = display(valueSize), maxLines = 1)
-            Text(label, style = body(11.sp, GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
+            Text(label, style = body(11.sp, Palette.muted), maxLines = 1)
         }
     }
 }
@@ -379,9 +379,15 @@ private fun Metric(@DrawableRes icon: Int, value: String, label: String, valueSi
 private fun Ring(m: WidgetModel, size: Dp, content: @Composable ColumnScope.() -> Unit) {
     Box(modifier = GlanceModifier.size(size), contentAlignment = Alignment.Center) {
         Image(
+            provider = ImageProvider(R.drawable.ring_glow),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(accent(m)),
+            modifier = GlanceModifier.fillMaxSize(),
+        )
+        Image(
             provider = ImageProvider(R.drawable.ring_track),
             contentDescription = null,
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.primaryContainer),
+            colorFilter = ColorFilter.tint(Palette.track),
             modifier = GlanceModifier.fillMaxSize(),
         )
         if (m.ringPercent > 0) {
@@ -401,16 +407,16 @@ private fun StepsIcon(size: Dp) {
     Image(
         provider = ImageProvider(R.drawable.ic_steps),
         contentDescription = null,
-        colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+        colorFilter = ColorFilter.tint(Palette.accent),
         modifier = GlanceModifier.size(size),
     )
 }
 
 @Composable
-private fun Subtitle(m: WidgetModel, size: TextUnit, long: Boolean = false) {
+private fun Subtitle(m: WidgetModel, size: TextUnit) {
     Text(
-        m.error ?: if (long) m.stepsSince else m.since,
-        style = body(size, if (m.error != null) GlanceTheme.colors.error else GlanceTheme.colors.onSurfaceVariant),
+        m.error ?: m.goalLine,
+        style = body(size, if (m.error != null) Palette.error else Palette.muted),
         maxLines = 1,
     )
 }
@@ -422,21 +428,21 @@ private fun InlineStat(@DrawableRes icon: Int, text: String) {
         Image(
             provider = ImageProvider(icon),
             contentDescription = null,
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+            colorFilter = ColorFilter.tint(Palette.accent),
             modifier = GlanceModifier.size(14.dp),
         )
         Spacer(GlanceModifier.width(4.dp))
-        Text(text, style = body(12.sp, GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
+        Text(text, style = body(12.sp, Palette.muted), maxLines = 1)
     }
 }
 
 @Composable
 private fun accent(m: WidgetModel): ColorProvider =
-    if (m.goalReached) GlanceTheme.colors.tertiary else GlanceTheme.colors.primary
+    if (m.goalReached) Palette.goal else Palette.accent
 
 @Composable
 private fun display(size: TextUnit) = TextStyle(
-    color = GlanceTheme.colors.onSurface,
+    color = Palette.text,
     fontSize = size,
     fontWeight = FontWeight.Medium,
     fontFamily = Display,

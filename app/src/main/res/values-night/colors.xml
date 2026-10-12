@@ -1,7 +1,0 @@
-<resources>
-    <color name="preview_bg">#FF1A2222</color>
-    <color name="preview_text">#FFDDE4E3</color>
-    <color name="preview_muted">#FFBEC8C8</color>
-    <color name="preview_accent">#FF6FD6DC</color>
-    <color name="preview_track">#FF324B4C</color>
-</resources>
