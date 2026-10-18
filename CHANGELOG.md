@@ -2,11 +2,11 @@
 
 Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered as below. The
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
-one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 → 200. Builds that
-were sent but never installed are folded into the next number (1.8 includes a build briefly
-labelled 1.9).
+one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 2.0 → 200. Builds that
+were sent but never installed are folded into the next number (1.8 includes two builds briefly
+labelled 1.8 and 1.9).
 
-## 1.9
+## 1.8
 - Four new ring styles to try in Settings → Ring (swipe the row): Platinum (steel to bright
   platinum, so it's silver until the goal and then gold), Amethyst (violet to orchid), Rose
   (raspberry to blush) and Emerald (emerald to mint). Like the others they turn gold at the goal.
@@ -15,8 +15,6 @@ labelled 1.9).
   screen is on it checks Google Health for new steps every 15 seconds. A setup sheet walks
   through the one-time Google Cloud setup, with each page a tap away and every value ready to
   copy (including the app's own signing fingerprint).
-
-## 1.8
 - Redesigned the app again, for a premium feel:
   - Everything moves: the ring sweeps round and numbers count up when a screen opens, sections
     drift in one after another, tabs slide, and buttons and cards give under your finger.

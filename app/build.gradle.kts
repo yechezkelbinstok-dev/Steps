@@ -4,9 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-/** The one place to bump the version. */
-val appVersion = "1.9"
-
 android {
     namespace = "app.wakesteps"
     compileSdk = 36
@@ -15,10 +12,10 @@ android {
         applicationId = "app.wakesteps"
         minSdk = 28
         targetSdk = 36
-        versionName = appVersion
-        // Derived from the version (1.4 -> 104) so the two always match and every release
-        // installs over the previous one. Builds before 1.4 used 1-6.
-        versionCode = appVersion.split(".").let { (major, minor) -> major.toInt() * 100 + minor.toInt() }
+        // Bump both together: versionCode is the version without the dot (1.8 -> 108), so the two
+        // always match and every release installs over the previous one. Builds before 1.4 used 1-6.
+        versionName = "1.8"
+        versionCode = 108
     }
 
     signingConfigs {
