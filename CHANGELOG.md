@@ -2,9 +2,11 @@
 
 Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered as below. The
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
-one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 → 200.
+one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 → 200. Builds that
+were sent but never installed are folded into the next number (1.8 includes a build briefly
+labelled 1.9).
 
-## 1.9
+## 1.8
 - Redesigned the app again, for a premium feel:
   - Everything moves: the ring sweeps round and numbers count up when a screen opens, sections
     drift in one after another, tabs slide, and buttons and cards give under your finger.
@@ -18,10 +20,8 @@ one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 �
   - Settings: drag a ruler to set your goal, ticking every 500 steps.
   - Today's header shows the date and how fresh your tracker data is, with a breathing dot.
   - A met goal gets a slow light passing round the gold ring.
-
-## 1.8
-- Vivid is back as a third ring style: aqua to blue up to the goal, with coral calories and
-  sky-blue distance, then the same gold as the other styles once the goal is met.
+- Vivid (from 1.6) is back as a third ring style: aqua to blue up to the goal, with coral
+  calories and sky-blue distance, then the same gold as the other styles once the goal is met.
 
 ## 1.7
 - New app design to match the widget: always dark in your wallpaper's tones, Google Sans

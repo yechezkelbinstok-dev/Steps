@@ -5,7 +5,7 @@ plugins {
 }
 
 /** The one place to bump the version. */
-val appVersion = "1.9"
+val appVersion = "1.8"
 
 android {
     namespace = "app.wakesteps"
@@ -21,10 +21,22 @@ android {
         versionCode = appVersion.split(".").let { (major, minor) -> major.toInt() * 100 + minor.toInt() }
     }
 
+    signingConfigs {
+        // One key for every build, kept in the repo: Android only installs an update signed
+        // with the same key as the installed app, and Google sign-in is tied to its fingerprint.
+        // (It's the key all builds so far were signed with.)
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/wakesteps.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so a release build can be sideloaded directly.
+            // Signed with the same key so a release build can be sideloaded directly.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
