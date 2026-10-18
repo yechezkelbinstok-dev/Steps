@@ -34,15 +34,25 @@ enum class WidgetStyle {
     FADE,
     /** Aqua to blue, with coral calories and sky-blue distance. */
     VIVID,
+    /** Steel to bright platinum: silver until the goal, then gold. */
+    PLATINUM,
+    /** Deep violet to orchid. */
+    AMETHYST,
+    /** Raspberry to blush. */
+    ROSE,
+    /** Emerald to soft mint. */
+    EMERALD,
 }
 
 /**
- * Only [goal] and [widgetStyle] are chosen in the app. Everything else is tuned in code (the user
+ * Only [goal], [widgetStyle] and [googleHealth] are chosen in the app. Everything else is tuned in code (the user
  * asks for changes rather than fiddling with settings), so those values are never read from storage.
  */
 data class AppSettings(
     val goal: Int = 10_000,
     val widgetStyle: WidgetStyle = WidgetStyle.SOFT,
+    /** Read activity and sleep from Google Health (falling back to Health Connect when it can't). */
+    val googleHealth: Boolean = false,
     /** Sleep mostly during the user's night counts (starts a new day) from this long. */
     val minNightSleepMinutes: Int = 60,
     /** Sleep mostly during the day is a nap unless it's at least this long. */
@@ -92,6 +102,8 @@ class Prefs(private val context: Context) {
     private object K {
         val goal = intPreferencesKey("goal")
         val widgetStyle = stringPreferencesKey("widget_style")
+        val googleHealth = booleanPreferencesKey("google_health")
+        val googleHealthError = stringPreferencesKey("google_health_error")
 
         val snapSteps = longPreferencesKey("snap_steps")
         val snapCalories = doublePreferencesKey("snap_calories")
@@ -137,6 +149,13 @@ class Prefs(private val context: Context) {
     }
 
     suspend fun currentSettings(): AppSettings = settings.first()
+
+    /** Why the last Google Health read failed, or null if it worked. */
+    val googleHealthError: Flow<String?> = context.dataStore.data.map { it[K.googleHealthError] }
+
+    suspend fun setGoogleHealthError(message: String?) {
+        context.dataStore.edit { p -> if (message == null) p.remove(K.googleHealthError) else p[K.googleHealthError] = message }
+    }
     suspend fun currentOverrides(): Overrides = overrides.first()
 
     /** Rule a sleep main (true) or a nap (false), replacing any earlier call on it. */
@@ -198,6 +217,7 @@ class Prefs(private val context: Context) {
             val s = transform(p.toSettings())
             p[K.goal] = s.goal
             p[K.widgetStyle] = s.widgetStyle.name
+            p[K.googleHealth] = s.googleHealth
         }
     }
 
@@ -230,6 +250,7 @@ class Prefs(private val context: Context) {
     private fun Preferences.toSettings(): AppSettings = AppSettings(
         goal = this[K.goal] ?: AppSettings().goal,
         widgetStyle = enumOr(this[K.widgetStyle], AppSettings().widgetStyle),
+        googleHealth = this[K.googleHealth] ?: false,
     )
 
     private fun Preferences.toSnapshot(): Snapshot? {

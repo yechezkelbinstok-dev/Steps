@@ -1,9 +1,12 @@
 package app.wakesteps.ui
 
 import android.app.Application
+import android.app.PendingIntent
+import android.content.Intent
 import androidx.health.connect.client.HealthConnectClient
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import app.wakesteps.R
 import app.wakesteps.app
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.Overrides
@@ -11,11 +14,13 @@ import app.wakesteps.core.SleepSpan
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalendarDay
 import app.wakesteps.data.DaySummary
+import app.wakesteps.data.GoogleHealth
 import app.wakesteps.data.HealthSource
 import app.wakesteps.data.SyncEvent
 import app.wakesteps.data.TodaySummary
 import app.wakesteps.sync.LiveModeService
 import app.wakesteps.widget.WidgetPusher
+import com.google.android.gms.auth.api.identity.AuthorizationResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -162,6 +167,71 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun adjust(change: suspend () -> Unit) {
         viewModelScope.launch {
             change()
+            reload()
+        }
+    }
+
+    // ---------------------------------------------------------------- Google Health
+
+    /** Why the last Google Health read failed, from the background refreshes. */
+    val googleHealthError: StateFlow<String?> =
+        app.prefs.googleHealthError.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _googleMessage = MutableStateFlow<String?>(null)
+    /** What went wrong connecting just now, if anything. */
+    val googleMessage: StateFlow<String?> = _googleMessage.asStateFlow()
+
+    private val _googleBusy = MutableStateFlow(false)
+    val googleBusy: StateFlow<Boolean> = _googleBusy.asStateFlow()
+
+    /** Asks Google for access; [showConsent] launches Google's consent screen when one is needed. */
+    fun connectGoogleHealth(showConsent: (PendingIntent) -> Unit) {
+        viewModelScope.launch {
+            _googleBusy.value = true
+            _googleMessage.value = null
+            try {
+                val result = app.googleHealth.authorize()
+                val consent = result.pendingIntent
+                if (result.hasResolution() && consent != null) showConsent(consent) else finishGoogleHealth(result)
+            } catch (e: Exception) {
+                _googleMessage.value = e.message
+            } finally {
+                _googleBusy.value = false
+            }
+        }
+    }
+
+    /** Back from Google's consent screen. */
+    fun googleConsentResult(data: Intent?) {
+        viewModelScope.launch {
+            val result = runCatching { app.googleHealth.resultFrom(data) }.getOrNull()
+            if (result == null) _googleMessage.value = app.getString(R.string.gh_cancelled) else finishGoogleHealth(result)
+        }
+    }
+
+    private suspend fun finishGoogleHealth(result: AuthorizationResult) {
+        val token = result.accessToken
+        if (token == null || result.grantedScopes.none { it == GoogleHealth.SCOPE_ACTIVITY }) {
+            _googleMessage.value = app.getString(R.string.gh_no_access)
+            return
+        }
+        try {
+            app.googleHealth.checkLinked(token)
+        } catch (e: Exception) {
+            _googleMessage.value = e.message
+            return
+        }
+        app.prefs.update { it.copy(googleHealth = true) }
+        app.prefs.setGoogleHealthError(null)
+        _googleMessage.value = null
+        reload()
+    }
+
+    fun disconnectGoogleHealth() {
+        viewModelScope.launch {
+            app.prefs.update { it.copy(googleHealth = false) }
+            app.prefs.setGoogleHealthError(null)
+            app.googleHealth.forgetToken()
             reload()
         }
     }

@@ -41,7 +41,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.Format
-import app.wakesteps.data.WidgetStyle
 import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import kotlinx.coroutines.delay
@@ -169,7 +168,7 @@ fun InteractiveBars(
             }
             val (top, bottom) = when {
                 bar.gold -> colors.goalStart to colors.goalEnd
-                colors.style == WidgetStyle.VIVID -> colors.accent to colors.accentEnd
+                colors.gradient -> colors.accent to colors.accentEnd
                 else -> colors.accent to colors.accent.copy(alpha = 0.5f)
             }
             if (chosen == i) {

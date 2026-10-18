@@ -83,10 +83,35 @@
     <string name="set_goal">Daily goal</string>
     <string name="hc_connected">Connected</string>
     <string name="hc_needs_access">Needs access</string>
+    <string name="gh_title">Google Health</string>
+    <string name="gh_row">Google Health</string>
+    <string name="gh_off">Off</string>
+    <string name="gh_not_connected">Not connected</string>
+    <string name="gh_intro">Read your steps straight from Google instead of waiting for them to reach Health Connect. Set it up once below (about 10 minutes), then connect.</string>
+    <string name="gh_connect">Connect</string>
+    <string name="gh_connecting">Connecting…</string>
+    <string name="gh_disconnect">Disconnect</string>
+    <string name="gh_setup">One-time setup</string>
+    <string name="gh_open">Open</string>
+    <string name="gh_copy">Copy</string>
+    <string name="gh_copied">Copied</string>
+    <string name="gh_step_project">Create a Google Cloud project (any name).</string>
+    <string name="gh_step_api">Turn on the Google Health API in that project.</string>
+    <string name="gh_step_branding">Set up the sign-in screen: Get started, app name below, your email, Audience: External, then Create.</string>
+    <string name="gh_step_scopes">Add or remove scopes, paste these two into “Manually add scopes”, Add to table, Update, then Save.</string>
+    <string name="gh_step_audience">Add your Google account under Test users, then Publish app, so sign-in doesn’t expire every 7 days.</string>
+    <string name="gh_step_client">Create client: Application type Android, then paste the package name and SHA-1 below.</string>
+    <string name="gh_step_app">Be signed in to the Google Health app with the same Google account.</string>
+    <string name="gh_no_access">Google didn’t grant access to your activity. Connect again and allow it.</string>
+    <string name="gh_cancelled">Sign-in was cancelled.</string>
     <string name="set_widget">Ring</string>
     <string name="widget_style_soft">Soft</string>
     <string name="widget_style_fade">Fade</string>
     <string name="widget_style_vivid">Vivid</string>
+    <string name="widget_style_platinum">Platinum</string>
+    <string name="widget_style_amethyst">Amethyst</string>
+    <string name="widget_style_rose">Rose</string>
+    <string name="widget_style_emerald">Emerald</string>
     <string name="set_open_hc">Health Connect</string>
     <string name="app_version">Awake Steps %1$s</string>
     <string name="sync_log_open">Sync log</string>
@@ -111,5 +136,5 @@
     <string name="notif_live">Keeping your step widget live</string>
 
     <string name="privacy_title">How Awake Steps uses your data</string>
-    <string name="privacy_body">Awake Steps reads your steps, calories burned, distance and sleep sessions from Health Connect. Sleep is used only to work out when your day starts (when you wake up) and ends (when you go to sleep); steps, calories and distance are added up between those times.\n\nEverything is processed on your phone. Nothing is uploaded, shared, or sent anywhere, and the app never writes to Health Connect.\n\nYou can revoke access at any time in Health Connect settings.</string>
+    <string name="privacy_body">Awake Steps reads your steps, calories burned, distance and sleep sessions from Health Connect. Sleep is used only to work out when your day starts (when you wake up) and ends (when you go to sleep); steps, calories and distance are added up between those times.\n\nEverything is processed on your phone. Nothing is uploaded or shared, and the app never writes to Health Connect.\n\nIf you connect Google Health in Settings, the app also reads the same kinds of data from your Google Health account, over the internet, using the access you grant on Google’s sign-in screen. It only reads; it never changes your Google Health data or sends it anywhere else. Disconnect any time in Settings, and remove access in your Google account.\n\nYou can revoke access at any time in Health Connect settings.</string>
 </resources>

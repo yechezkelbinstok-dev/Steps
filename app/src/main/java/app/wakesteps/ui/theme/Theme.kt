@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.wakesteps.R
 import app.wakesteps.data.WidgetStyle
+import app.wakesteps.widget.accentColor
+import app.wakesteps.widget.gradient
 
 /**
  * The app wears the widget's look: always dark, built from the same wallpaper tones (Android 12+;
@@ -48,8 +50,14 @@ class AppColors(
     val track: Color,
     /** The ring, footprints, icons and chart bars until the goal is met. */
     val accent: Color,
-    /** Where the vivid ring's blend ends up; the same as [accent] in the other styles. */
+    /** A gradient style's second colour (the bottom of chart bars, a backdrop glow); for the
+     *  wallpaper-toned styles, the same as [accent]. */
     val accentEnd: Color,
+    /** The ring's colours before the goal, 12 o'clock to tip (gradient styles). */
+    val ringStart: Color,
+    val ringEnd: Color,
+    /** Whether the ring blends between two colours (vivid, platinum, …) rather than one tone. */
+    val gradient: Boolean,
     val calories: Color,
     val distance: Color,
     /** Footprints and glow once the goal is met. */
@@ -68,7 +76,10 @@ class AppColors(
             val card = c(R.color.widget_bg)
             val background = lerp(Color.Black, tint, 0.3f)
             val vivid = style == WidgetStyle.VIVID
-            val accent = c(if (vivid) R.color.widget_aqua else R.color.widget_accent)
+            val accent = c(style.accentColor)
+            val blend = style.gradient
+            val ringStart = blend?.let { c(it.start) } ?: accent
+            val ringEnd = blend?.let { c(it.end) } ?: accent
             return AppColors(
                 style = style,
                 background = background,
@@ -82,7 +93,14 @@ class AppColors(
                 faint = c(R.color.widget_muted).copy(alpha = 0.55f),
                 track = c(R.color.widget_track),
                 accent = accent,
-                accentEnd = if (vivid) c(R.color.widget_ring_end) else accent,
+                accentEnd = when {
+                    blend == null -> accent
+                    accent == ringStart -> ringEnd
+                    else -> ringStart
+                },
+                ringStart = ringStart,
+                ringEnd = ringEnd,
+                gradient = blend != null,
                 calories = if (vivid) c(R.color.widget_calories) else accent,
                 distance = if (vivid) c(R.color.widget_distance) else accent,
                 goal = c(R.color.widget_gold),

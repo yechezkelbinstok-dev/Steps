@@ -96,9 +96,9 @@ private val TOWER_HEIGHT = 240.dp
 /**
  * A deep card in a dark tone of the wallpaper colour (Android 12+, teal before that), the same
  * in light and dark mode. Until the goal is met the ring and icons are a bright tone of it (soft,
- * fade) or aqua with coral and sky-blue stat icons (vivid); then the ring turns gold. See widget_*
- * in values/colors.xml and values-v31. Resolved on every render, so a new wallpaper shows up on
- * the next refresh.
+ * fade) or the chosen style's colours (see RingStyles.kt; vivid also colours the stat icons coral
+ * and sky blue); then the ring turns gold. See widget_* in values/colors.xml and values-v31.
+ * Resolved on every render, so a new wallpaper shows up on the next refresh.
  */
 private class WidgetPalette(private val context: Context, val style: WidgetStyle) {
     private fun of(@ColorRes id: Int) = ColorProvider(Color(context.getColor(id)))
@@ -108,8 +108,8 @@ private class WidgetPalette(private val context: Context, val style: WidgetStyle
     val muted = of(R.color.widget_muted)
     val error = of(R.color.widget_error)
     private val vivid = style == WidgetStyle.VIVID
-    /** Footprints, ring glow and (soft, fade) the ring itself and stat icons before the goal. */
-    val accent = of(if (vivid) R.color.widget_aqua else R.color.widget_accent)
+    /** Footprints, ring glow, stat icons and (soft, fade) the ring itself before the goal. */
+    val accent = of(style.accentColor)
     val goal = of(R.color.widget_gold)
     val calories = if (vivid) of(R.color.widget_calories) else accent
     val distance = if (vivid) of(R.color.widget_distance) else accent
@@ -210,7 +210,7 @@ private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings, 
  * value over a word ("1,284" / "calories"), keeping the unit only where the word doesn't say it.
  */
 private class Stat(
-    @DrawableRes val icon: Int,
+    @param:DrawableRes val icon: Int,
     val tint: ColorProvider,
     val value: String,
     val unit: String,
@@ -323,8 +323,8 @@ private fun TowerLayout(m: WidgetModel, size: DpSize) {
 
 /**
  * Goal ring: a soft glow and a track in the card's tone, the arc on top, [content] inside. Until
- * the goal the arc is in the chosen style (the wallpaper's bright tone, even or fading in, or aqua
- * to blue), then a gold ring; past the goal the next gold lap runs over it, casting a shadow ahead
+ * the goal the arc is in the chosen style (the wallpaper's bright tone, even or fading in, or one
+ * of the gradients), then a gold ring; past the goal the next gold lap runs over it, casting a shadow ahead
  * of its tip.
  */
 @Composable
@@ -338,7 +338,7 @@ private fun Ring(m: WidgetModel, size: Dp, content: @Composable ColumnScope.() -
             m.ringPercent > 0 -> when (Palette.style) {
                 WidgetStyle.SOFT -> RingLayer(RING_ARCS[m.ringPercent], ColorFilter.tint(Palette.accent))
                 WidgetStyle.FADE -> RingLayer(FADE_ARCS[m.ringPercent], ColorFilter.tint(Palette.accent))
-                WidgetStyle.VIVID -> RingLayer(VIVID_ARCS[m.ringPercent], null)
+                else -> RingLayer(Palette.style.gradient!!.arcs[m.ringPercent], null)
             }
         }
         if (m.lapPercent > 0) {

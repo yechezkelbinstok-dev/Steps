@@ -84,6 +84,28 @@ The live part runs as a background service. Android requires services like this 
 never asks for notification permission, so on Android 13+ that notification is never shown.
 You'll only see Awake Steps listed under "active apps" in quick settings.
 
+## Google Health (optional, faster data)
+
+Health Connect only gets your steps when the Fitbit / Google Health app decides to write them.
+Connecting Google Health (Settings → Google Health) reads them straight from Google's servers
+instead, through the [Google Health API](https://developers.google.com/health), and falls back to
+Health Connect whenever that doesn't work. It still isn't every second: the live count in the
+Google Health app comes over Bluetooth from the watch, and the API only has what that app has
+uploaded.
+
+It needs a one-time setup in your own (free) Google Cloud project. The setup sheet in the app
+links each page and has every value ready to copy:
+
+1. Create a project, and turn on the Google Health API in it.
+2. Set up the sign-in screen (Google Auth Platform): app name "Awake Steps", audience External.
+3. Add the scopes `…/auth/googlehealth.activity_and_fitness.readonly` and
+   `…/auth/googlehealth.sleep.readonly`.
+4. Add your Google account as a test user, then publish the app (otherwise sign-in lapses every
+   7 days).
+5. Create an OAuth client of type Android: package `app.wakesteps` and the SHA-1 of the signing
+   key (`keystore/wakesteps.keystore`, shown in the sheet).
+6. Make sure the Google Health app is signed in with the same account, then tap Connect.
+
 ## Comparing with the Fitbit / Google app
 
 History has a **Midnight to midnight** toggle that shows plain calendar-day totals (steps,

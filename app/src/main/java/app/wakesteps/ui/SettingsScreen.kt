@@ -72,6 +72,8 @@ fun SettingsScreen(
     access: Access,
     latestSync: Instant?,
     onShowSyncLog: () -> Unit,
+    onOpenGoogleHealth: () -> Unit,
+    googleError: String?,
     bottomPadding: Dp,
 ) {
     val context = LocalContext.current
@@ -123,7 +125,23 @@ fun SettingsScreen(
                     color = Palette.muted,
                 )
             }
-            Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.06f)))
+            Divider()
+            LinkRow(stringResource(R.string.gh_row), onOpenGoogleHealth) {
+                if (settings.googleHealth) StatusDot(if (googleError == null) Palette.accent else Palette.error)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(
+                        when {
+                            !settings.googleHealth -> R.string.gh_off
+                            googleError == null -> R.string.hc_connected
+                            else -> R.string.hc_needs_access
+                        }
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Palette.muted,
+                )
+            }
+            Divider()
             LinkRow(stringResource(R.string.sync_log_open), onShowSyncLog) {
                 latestSync?.let { Text(Format.ago(it), style = MaterialTheme.typography.labelLarge, color = Palette.muted) }
             }
@@ -139,6 +157,11 @@ fun SettingsScreen(
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
     }
+}
+
+@Composable
+private fun Divider() {
+    Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.06f)))
 }
 
 @Composable

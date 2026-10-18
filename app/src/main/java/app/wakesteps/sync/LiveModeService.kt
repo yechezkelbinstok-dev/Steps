@@ -27,10 +27,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
 
 /**
  * Live refresh: re-reads Health Connect the moment the screen turns on (so the widget is current
- * when you look at it), then watches for new data every few seconds while it stays on.
+ * when you look at it), then watches for new data every few seconds while it stays on, in Health
+ * Connect and, when it's connected, Google Health.
  * Does nothing while the screen is off.
  *
  * Android requires a notification for any long-running service, but this app never asks for
@@ -80,7 +83,8 @@ class LiveModeService : Service() {
             var tokenSource: String? = null
             var lastFull = 0L
             while (isActive) {
-                val source = app.prefs.currentSettings().sourcePackage
+                val settings = app.prefs.currentSettings()
+                val source = settings.sourcePackage
                 if (source != tokenSource) token = null // the bookmark is per data source
                 var changed = false
                 var failed = false
@@ -93,6 +97,8 @@ class LiveModeService : Service() {
                     token = runCatching { health.changesToken(source) }.getOrNull()
                     tokenSource = source
                 }
+                // With Google Health on, also ask it (one small call) whether newer steps arrived.
+                if (settings.googleHealth && !changed) changed = googleHasNewer()
                 val now = SystemClock.elapsedRealtime()
                 if (changed || lastFull == 0L || now - lastFull >= FULL_REFRESH_MS) {
                     app.engine.refresh()
@@ -102,6 +108,15 @@ class LiveModeService : Service() {
                 delay(if (failed) BACKOFF_MS else POLL_MS)
             }
         }
+    }
+
+    private suspend fun googleHasNewer(): Boolean {
+        val token = app.googleHealth.token() ?: return false
+        val known = app.prefs.currentSnapshot()?.latestDataAt
+        val now = Instant.now()
+        val since = maxOf(known?.minusSeconds(60) ?: Instant.EPOCH, now.minus(Duration.ofHours(3)))
+        val latest = runCatching { app.googleHealth.latestStepTime(token, since, now) }.getOrNull() ?: return false
+        return known == null || latest > known
     }
 
     private fun stopLoop() {

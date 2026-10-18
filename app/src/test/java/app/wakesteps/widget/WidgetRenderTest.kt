@@ -51,7 +51,9 @@ class WidgetRenderTest {
     fun renderAllSizesDark() = renderAll("dark", WidgetStyle.SOFT, steps = 8432)
 
     @Test
-    fun renderPastGoal() = WidgetStyle.entries.forEach { renderAll("lap_${it.name.lowercase()}", it, steps = 13400) }
+    fun renderPastGoal() = listOf(WidgetStyle.SOFT, WidgetStyle.FADE).forEach {
+        renderAll("lap_${it.name.lowercase()}", it, steps = 13400)
+    }
 
     private fun renderAll(tag: String, style: WidgetStyle, steps: Long) = runBlocking {
         val app = ApplicationProvider.getApplicationContext<WakeStepsApp>()

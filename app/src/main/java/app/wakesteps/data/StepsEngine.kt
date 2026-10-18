@@ -6,6 +6,7 @@ import app.wakesteps.core.DayWindow
 import app.wakesteps.core.NightWindow
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.widget.WidgetPusher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Duration
@@ -37,12 +38,56 @@ class StepsEngine(
     private val context: Context,
     private val prefs: Prefs,
     private val health: HealthSource,
+    private val google: GoogleHealth,
 ) {
     private val refreshLock = Mutex()
 
-    /** Recent sleep: enough history to learn when the user's night is. */
-    private suspend fun recentSleeps(settings: AppSettings, now: Instant, days: Long): List<SleepSpan> =
-        health.sleeps(now.minus(Duration.ofDays(maxOf(days, LEARN_DAYS) + 1)), now, settings.sourcePackage)
+    /** Whether a Google Health failure is currently on record (so success only clears it once). */
+    @Volatile private var googleErrorShown = true
+
+    /**
+     * Reads through Google Health when it's switched on and signed in, otherwise (or if that
+     * fails) through Health Connect. Why Google Health failed is kept for the Settings sheet.
+     */
+    private suspend fun <T> read(
+        settings: AppSettings,
+        cloud: suspend GoogleHealth.(token: String) -> T?,
+        local: suspend () -> T,
+    ): T {
+        if (settings.googleHealth) {
+            val token = google.token()
+            if (token == null) {
+                noteGoogleError("Connect Google Health again in Settings.")
+            } else {
+                try {
+                    val value = google.cloud(token)
+                    if (googleErrorShown) noteGoogleError(null)
+                    if (value != null) return value
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    noteGoogleError(e.message ?: e.javaClass.simpleName)
+                }
+            }
+        }
+        return local()
+    }
+
+    private suspend fun noteGoogleError(message: String?) {
+        googleErrorShown = message != null
+        prefs.setGoogleHealthError(message)
+    }
+
+    /**
+     * Recent sleep: enough history to learn when the user's night is. With Google Health on, its
+     * sleep is added to Health Connect's; overlapping copies of the same night merge into one.
+     */
+    private suspend fun recentSleeps(settings: AppSettings, now: Instant, days: Long): List<SleepSpan> {
+        val from = now.minus(Duration.ofDays(maxOf(days, LEARN_DAYS) + 1))
+        val local = health.sleeps(from, now, settings.sourcePackage)
+        val cloud = if (settings.googleHealth) read(settings, { sleeps(it, from, now) }, { emptyList() }) else emptyList()
+        return (local + cloud).sortedBy { it.start }
+    }
 
     suspend fun today(settings: AppSettings, includeHourly: Boolean): TodaySummary {
         val now = Instant.now()
@@ -53,21 +98,23 @@ class StepsEngine(
         val window = DayCalculator.current(sleeps, now.minus(Duration.ofDays(3)), now, zone, settings.rules(), overrides)
         val night = DayCalculator.nightWindow(sleeps, zone, settings.rules())
         val end = window.endOr(now)
-        val totals = health.totals(window.start, end, settings.sourcePackage, granted, settings.calorieMode)
-        val hourly = if (includeHourly) {
-            health.stepsBuckets(window.start, end, Duration.ofHours(1), settings.sourcePackage)
-        } else {
-            emptyList()
+        val totals = read(settings, { totals(it, window.start, end) }) {
+            health.totals(window.start, end, settings.sourcePackage, granted, settings.calorieMode)
         }
-        val latest = runCatching {
-            health.latestStepTime(now.minus(Duration.ofDays(2)), now, settings.sourcePackage)
-        }.getOrNull()
+        val hourly = if (includeHourly) hourly(window, settings) else emptyList()
+        val latest = read(settings, { latestStepTime(it, now.minus(Duration.ofHours(6)), now) }) {
+            runCatching { health.latestStepTime(now.minus(Duration.ofDays(2)), now, settings.sourcePackage) }.getOrNull()
+        }
         return TodaySummary(window, night, totals, hourly, latest, now)
     }
 
     /** Steps hour by hour across one awake day (up to now if it's still going). */
-    suspend fun hourly(window: DayWindow, settings: AppSettings): List<Pair<Instant, Long>> =
-        health.stepsBuckets(window.start, window.endOr(Instant.now()), Duration.ofHours(1), settings.sourcePackage)
+    suspend fun hourly(window: DayWindow, settings: AppSettings): List<Pair<Instant, Long>> {
+        val end = window.endOr(Instant.now())
+        return read(settings, { stepsBuckets(it, window.start, end, Duration.ofHours(1)) }) {
+            health.stepsBuckets(window.start, end, Duration.ofHours(1), settings.sourcePackage)
+        }
+    }
 
     suspend fun history(settings: AppSettings, days: Long = 14): List<DaySummary> {
         val now = Instant.now()
@@ -77,10 +124,13 @@ class StepsEngine(
         return DayCalculator.windows(
             sleeps, now.minus(Duration.ofDays(days + 1)), now, ZoneId.systemDefault(), settings.rules(), overrides,
         )
-            .map {
+            .map { w ->
+                val end = w.endOr(now)
                 DaySummary(
-                    it,
-                    health.totals(it.start, it.endOr(now), settings.sourcePackage, granted, settings.calorieMode),
+                    w,
+                    read(settings, { totals(it, w.start, end) }) {
+                        health.totals(w.start, end, settings.sourcePackage, granted, settings.calorieMode)
+                    },
                 )
             }
             .reversed()

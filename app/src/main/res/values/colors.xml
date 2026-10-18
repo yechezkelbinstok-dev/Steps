@@ -20,6 +20,16 @@
     <color name="widget_calories">#FFFF7A59</color>
     <color name="widget_distance">#FF5CB8FF</color>
 
+    <!-- The other gradient styles, start (12 o'clock) to tip. Keep in step with gen_rings.py. -->
+    <color name="ring_platinum_start">#FF7D879A</color>
+    <color name="ring_platinum_end">#FFFFFFFF</color>
+    <color name="ring_amethyst_start">#FF7C4DFF</color>
+    <color name="ring_amethyst_end">#FFE0A8FF</color>
+    <color name="ring_rose_start">#FFE8336B</color>
+    <color name="ring_rose_end">#FFFFA8C2</color>
+    <color name="ring_emerald_start">#FF0E9F6E</color>
+    <color name="ring_emerald_end">#FFA3F5C4</color>
+
     <!-- Goal met: the same gold everywhere (tools/gen_rings.py bakes it into the widget's rings). -->
     <color name="widget_gold">#FFFFC94D</color>
     <color name="widget_gold_start">#FFFFE082</color>

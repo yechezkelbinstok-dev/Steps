@@ -5,6 +5,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -115,6 +117,13 @@ private fun App(vm: MainViewModel) {
     val overrides by vm.overrides.collectAsStateWithLifecycle()
     var adjusting by remember { mutableStateOf<DayWindow?>(null) }
     var showSyncLog by remember { mutableStateOf(false) }
+    var showGoogleHealth by remember { mutableStateOf(false) }
+    val googleError by vm.googleHealthError.collectAsStateWithLifecycle()
+    val googleMessage by vm.googleMessage.collectAsStateWithLifecycle()
+    val googleBusy by vm.googleBusy.collectAsStateWithLifecycle()
+    val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        vm.googleConsentResult(it.data)
+    }
     val syncLog by vm.syncLog.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     // Only show the pull-to-refresh spinner for a pull, not for the automatic reloads.
@@ -178,7 +187,10 @@ private fun App(vm: MainViewModel) {
                     Tab.HISTORY -> HistoryScreen(state, settings, overrides, onOpenDay = { openDay = it }, bottomPadding = bottom)
                     Tab.SETTINGS -> SettingsScreen(
                         settings, vm::updateSettings, actions, state.access, state.today?.latestDataAt,
-                        onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
+                        onShowSyncLog = { showSyncLog = true },
+                        onOpenGoogleHealth = { showGoogleHealth = true },
+                        googleError = googleError,
+                        bottomPadding = bottom,
                     )
                 }
             }
@@ -215,6 +227,18 @@ private fun App(vm: MainViewModel) {
         TabBar(tab, onSelect = { openDay = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
+        if (showGoogleHealth) {
+            GoogleHealthSheet(
+                connected = settings.googleHealth,
+                problem = googleMessage ?: googleError.takeIf { settings.googleHealth },
+                busy = googleBusy,
+                onConnect = {
+                    vm.connectGoogleHealth { consentLauncher.launch(IntentSenderRequest.Builder(it).build()) }
+                },
+                onDisconnect = vm::disconnectGoogleHealth,
+                onDone = { showGoogleHealth = false },
+            )
+        }
     }
 }
 

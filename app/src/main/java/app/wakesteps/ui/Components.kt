@@ -350,7 +350,7 @@ private fun DrawScope.drawRing(colors: AppColors, p: RingProgress, stroke: Float
             val brush = when {
                 p.goalReached -> fade(1f, colors.goalStart, colors.goalEnd)
                 colors.style == WidgetStyle.FADE -> fade(p.base, colors.accent.copy(alpha = 0.42f), colors.accent)
-                colors.style == WidgetStyle.VIVID -> fade(p.base, colors.accent, colors.accentEnd)
+                colors.gradient -> fade(p.base, colors.ringStart, colors.ringEnd)
                 else -> SolidColor(colors.accent)
             }
             drawArc(brush, 0f, 360f * p.base, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))

@@ -7,11 +7,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,15 +49,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.data.WidgetStyle
+import app.wakesteps.widget.accentColor
+import app.wakesteps.widget.gradient
 
-/** The widget looks as tiny widgets, side by side; tap one to use it. */
+/** The ring styles as tiny widgets in a row you can swipe through; tap one to use it. */
 @Composable
 fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
-    Row(
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (selected.ordinal - 1).coerceAtLeast(0))
+    LazyRow(
+        state = listState,
         modifier = Modifier.fillMaxWidth().selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        WidgetStyle.entries.forEach { style ->
+        items(WidgetStyle.entries) { style ->
             val isSelected = style == selected
             val source = remember { MutableInteractionSource() }
             val scale by animateFloatAsState(
@@ -65,7 +72,7 @@ fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
             val labelColor by animateColorAsState(if (isSelected) Palette.text else Palette.faint, label = "styleLabel")
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .width(88.dp)
                     .pressScale(source, pressed = 0.9f)
                     .graphicsLayer { scaleX = scale; scaleY = scale }
                     .selectable(
@@ -85,10 +92,15 @@ fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
                             WidgetStyle.SOFT -> R.string.widget_style_soft
                             WidgetStyle.FADE -> R.string.widget_style_fade
                             WidgetStyle.VIVID -> R.string.widget_style_vivid
+                            WidgetStyle.PLATINUM -> R.string.widget_style_platinum
+                            WidgetStyle.AMETHYST -> R.string.widget_style_amethyst
+                            WidgetStyle.ROSE -> R.string.widget_style_rose
+                            WidgetStyle.EMERALD -> R.string.widget_style_emerald
                         }
                     ),
                     style = MaterialTheme.typography.labelLarge,
                     color = labelColor,
+                    maxLines = 1,
                 )
             }
         }
@@ -102,12 +114,13 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
     fun color(id: Int) = Color(context.getColor(id))
     val card = color(R.color.widget_bg)
     val track = color(R.color.widget_track)
-    val accent = color(if (style == WidgetStyle.VIVID) R.color.widget_aqua else R.color.widget_accent)
+    val accent = color(style.accentColor)
+    val blend = style.gradient
     val shape = RoundedCornerShape(18.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(104.dp)
+            .height(100.dp)
             .clip(shape)
             .background(card)
             .background(
@@ -121,7 +134,7 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(64.dp)) {
+        Canvas(Modifier.size(62.dp)) {
             val stroke = size.minDimension * 0.11f
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)
@@ -133,14 +146,14 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
             )
             drawArc(track, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
             val sweep = 0.75f
-            val brush = when (style) {
-                WidgetStyle.SOFT -> SolidColor(accent)
-                WidgetStyle.FADE -> Brush.sweepGradient(
+            val brush = when {
+                blend != null -> color(blend.start).let { start ->
+                    Brush.sweepGradient(0f to start, sweep to color(blend.end), 1f to start)
+                }
+                style == WidgetStyle.FADE -> Brush.sweepGradient(
                     0f to accent.copy(alpha = 0.42f), sweep to accent, 1f to accent.copy(alpha = 0.42f),
                 )
-                WidgetStyle.VIVID -> Brush.sweepGradient(
-                    0f to accent, sweep to color(R.color.widget_ring_end), 1f to accent,
-                )
+                else -> SolidColor(accent)
             }
             // Sweep gradients start at 3 o'clock; turn the canvas so the arc starts at 12.
             rotate(-90f) {

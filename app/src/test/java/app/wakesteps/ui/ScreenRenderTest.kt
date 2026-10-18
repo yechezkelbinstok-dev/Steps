@@ -86,30 +86,30 @@ class ScreenRenderTest {
         }
     }
 
+    /** Every screen, in the default style. */
     @Test
     fun renderScreens() {
+        val settings = AppSettings()
+        val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
+        render("today", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom) }
+        render("goal", settings, Tab.TODAY) { TodayScreen(state.copy(today = today(13400)), settings, actions, {}, {}, bottom) }
+        render("scrub", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom, chartSelection = 7) }
+        render("history", settings, Tab.HISTORY) { HistoryScreen(state, settings, Overrides.NONE, {}, bottom, chartSelection = 3) }
+        render("day", settings, Tab.HISTORY) {
+            DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom)
+        }
+        render("settings", settings, Tab.SETTINGS) {
+            SettingsScreen(settings, {}, actions, state.access, now.minus(Duration.ofMinutes(6)), {}, {}, null, bottom)
+        }
+    }
+
+    /** Today in every ring style. */
+    @Test
+    fun renderStyles() {
+        val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
         for (style in WidgetStyle.entries) {
             val settings = AppSettings(widgetStyle = style)
-            val tag = style.name.lowercase()
-            val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
-            render("today_$tag", settings, Tab.TODAY) {
-                TodayScreen(state, settings, actions, {}, {}, bottom)
-            }
-            render("goal_$tag", settings, Tab.TODAY) {
-                TodayScreen(state.copy(today = today(13400)), settings, actions, {}, {}, bottom)
-            }
-            render("scrub_$tag", settings, Tab.TODAY) {
-                TodayScreen(state, settings, actions, {}, {}, bottom, chartSelection = 7)
-            }
-            render("history_$tag", settings, Tab.HISTORY) {
-                HistoryScreen(state, settings, Overrides.NONE, {}, bottom, chartSelection = 3)
-            }
-            render("day_$tag", settings, Tab.HISTORY) {
-                DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom)
-            }
-            render("settings_$tag", settings, Tab.SETTINGS) {
-                SettingsScreen(settings, {}, actions, state.access, now.minus(Duration.ofMinutes(6)), {}, bottom)
-            }
+            render("today_${style.name.lowercase()}", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom) }
         }
     }
 
@@ -120,6 +120,19 @@ class ScreenRenderTest {
         val settings = AppSettings()
         render("day_full", settings, Tab.HISTORY) {
             DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom)
+        }
+    }
+
+    /** The Google Health setup sheet's content. */
+    @Test
+    @Config(qualifiers = "w411dp-h1300dp-420dpi")
+    fun renderGoogleHealth() {
+        render("google_health", AppSettings(), Tab.SETTINGS) {
+            GoogleHealthContent(
+                connected = false, problem = null, busy = false,
+                sha1 = "B0:26:35:22:6D:29:49:EE:FA:30:07:C2:5B:2F:AC:1A:0F:37:87:D3",
+                onConnect = {}, onDisconnect = {},
+            )
         }
     }
 
