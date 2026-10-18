@@ -21,6 +21,7 @@ import app.wakesteps.data.TodaySummary
 import app.wakesteps.sync.LiveModeService
 import app.wakesteps.widget.WidgetPusher
 import com.google.android.gms.auth.api.identity.AuthorizationResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -114,7 +115,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 app.engine.refresh(today)
                 val history = app.engine.history(s)
                 val calendar = runCatching { app.engine.calendarDays(s) }.getOrDefault(emptyList())
-                _state.update { it.copy(history = history, calendar = calendar, loading = false) }
+                _state.update { it.copy(history = history, calendar = calendar, loading = false, error = null) }
+            } catch (e: CancellationException) {
+                throw e // a newer reload replaced this one: not an error
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = e.message ?: e.javaClass.simpleName) }
             }

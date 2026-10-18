@@ -169,6 +169,8 @@ class StepsEngine(
                 latestDataAt = t.latestDataAt,
                 error = null,
             ).also { prefs.saveSnapshot(it) }
+        } catch (e: CancellationException) {
+            throw e // e.g. the screen went off mid-refresh: not an error to show
         } catch (e: Exception) {
             prefs.saveError(e.message ?: e.javaClass.simpleName)
             null

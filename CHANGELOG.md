@@ -6,6 +6,12 @@ one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 2.0
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9).
 
+## 1.9
+- Fixed a red "StandaloneCoroutine was cancelled" message on Today. It appeared when two
+  refreshes overlapped (for example coming back from Google's sign-in screen); the one that got
+  replaced wrongly reported itself as an error. The widget's background refresh had the same
+  flaw when the screen turned off mid-refresh.
+
 ## 1.8
 - Four new ring styles to try in Settings → Ring (swipe the row): Platinum (steel to bright
   platinum, so it's silver until the goal and then gold), Amethyst (violet to orchid), Rose

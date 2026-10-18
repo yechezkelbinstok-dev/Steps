@@ -14,8 +14,8 @@ android {
         targetSdk = 36
         // Bump both together: versionCode is the version without the dot (1.8 -> 108), so the two
         // always match and every release installs over the previous one. Builds before 1.4 used 1-6.
-        versionName = "1.8"
-        versionCode = 108
+        versionName = "1.9"
+        versionCode = 109
     }
 
     signingConfigs {
