@@ -260,6 +260,7 @@ private fun DrawScope.drawRing(colors: AppColors, p: RingProgress, stroke: Float
             val brush = when {
                 p.goalReached -> fade(1f, colors.goalStart, colors.goalEnd)
                 colors.style == WidgetStyle.FADE -> fade(p.base, colors.accent.copy(alpha = 0.42f), colors.accent)
+                colors.style == WidgetStyle.VIVID -> fade(p.base, colors.accent, colors.accentEnd)
                 else -> SolidColor(colors.accent)
             }
             drawArc(brush, 0f, 360f * p.base, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
@@ -324,9 +325,10 @@ fun Bars(
             if (v == 0L) {
                 drawRoundRect(colors.faint.copy(alpha = 0.35f), Offset(x, size.height - minH), Size(w, minH), radius)
             } else {
+                val bottom = if (colors.style == WidgetStyle.VIVID) colors.accentEnd else colors.accent.copy(alpha = 0.55f)
                 drawRoundRect(
                     Brush.verticalGradient(
-                        listOf(colors.accent, colors.accent.copy(alpha = 0.55f)),
+                        listOf(colors.accent, bottom),
                         startY = size.height - h, endY = size.height,
                     ),
                     Offset(x, size.height - h), Size(w, h), radius,

@@ -70,6 +70,7 @@
     <string name="set_widget">Ring</string>
     <string name="widget_style_soft">Soft</string>
     <string name="widget_style_fade">Fade</string>
+    <string name="widget_style_vivid">Vivid</string>
     <string name="set_open_hc">Health Connect</string>
     <string name="app_version">Awake Steps %1$s</string>
     <string name="sync_log_open">Sync log</string>

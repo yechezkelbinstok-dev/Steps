@@ -50,8 +50,9 @@ widgets under Settings → Display → Lock screen, then swipe over on the lock 
   lock-screen size).
 * A goal ring with the footprints icon over your step count, plus calories and distance.
   No percentages or "to go" (the ring already shows progress), and no wake-up time.
-* A solid card in a deep tone of your wallpaper colour (Android 12+). The ring is a bright tone
-  of it until you hit your goal, even (Soft) or fading in (Fade), then gold (Settings → Ring).
+* A solid card in a deep tone of your wallpaper colour (Android 12+). Until you hit your goal the
+  ring is a bright tone of it, even (Soft) or fading in (Fade), or aqua to blue with coral
+  calories and sky-blue distance (Vivid); then it turns gold. Pick in Settings → Ring.
 * Past your goal the ring keeps going: the next lap runs over the full ring, with a shadow at
   its tip.
 * Tap it to open the app.

@@ -13,6 +13,13 @@
     <!-- The app's background: near black with a little of this mixed in. -->
     <color name="app_tint">#FF002022</color>
 
+    <!-- Vivid style: fixed, so they pop on any card. -->
+    <color name="widget_aqua">#FF2BE7C8</color>
+    <!-- Where the aqua ring ends up (tools/gen_rings.py bakes the blend into the widget's rings). -->
+    <color name="widget_ring_end">#FF3A8DFF</color>
+    <color name="widget_calories">#FFFF7A59</color>
+    <color name="widget_distance">#FF5CB8FF</color>
+
     <!-- Goal met: the same gold everywhere (tools/gen_rings.py bakes it into the widget's rings). -->
     <color name="widget_gold">#FFFFC94D</color>
     <color name="widget_gold_start">#FFFFE082</color>

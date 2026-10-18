@@ -44,6 +44,10 @@ class AppColors(
     val track: Color,
     /** The ring, footprints, icons and chart bars until the goal is met. */
     val accent: Color,
+    /** Where the vivid ring's blend ends up; the same as [accent] in the other styles. */
+    val accentEnd: Color,
+    val calories: Color,
+    val distance: Color,
     /** Footprints and glow once the goal is met. */
     val goal: Color,
     /** The gold ring's blend, from 12 o'clock to the far side. */
@@ -59,6 +63,8 @@ class AppColors(
             val tint = c(R.color.app_tint)
             val card = c(R.color.widget_bg)
             val background = lerp(Color.Black, tint, 0.38f)
+            val vivid = style == WidgetStyle.VIVID
+            val accent = c(if (vivid) R.color.widget_aqua else R.color.widget_accent)
             return AppColors(
                 style = style,
                 background = background,
@@ -70,7 +76,10 @@ class AppColors(
                 muted = c(R.color.widget_muted),
                 faint = c(R.color.widget_muted).copy(alpha = 0.55f),
                 track = c(R.color.widget_track),
-                accent = c(R.color.widget_accent),
+                accent = accent,
+                accentEnd = if (vivid) c(R.color.widget_ring_end) else accent,
+                calories = if (vivid) c(R.color.widget_calories) else accent,
+                distance = if (vivid) c(R.color.widget_distance) else accent,
                 goal = c(R.color.widget_gold),
                 goalStart = c(R.color.widget_gold_start),
                 goalEnd = c(R.color.widget_gold_end),

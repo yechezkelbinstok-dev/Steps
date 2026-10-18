@@ -26,12 +26,14 @@ private val Context.dataStore by preferencesDataStore(name = "wakesteps")
 enum class CalorieMode { TOTAL, ACTIVE }
 enum class DistanceUnit { AUTO, KILOMETERS, MILES }
 
-/** How the goal ring fills up to the goal, in the wallpaper's colour. Past it, it's gold either way. */
+/** How the goal ring fills up to the goal. Past it, it's gold in every style. */
 enum class WidgetStyle {
-    /** One even colour. */
+    /** The wallpaper's bright tone, even. */
     SOFT,
-    /** Faint at the start, fading in toward the tip. */
+    /** The wallpaper's bright tone, faint at the start and fading in toward the tip. */
     FADE,
+    /** Aqua to blue, with coral calories and sky-blue distance. */
+    VIVID,
 }
 
 /**

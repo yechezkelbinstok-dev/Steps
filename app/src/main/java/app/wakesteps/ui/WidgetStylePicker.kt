@@ -60,6 +60,7 @@ fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
                         when (style) {
                             WidgetStyle.SOFT -> R.string.widget_style_soft
                             WidgetStyle.FADE -> R.string.widget_style_fade
+                            WidgetStyle.VIVID -> R.string.widget_style_vivid
                         }
                     ),
                     style = MaterialTheme.typography.labelLarge,
@@ -77,7 +78,7 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
     fun color(id: Int) = Color(context.getColor(id))
     val card = color(R.color.widget_bg)
     val track = color(R.color.widget_track)
-    val accent = color(R.color.widget_accent)
+    val accent = color(if (style == WidgetStyle.VIVID) R.color.widget_aqua else R.color.widget_accent)
     val shape = RoundedCornerShape(18.dp)
     Box(
         modifier = Modifier
@@ -108,6 +109,9 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
                 WidgetStyle.SOFT -> SolidColor(accent)
                 WidgetStyle.FADE -> Brush.sweepGradient(
                     0f to accent.copy(alpha = 0.42f), sweep to accent, 1f to accent.copy(alpha = 0.42f),
+                )
+                WidgetStyle.VIVID -> Brush.sweepGradient(
+                    0f to accent, sweep to color(R.color.widget_ring_end), 1f to accent,
                 )
             }
             // Sweep gradients start at 3 o'clock; turn the canvas so the arc starts at 12.

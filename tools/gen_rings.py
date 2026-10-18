@@ -7,6 +7,7 @@ track (ring_track) that the widget tints to the card's tone:
  - ring_p001..ring_p100: plain white, tinted at runtime (the soft style)
  - ring_f001..ring_f100: white fading in toward the tip, tinted at runtime (the fade style;
    tinting keeps the alpha)
+ - ring_v001..ring_v100: aqua -> blue (the vivid style)
  - ring_l001..ring_l100: past the goal, the next gold lap, deepening to amber
  - ring_s001..ring_s100: the soft shadow a lap casts ahead of its tip onto the ring beneath,
    so you can see where the overlap ends
@@ -27,6 +28,7 @@ R = (SIZE - STROKE) / 2
 C = SIZE / 2
 
 PLAIN = "#FFFFFFFF"                              # tinted at runtime
+VIVID_START, VIVID_END = "#FF2BE7C8", "#FF3A8DFF"  # aqua -> blue
 FADE_START, FADE_END = "#6BFFFFFF", "#FFFFFFFF"  # faint -> solid, tinted at runtime
 GOAL_START, GOAL_END = "#FFFFE082", "#FFFF9F1C"  # light gold -> amber
 LAP_END = "#FFFF8A00"                            # a lap deepens past the full ring's amber
@@ -117,6 +119,7 @@ for p in range(1, 101):
 write("ring_goal.xml", gradient_path(FULL, GOAL_START, GOAL_END, 1.0))
 for p in range(1, 101):
     write(f"ring_f{p:03d}.xml", gradient_path(arc(p / 100), FADE_START, FADE_END, p / 100))
+    write(f"ring_v{p:03d}.xml", gradient_path(arc(p / 100), VIVID_START, VIVID_END, p / 100))
     write(f"ring_l{p:03d}.xml", gradient_path(arc(p / 100), GOAL_START, LAP_END, p / 100))
     write(f"ring_s{p:03d}.xml", shadow(p / 100))
 
@@ -126,6 +129,7 @@ with open(KT, "w") as f:
     for name, prefix, what in [
         ("RING_ARCS", "ring_p", "a plain white arc"),
         ("FADE_ARCS", "ring_f", "a fading white arc"),
+        ("VIVID_ARCS", "ring_v", "an aqua-to-blue arc"),
         ("LAP_ARCS", "ring_l", "a gold lap"),
         ("LAP_SHADOWS", "ring_s", "the shadow ahead of the tip of a lap"),
     ]:

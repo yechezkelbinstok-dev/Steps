@@ -199,7 +199,7 @@ private fun Stats(t: TodaySummary, settings: AppSettings) {
         calories?.let {
             StatTile(
                 icon = R.drawable.ic_fire,
-                tint = Palette.accent,
+                tint = Palette.calories,
                 value = Format.number(Math.round(it)),
                 unit = null,
                 label = stringResource(
@@ -213,7 +213,7 @@ private fun Stats(t: TodaySummary, settings: AppSettings) {
             val text = Format.distance(it, settings.distanceUnit) // "3.8 mi"
             StatTile(
                 icon = R.drawable.ic_distance,
-                tint = Palette.accent,
+                tint = Palette.distance,
                 value = text.substringBeforeLast(' '),
                 unit = text.substringAfterLast(' '),
                 label = stringResource(R.string.widget_label_distance),

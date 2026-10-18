@@ -95,9 +95,10 @@ private val TOWER_HEIGHT = 240.dp
 
 /**
  * A deep card in a dark tone of the wallpaper colour (Android 12+, teal before that), the same
- * in light and dark mode, with the ring and icons in a bright tone of it until the goal is met,
- * then gold. See widget_* in values/colors.xml and values-v31. Resolved on every render, so a new
- * wallpaper shows up on the next refresh.
+ * in light and dark mode. Until the goal is met the ring and icons are a bright tone of it (soft,
+ * fade) or aqua with coral and sky-blue stat icons (vivid); then the ring turns gold. See widget_*
+ * in values/colors.xml and values-v31. Resolved on every render, so a new wallpaper shows up on
+ * the next refresh.
  */
 private class WidgetPalette(private val context: Context, val style: WidgetStyle) {
     private fun of(@ColorRes id: Int) = ColorProvider(Color(context.getColor(id)))
@@ -106,9 +107,12 @@ private class WidgetPalette(private val context: Context, val style: WidgetStyle
     val text = of(R.color.widget_text)
     val muted = of(R.color.widget_muted)
     val error = of(R.color.widget_error)
-    /** Footprints, ring glow, stat icons and the ring itself before the goal. */
-    val accent = of(R.color.widget_accent)
+    private val vivid = style == WidgetStyle.VIVID
+    /** Footprints, ring glow and (soft, fade) the ring itself and stat icons before the goal. */
+    val accent = of(if (vivid) R.color.widget_aqua else R.color.widget_accent)
     val goal = of(R.color.widget_gold)
+    val calories = if (vivid) of(R.color.widget_calories) else accent
+    val distance = if (vivid) of(R.color.widget_distance) else accent
 }
 
 private val LocalPalette = staticCompositionLocalOf<WidgetPalette> { error("No palette") }
@@ -182,7 +186,7 @@ private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings, 
     val error = s.error
     val calories: Stat? = s.totals.calories?.let {
         Stat(
-            R.drawable.ic_fire, palette.accent, Format.number(Math.round(it)), unit = "cal",
+            R.drawable.ic_fire, palette.calories, Format.number(Math.round(it)), unit = "cal",
             label = context.getString(
                 if (settings.calorieMode == CalorieMode.ACTIVE) R.string.widget_label_active_calories
                 else R.string.widget_label_calories
@@ -193,7 +197,7 @@ private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings, 
     val distance: Stat? = s.totals.distanceMeters?.let {
         val text = Format.distance(it, settings.distanceUnit) // "3.8 mi"
         Stat(
-            R.drawable.ic_distance, palette.accent, text.substringBeforeLast(' '), unit = text.substringAfterLast(' '),
+            R.drawable.ic_distance, palette.distance, text.substringBeforeLast(' '), unit = text.substringAfterLast(' '),
             label = context.getString(R.string.widget_label_distance),
             unitWithLabel = true,
         )
@@ -318,9 +322,10 @@ private fun TowerLayout(m: WidgetModel, size: DpSize) {
 // ---------------------------------------------------------------- pieces
 
 /**
- * Goal ring: a soft glow and a track in the card's tone, the arc on top, [content] inside. The arc
- * is the wallpaper's bright tone (even or fading in, by style) until the goal, then a gold ring;
- * past the goal the next gold lap runs over it, casting a shadow ahead of its tip.
+ * Goal ring: a soft glow and a track in the card's tone, the arc on top, [content] inside. Until
+ * the goal the arc is in the chosen style (the wallpaper's bright tone, even or fading in, or aqua
+ * to blue), then a gold ring; past the goal the next gold lap runs over it, casting a shadow ahead
+ * of its tip.
  */
 @Composable
 private fun Ring(m: WidgetModel, size: Dp, content: @Composable ColumnScope.() -> Unit) {
@@ -328,11 +333,12 @@ private fun Ring(m: WidgetModel, size: Dp, content: @Composable ColumnScope.() -
         RingLayer(R.drawable.ring_glow, ColorFilter.tint(if (m.goalReached) Palette.goal else Palette.accent))
         RingLayer(R.drawable.ring_track, ColorFilter.tint(Palette.track))
         when {
-            // Gold drawables carry their own colours.
+            // Gold and vivid drawables carry their own colours.
             m.goalReached -> RingLayer(R.drawable.ring_goal, null)
-            m.ringPercent > 0 -> {
-                val arcs = if (Palette.style == WidgetStyle.FADE) FADE_ARCS else RING_ARCS
-                RingLayer(arcs[m.ringPercent], ColorFilter.tint(Palette.accent))
+            m.ringPercent > 0 -> when (Palette.style) {
+                WidgetStyle.SOFT -> RingLayer(RING_ARCS[m.ringPercent], ColorFilter.tint(Palette.accent))
+                WidgetStyle.FADE -> RingLayer(FADE_ARCS[m.ringPercent], ColorFilter.tint(Palette.accent))
+                WidgetStyle.VIVID -> RingLayer(VIVID_ARCS[m.ringPercent], null)
             }
         }
         if (m.lapPercent > 0) {
