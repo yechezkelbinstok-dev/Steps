@@ -58,7 +58,7 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
         onDone()
     }
 
-    ModalBottomSheet(onDismissRequest = onDone, containerColor = Palette.card) {
+    ModalBottomSheet(onDismissRequest = onDone, containerColor = Palette.cardHigh) {
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())

@@ -28,7 +28,7 @@ import java.time.Duration
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncLogSheet(events: List<SyncEvent>, onDone: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDone, containerColor = Palette.card) {
+    ModalBottomSheet(onDismissRequest = onDone, containerColor = Palette.cardHigh) {
         LazyColumn(
             Modifier.padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

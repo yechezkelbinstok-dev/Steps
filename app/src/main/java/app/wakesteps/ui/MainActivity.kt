@@ -8,6 +8,23 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import app.wakesteps.data.DaySummary
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -102,6 +119,7 @@ private fun App(vm: MainViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     // Only show the pull-to-refresh spinner for a pull, not for the automatic reloads.
     var pulled by remember { mutableStateOf(false) }
+    val refreshState = rememberPullToRefreshState()
     LaunchedEffect(state.loading) { if (!state.loading) pulled = false }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.reload() }
@@ -118,23 +136,72 @@ private fun App(vm: MainViewModel) {
         requestBackground = { permissionLauncher.launch(vm.backgroundPermission()) },
     )
 
+    var openDay by remember { mutableStateOf<DaySummary?>(null) }
+    // Keep an open day in step with fresh data (e.g. after adjusting it).
+    LaunchedEffect(state.history) {
+        openDay = openDay?.let { open -> state.history.firstOrNull { it.window.start == open.window.start } ?: open }
+    }
+
     // Room under the content for the floating tab bar.
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 104.dp
-    Box(Modifier.fillMaxSize().background(Palette.background)) {
+    Box(Modifier.fillMaxSize()) {
+        Backdrop()
         PullToRefreshBox(
             isRefreshing = pulled && state.loading,
             onRefresh = { pulled = true; vm.reload() },
             modifier = Modifier.fillMaxSize(),
+            state = refreshState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = refreshState,
+                    isRefreshing = pulled && state.loading,
+                    containerColor = Palette.cardHigh,
+                    color = Palette.accent,
+                    modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
+                )
+            },
         ) {
-            when (tab) {
-                Tab.TODAY -> TodayScreen(
-                    state, settings, actions,
-                    onAdjust = { adjusting = it }, onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
-                )
-                Tab.HISTORY -> HistoryScreen(state, settings, overrides, onAdjust = { adjusting = it }, bottomPadding = bottom)
-                Tab.SETTINGS -> SettingsScreen(
-                    settings, vm::updateSettings, actions, onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
-                )
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (fadeIn(tween(320, delayMillis = 60)) + slideInHorizontally(tween(420, easing = Glide)) { it / 10 * direction })
+                        .togetherWith(fadeOut(tween(160)) + slideOutHorizontally(tween(320, easing = Glide)) { -it / 14 * direction })
+                },
+                label = "tabs",
+            ) { t ->
+                when (t) {
+                    Tab.TODAY -> TodayScreen(
+                        state, settings, actions,
+                        onAdjust = { adjusting = it }, onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
+                    )
+                    Tab.HISTORY -> HistoryScreen(state, settings, overrides, onOpenDay = { openDay = it }, bottomPadding = bottom)
+                    Tab.SETTINGS -> SettingsScreen(
+                        settings, vm::updateSettings, actions, state.access, state.today?.latestDataAt,
+                        onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
+                    )
+                }
+            }
+        }
+        // A day opened from History slides in over everything but the tab bar.
+        AnimatedVisibility(
+            visible = openDay != null,
+            enter = slideInHorizontally(tween(420, easing = Glide)) { it } + fadeIn(tween(250)),
+            exit = slideOutHorizontally(tween(320, easing = Glide)) { it } + fadeOut(tween(200)),
+        ) {
+            // Hold on to the last day while it slides away.
+            val day = remember { mutableStateOf(openDay) }.apply { if (openDay != null) value = openDay }.value
+            Box(Modifier.fillMaxSize()) {
+                Backdrop()
+                if (day != null) {
+                    DayDetail(
+                        day, settings, overrides,
+                        loadHourly = vm::hourly,
+                        onAdjust = { adjusting = it },
+                        onBack = { openDay = null },
+                        bottomPadding = bottom,
+                    )
+                }
             }
         }
         // Content fades out under the tab bar instead of running into it.
@@ -143,15 +210,15 @@ private fun App(vm: MainViewModel) {
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(bottom)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.background.copy(alpha = 0.92f)))),
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.background.copy(alpha = 0.94f)))),
         )
-        TabBar(tab, onSelect = { tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
+        TabBar(tab, onSelect = { openDay = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
     }
 }
 
-/** A floating pill: the current tab shows its name, the others just their icon. */
+/** A floating glass pill: the current tab grows to show its name, the others just their icon. */
 @Composable
 internal fun TabBar(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
     Row(
@@ -159,19 +226,23 @@ internal fun TabBar(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = 
             .navigationBarsPadding()
             .padding(bottom = 16.dp)
             .clip(CircleShape)
-            .background(Palette.cardHigh)
-            .border(1.dp, Palette.outline, CircleShape)
-            .padding(6.dp),
+            .background(Palette.cardHigh.copy(alpha = 0.96f))
+            .border(1.dp, glassEdge(), CircleShape)
+            .padding(6.dp)
+            .animateContentSize(spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Tab.entries.forEach { t ->
             val on = t == current
-            val color = if (on) Palette.accent else Palette.muted
+            val color by animateColorAsState(if (on) Palette.accent else Palette.muted, label = "tabColor")
+            val fill by animateColorAsState(if (on) Palette.accent.copy(alpha = 0.15f) else Color.Transparent, label = "tabFill")
+            val source = remember { MutableInteractionSource() }
             Row(
                 Modifier
+                    .pressScale(source, pressed = 0.9f)
                     .clip(CircleShape)
-                    .background(if (on) Palette.accent.copy(alpha = 0.14f) else Color.Transparent)
-                    .clickable { onSelect(t) }
+                    .background(fill)
+                    .clickable(source, indication = null) { onSelect(t) }
                     .padding(horizontal = if (on) 18.dp else 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

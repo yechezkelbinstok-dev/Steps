@@ -23,6 +23,20 @@ object Format {
 
     fun day(i: Instant): String = dayFmt.format(i.atZone(ZoneId.systemDefault()))
 
+    private val hour12 = DateTimeFormatter.ofPattern("h a")
+    private val hour24 = DateTimeFormatter.ofPattern("HH:mm")
+
+    /** An hour on its own: "2 PM", or "14:00" on a 24-hour clock. */
+    fun hour(i: Instant, h24: Boolean): String =
+        (if (h24) hour24 else hour12).format(i.atZone(ZoneId.systemDefault()))
+
+    /** Short form for chart labels: "10k", "7.5k", "800". */
+    fun compact(n: Long): String = when {
+        n >= 1000 && n % 1000 == 0L -> "${n / 1000}k"
+        n >= 1000 -> "%.1fk".format(n / 1000.0)
+        else -> n.toString()
+    }
+
     fun duration(d: Duration): String {
         val m = d.toMinutes().coerceAtLeast(0)
         return if (m < 60) "${m}m" else "${m / 60}h ${"%02d".format(m % 60)}m"

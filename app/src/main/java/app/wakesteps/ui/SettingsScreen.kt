@@ -1,7 +1,9 @@
 package app.wakesteps.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,37 +15,51 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.Format
 import app.wakesteps.data.AppSettings
+import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import kotlinx.coroutines.delay
+import java.time.Instant
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 private const val GOAL_STEP = 500
 private val GOAL_RANGE = 1_000..50_000
@@ -53,6 +69,8 @@ fun SettingsScreen(
     settings: AppSettings,
     update: ((AppSettings) -> AppSettings) -> Unit,
     actions: Actions,
+    access: Access,
+    latestSync: Instant?,
     onShowSyncLog: () -> Unit,
     bottomPadding: Dp,
 ) {
@@ -62,44 +80,53 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
-            .padding(bottom = bottomPadding),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(top = 12.dp, bottom = bottomPadding),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        ScreenTitle(stringResource(R.string.tab_settings))
+        Column(Modifier.entrance(0)) {
+            Eyebrow(stringResource(R.string.settings_eyebrow))
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.tab_settings), style = AppType.title, color = Palette.text)
+        }
 
-        AppCard(Modifier.fillMaxWidth()) {
-            CardLabel(stringResource(R.string.set_goal))
+        Panel(Modifier.fillMaxWidth().entrance(1)) {
+            Eyebrow(stringResource(R.string.set_goal))
             var goal by remember(settings.goal) { mutableIntStateOf(settings.goal) }
-            // Save once the taps settle, not on every one: each save redraws the widget.
+            // Save once the dial settles, not on every tick: each save redraws the widget.
             LaunchedEffect(goal) {
                 if (goal == settings.goal) return@LaunchedEffect
                 delay(700)
                 update { it.copy(goal = goal) }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RoundButton(painterResource(R.drawable.ic_minus), stringResource(R.string.goal_less), enabled = goal > GOAL_RANGE.first) {
-                    goal = (goal - GOAL_STEP).coerceIn(GOAL_RANGE)
-                }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    BigValue(Format.number(goal.toLong()), size = 44)
-                }
-                RoundButton(rememberVectorPainter(Icons.Default.Add), stringResource(R.string.goal_more), enabled = goal < GOAL_RANGE.last) {
-                    goal = (goal + GOAL_STEP).coerceIn(GOAL_RANGE)
-                }
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(Format.number(goal.toLong()), style = AppType.number(56f), color = Palette.text)
             }
+            Spacer(Modifier.height(8.dp))
+            GoalDial(goal, onChange = { goal = it }, Modifier.fillMaxWidth().height(76.dp))
         }
 
-        AppCard(Modifier.fillMaxWidth()) {
-            CardLabel(stringResource(R.string.set_widget))
-            Spacer(Modifier.height(14.dp))
+        Panel(Modifier.fillMaxWidth().entrance(2)) {
+            Eyebrow(stringResource(R.string.set_widget))
+            Spacer(Modifier.height(16.dp))
             WidgetStylePicker(settings.widgetStyle) { style -> update { s -> s.copy(widgetStyle = style) } }
         }
 
-        AppCard(Modifier.fillMaxWidth(), padding = PaddingValues(0.dp)) {
-            LinkRow(stringResource(R.string.set_open_hc), actions.openHealthConnect)
-            HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = Palette.outline)
-            LinkRow(stringResource(R.string.sync_log_open), onShowSyncLog)
+        Panel(Modifier.fillMaxWidth().entrance(3), padding = PaddingValues(vertical = 6.dp)) {
+            val connected = access is Access.Ready
+            LinkRow(stringResource(R.string.set_open_hc), actions.openHealthConnect) {
+                StatusDot(if (connected) Palette.accent else Palette.error)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(if (connected) R.string.hc_connected else R.string.hc_needs_access),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Palette.muted,
+                )
+            }
+            Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.06f)))
+            LinkRow(stringResource(R.string.sync_log_open), onShowSyncLog) {
+                latestSync?.let { Text(Format.ago(it), style = MaterialTheme.typography.labelLarge, color = Palette.muted) }
+            }
         }
 
         val version = remember {
@@ -115,29 +142,91 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun RoundButton(icon: Painter, description: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(Palette.cardHigh)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
+private fun StatusDot(color: Color) {
+    Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+}
+
+/**
+ * A ruler you drag sideways to set the goal: a tick every 500 steps, taller ones every 1,000,
+ * labelled every 5,000, fading out towards the edges. Each tick past the marker clicks.
+ */
+@Composable
+private fun GoalDial(value: Int, onChange: (Int) -> Unit, modifier: Modifier) {
+    val colors = Palette
+    val haptics = LocalHapticFeedback.current
+    val measurer = rememberTextMeasurer()
+    val labelStyle = AppType.eyebrow
+    val current by rememberUpdatedState(value)
+    var dragging by remember { mutableStateOf(false) }
+    var startValue by remember { mutableIntStateOf(value) }
+    var drag by remember { mutableFloatStateOf(0f) }
+    val tickSpacing = 13.dp
+
+    Canvas(
+        modifier.pointerInput(Unit) {
+            val tickPx = tickSpacing.toPx()
+            detectHorizontalDragGestures(
+                onDragStart = { startValue = current; drag = 0f; dragging = true },
+                onDragEnd = { dragging = false },
+                onDragCancel = { dragging = false },
+            ) { change, dx ->
+                change.consume()
+                drag += dx
+                val v = (startValue + (-drag / tickPx).roundToInt() * GOAL_STEP).coerceIn(GOAL_RANGE)
+                if (v != current) {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    onChange(v)
+                }
+            }
+        },
     ) {
-        Icon(icon, description, tint = if (enabled) Palette.text else Palette.faint, modifier = Modifier.size(22.dp))
+        val tickPx = tickSpacing.toPx()
+        // While dragging the ruler follows the finger smoothly; otherwise it rests on the value.
+        val pos = if (dragging) {
+            (startValue - drag / tickPx * GOAL_STEP).coerceIn(GOAL_RANGE.first.toFloat(), GOAL_RANGE.last.toFloat())
+        } else value.toFloat()
+        val cx = size.width / 2
+        val span = size.width / 2 / tickPx * GOAL_STEP
+        val first = (ceil((pos - span) / GOAL_STEP) * GOAL_STEP).toInt().coerceAtLeast(GOAL_RANGE.first)
+        val last = (floor((pos + span) / GOAL_STEP) * GOAL_STEP).toInt().coerceAtMost(GOAL_RANGE.last)
+        val base = size.height * 0.62f
+        for (t in first..last step GOAL_STEP) {
+            val x = cx + (t - pos) / GOAL_STEP * tickPx
+            val fade = (1f - abs(x - cx) / cx).coerceIn(0f, 1f)
+            val (h, w) = when {
+                t % 5000 == 0 -> 26.dp.toPx() to 2.dp.toPx()
+                t % 1000 == 0 -> 16.dp.toPx() to 1.5.dp.toPx()
+                else -> 9.dp.toPx() to 1.dp.toPx()
+            }
+            drawRoundRect(
+                colors.muted.copy(alpha = 0.75f * fade * fade),
+                Offset(x - w / 2, base - h), Size(w, h), CornerRadius(w / 2),
+            )
+            if (t % 5000 == 0) {
+                val text = measurer.measure(Format.compact(t.toLong()), labelStyle.copy(color = colors.faint.copy(alpha = fade)))
+                drawText(text, topLeft = Offset(x - text.size.width / 2f, base + 8.dp.toPx()))
+            }
+        }
+        // The marker.
+        val mw = 3.dp.toPx()
+        val mh = 38.dp.toPx()
+        drawRoundRect(colors.accent.copy(alpha = 0.2f), Offset(cx - mw * 2, base - mh - 2.dp.toPx()), Size(mw * 4, mh + 4.dp.toPx()), CornerRadius(mw * 2))
+        drawRoundRect(colors.accent, Offset(cx - mw / 2, base - mh), Size(mw, mh), CornerRadius(mw / 2))
     }
 }
 
 @Composable
-private fun LinkRow(text: String, onClick: () -> Unit) {
+private fun LinkRow(text: String, onClick: () -> Unit, trailing: @Composable () -> Unit = {}) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text, style = MaterialTheme.typography.bodyLarge, color = Palette.text, modifier = Modifier.weight(1f))
+        trailing()
+        Spacer(Modifier.width(6.dp))
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Palette.faint)
     }
 }

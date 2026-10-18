@@ -17,7 +17,16 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
+import app.wakesteps.ui.theme.Palette
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,14 +56,29 @@ fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
     ) {
         WidgetStyle.entries.forEach { style ->
             val isSelected = style == selected
+            val source = remember { MutableInteractionSource() }
+            val scale by animateFloatAsState(
+                if (isSelected) 1f else 0.94f,
+                spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+                label = "styleScale",
+            )
+            val labelColor by animateColorAsState(if (isSelected) Palette.text else Palette.faint, label = "styleLabel")
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(style) }),
+                    .pressScale(source, pressed = 0.9f)
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
+                    .selectable(
+                        selected = isSelected,
+                        interactionSource = source,
+                        indication = null,
+                        role = Role.RadioButton,
+                        onClick = { onSelect(style) },
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 MiniWidget(style, isSelected)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(
                         when (style) {
@@ -64,7 +88,7 @@ fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
                         }
                     ),
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = labelColor,
                 )
             }
         }
@@ -90,7 +114,11 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
                 // The widget's sheen: light from the top-left, a little shade bottom-right.
                 Brush.linearGradient(listOf(Color.White.copy(alpha = 0.12f), Color.Transparent, Color.Black.copy(alpha = 0.22f)))
             )
-            .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier),
+            .border(
+                if (selected) 2.dp else 1.dp,
+                if (selected) SolidColor(accent) else glassEdge(),
+                shape,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(64.dp)) {

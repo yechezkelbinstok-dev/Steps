@@ -4,6 +4,21 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 → 200.
 
+## 1.9
+- Redesigned the app again, for a premium feel:
+  - Everything moves: the ring sweeps round and numbers count up when a screen opens, sections
+    drift in one after another, tabs slide, and buttons and cards give under your finger.
+  - A slowly drifting glow in your wallpaper's tones behind every screen, glass-edged panels,
+    small spaced-capital labels and big display numbers.
+  - Hour by hour: tap or drag across the bars to read any hour (with a haptic tick per bar).
+    The hours after you passed your goal are gold, and it says when you got there.
+  - History: the last 7 days chart is scrubbable too, goal days in gold against a goal line.
+    Tap any day for its own page: ring, calories and distance, hour by hour, a timeline from
+    waking to sleep with naps on it, and Adjust.
+  - Settings: drag a ruler to set your goal, ticking every 500 steps.
+  - Today's header shows the date and how fresh your tracker data is, with a breathing dot.
+  - A met goal gets a slow light passing round the gold ring.
+
 ## 1.8
 - Vivid is back as a third ring style: aqua to blue up to the goal, with coral calories and
   sky-blue distance, then the same gold as the other styles once the goal is met.

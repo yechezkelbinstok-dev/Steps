@@ -2,12 +2,19 @@ package app.wakesteps.ui
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,11 +33,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -41,9 +50,11 @@ import app.wakesteps.core.DayWindow
 import app.wakesteps.core.Format
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalorieMode
-import app.wakesteps.data.TodaySummary
+import app.wakesteps.data.DayTotals
+import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import app.wakesteps.widget.StepsWidgetReceiver
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -57,37 +68,75 @@ fun TodayScreen(
     onAdjust: (DayWindow) -> Unit,
     onShowSyncLog: () -> Unit,
     bottomPadding: Dp,
+    chartSelection: Int? = null,
 ) {
+    val today = state.today
     Column(
         Modifier
             .verticalScroll(rememberScrollState())
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
-            .padding(bottom = bottomPadding),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(top = 12.dp, bottom = bottomPadding),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        ScreenTitle(stringResource(R.string.tab_today))
+        Header(today?.now ?: Instant.now(), today?.latestDataAt, onShowSyncLog, Modifier.entrance(0))
         AccessPrompts(state.access, actions)
         state.error?.let { ErrorNote(it) }
-        val today = state.today
         if (today != null) {
-            Hero(today, settings, onAdjust)
-            Stats(today, settings)
-            if (today.hourly.isNotEmpty()) Hourly(today)
-            today.latestDataAt?.let { latest ->
-                Text(
-                    stringResource(R.string.synced_ago, Format.ago(latest, today.now)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Palette.faint,
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .clip(CircleShape)
-                        .clickable(onClick = onShowSyncLog)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                )
+            Hero(today.totals.steps, settings.goal, today.window, today.now, onAdjust, Modifier.entrance(1))
+            Metrics(today.totals, settings, Modifier.entrance(2))
+            if (today.hourly.isNotEmpty()) {
+                HourlyPanel(today.hourly, settings.goal, ongoing = today.window.isOngoing, Modifier.entrance(3), chartSelection)
             }
             AddWidgetPrompt()
         }
+    }
+}
+
+/** Today's date, the title, and how fresh the tracker data is (tap for the sync log). */
+@Composable
+private fun Header(now: Instant, latest: Instant?, onShowSyncLog: () -> Unit, modifier: Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f)) {
+            Eyebrow(DateTimeFormatter.ofPattern("EEEE, MMM d").format(now.atZone(ZoneId.systemDefault())))
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.tab_today), style = AppType.title, color = Palette.text)
+        }
+        if (latest != null) SyncPill(latest, now, onShowSyncLog)
+    }
+}
+
+/** "● 6 min ago": the dot breathes while the data is fresh. */
+@Composable
+private fun SyncPill(latest: Instant, now: Instant, onClick: () -> Unit) {
+    val fresh = Duration.between(latest, now) < Duration.ofMinutes(30)
+    val pulse = if (!fresh || LocalSnapAnimations.current) 1f else {
+        val t by rememberInfiniteTransition(label = "sync").animateFloat(
+            0.35f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "syncDot",
+        )
+        t
+    }
+    val source = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .padding(bottom = 6.dp)
+            .pressScale(source)
+            .clip(CircleShape)
+            .background(Palette.card)
+            .border(1.dp, glassEdge(), CircleShape)
+            .clickable(source, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(7.dp)
+                .graphicsLayer { alpha = if (fresh) pulse else 1f }
+                .clip(CircleShape)
+                .background(if (fresh) Palette.accent else Palette.faint),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(Format.ago(latest, now), style = MaterialTheme.typography.labelMedium, color = Palette.muted)
     }
 }
 
@@ -128,47 +177,52 @@ private fun AccessPrompts(access: Access, actions: Actions) {
     }
 }
 
-/** The ring with footprints over the count, on a soft halo of the widget's colour. */
+/** The ring with footprints over the count, and which stretch of time is being counted. */
 @Composable
-private fun Hero(t: TodaySummary, settings: AppSettings, onAdjust: (DayWindow) -> Unit) {
-    val progress = RingProgress(t.totals.steps, settings.goal)
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(330.dp)
-                .background(Brush.radialGradient(listOf(Palette.glow.copy(alpha = 0.55f), Color.Transparent))),
-            contentAlignment = Alignment.Center,
-        ) {
-            StepsRing(progress, 264.dp, strokeFraction = 0.085f) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        painterResource(R.drawable.ic_steps),
-                        contentDescription = null,
-                        tint = if (progress.goalReached) Palette.goal else Palette.accent,
-                        modifier = Modifier.size(28.dp),
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    BigValue(Format.number(t.totals.steps), size = 60)
-                    Spacer(Modifier.height(18.dp))
-                }
+fun Hero(
+    steps: Long,
+    goal: Int,
+    window: DayWindow,
+    now: Instant,
+    onAdjust: ((DayWindow) -> Unit)?,
+    modifier: Modifier = Modifier,
+    ringSize: Dp = 276.dp,
+) {
+    val ratio = RingProgress.of(steps, goal)
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        StepsRing(ratio, ringSize, strokeFraction = 0.082f, delayMillis = 150) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    painterResource(R.drawable.ic_steps),
+                    contentDescription = null,
+                    tint = if (ratio >= 1f) Palette.goal else Palette.accent,
+                    modifier = Modifier.size(ringSize * 0.105f),
+                )
+                Spacer(Modifier.height(2.dp))
+                CountUp(steps.toDouble(), ringSize.value * 0.23f, delayMillis = 150, durationMillis = 1500)
+                Spacer(Modifier.height(ringSize * 0.07f))
             }
         }
-        DayChip(t.window, t.now, onClick = { onAdjust(t.window) })
+        if (onAdjust != null) {
+            Spacer(Modifier.height(18.dp))
+            DayChip(window, now, onClick = { onAdjust(window) })
+        }
     }
 }
 
 /** Which stretch of time is being counted; tap to adjust it. */
 @Composable
 private fun DayChip(w: DayWindow, now: Instant, onClick: () -> Unit) {
-    val text = if (!w.isOngoing) stringResource(R.string.today_ended, Format.time(w.endOr(now)))
-        else since(w.start, now)
+    val text = if (!w.isOngoing) stringResource(R.string.today_ended, Format.time(w.endOr(now))) else since(w.start, now)
+    val source = remember { MutableInteractionSource() }
     Row(
         Modifier
+            .pressScale(source)
             .clip(CircleShape)
             .background(Palette.card)
-            .border(1.dp, Palette.outline, CircleShape)
-            .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
+            .border(1.dp, glassEdge(), CircleShape)
+            .clickable(source, indication = null, onClick = onClick)
+            .padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge, color = Palette.muted)
@@ -190,65 +244,47 @@ private fun since(start: Instant, now: Instant): String {
     }
 }
 
+/** Calories and distance side by side in one panel. */
 @Composable
-private fun Stats(t: TodaySummary, settings: AppSettings) {
-    val calories = t.totals.calories
-    val distance = t.totals.distanceMeters
+fun Metrics(totals: DayTotals, settings: AppSettings, modifier: Modifier = Modifier) {
+    val calories = totals.calories
+    val distance = totals.distanceMeters
     if (calories == null && distance == null) return
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        calories?.let {
-            StatTile(
-                icon = R.drawable.ic_fire,
-                tint = Palette.calories,
-                value = Format.number(Math.round(it)),
-                unit = null,
-                label = stringResource(
-                    if (settings.calorieMode == CalorieMode.ACTIVE) R.string.widget_label_active_calories
-                    else R.string.widget_label_calories
-                ),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        distance?.let {
-            val text = Format.distance(it, settings.distanceUnit) // "3.8 mi"
-            StatTile(
-                icon = R.drawable.ic_distance,
-                tint = Palette.distance,
-                value = text.substringBeforeLast(' '),
-                unit = text.substringAfterLast(' '),
-                label = stringResource(R.string.widget_label_distance),
-                modifier = Modifier.weight(1f),
-            )
+    Panel(modifier.fillMaxWidth(), padding = PaddingValues(0.dp)) {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            calories?.let {
+                Metric(
+                    R.drawable.ic_fire, Palette.calories,
+                    stringResource(
+                        if (settings.calorieMode == CalorieMode.ACTIVE) R.string.widget_label_active_calories
+                        else R.string.widget_label_calories
+                    ),
+                    it, unit = null, decimals = 0, Modifier.weight(1f),
+                )
+            }
+            if (calories != null && distance != null) VerticalRule(Modifier.padding(vertical = 18.dp))
+            distance?.let {
+                val text = Format.distance(it, settings.distanceUnit) // "3.8 mi"
+                Metric(
+                    R.drawable.ic_distance, Palette.distance, stringResource(R.string.widget_label_distance),
+                    text.substringBeforeLast(' ').toDoubleOrNull() ?: 0.0, unit = text.substringAfterLast(' '), decimals = 1,
+                    Modifier.weight(1f),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun StatTile(icon: Int, tint: Color, value: String, unit: String?, label: String, modifier: Modifier) {
-    AppCard(modifier, padding = PaddingValues(18.dp)) {
-        IconDisc(icon, tint)
+private fun Metric(icon: Int, tint: Color, label: String, value: Double, unit: String?, decimals: Int, modifier: Modifier) {
+    Column(modifier.padding(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconDisc(icon, tint, 28.dp)
+            Spacer(Modifier.width(10.dp))
+            Eyebrow(label)
+        }
         Spacer(Modifier.height(14.dp))
-        BigValue(value, size = 30, unit = unit)
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
-    }
-}
-
-@Composable
-private fun Hourly(t: TodaySummary) {
-    AppCard(Modifier.fillMaxWidth()) {
-        CardLabel(stringResource(R.string.hourly_title))
-        Spacer(Modifier.height(16.dp))
-        Bars(t.hourly.map { it.second }, Modifier.fillMaxWidth().height(110.dp))
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth()) {
-            Text(
-                Format.time(t.hourly.first().first),
-                style = MaterialTheme.typography.labelSmall,
-                color = Palette.faint,
-                modifier = Modifier.weight(1f),
-            )
-            Text(stringResource(R.string.now_label), style = MaterialTheme.typography.labelSmall, color = Palette.faint)
-        }
+        ValueWithUnit(value, 34f, unit, decimals, delayMillis = 300)
     }
 }
 

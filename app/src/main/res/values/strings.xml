@@ -10,9 +10,11 @@
     <string name="today_since_yesterday">Since yesterday, %1$s</string>
     <string name="today_since_day">Since %1$s, %2$s</string>
     <string name="today_ended">Day ended %1$s</string>
-    <string name="synced_ago">Synced %1$s</string>
     <string name="now_label">Now</string>
     <string name="hourly_title">Hour by hour</string>
+    <string name="hourly_peak">busiest · %1$s</string>
+    <string name="hourly_goal_at">Goal at %1$s</string>
+    <string name="hourly_none">No steps recorded.</string>
 
     <string name="hc_missing_title">Health Connect needed</string>
     <string name="hc_missing_body">This app reads your Fitbit steps and sleep through Health Connect. Install or update it, then turn on Health Connect sync in the Fitbit app.</string>
@@ -33,8 +35,21 @@
     <string name="history_calendar_days">Midnight to midnight</string>
     <string name="history_today_so_far">Today so far</string>
     <string name="history_today">Today</string>
+    <string name="history_eyebrow">Your days, your way</string>
     <string name="history_week">Last 7 days</string>
-    <string name="history_per_day">a day on average</string>
+    <string name="history_per_day">daily average</string>
+    <string name="history_goal_days">Goal %1$d/%2$d</string>
+    <string name="history_days">Days</string>
+    <string name="detail_eyebrow">Awake day</string>
+    <string name="detail_timeline">Timeline</string>
+    <string name="detail_awake">%1$s awake</string>
+    <string name="detail_woke">Woke</string>
+    <string name="detail_new_day">New day</string>
+    <string name="detail_started">Started</string>
+    <string name="detail_slept">Slept</string>
+    <string name="detail_ended">Ended</string>
+    <string name="detail_adjust">Adjust this day</string>
+    <string name="back">Back</string>
     <string name="tag_edited">Edited by you</string>
     <plurals name="tag_naps">
         <item quantity="one">%d nap</item>
@@ -64,9 +79,10 @@
     <string name="tag_fallback_start">Fallback start</string>
     <string name="tag_no_sleep">No sleep logged</string>
 
+    <string name="settings_eyebrow">Make it yours</string>
     <string name="set_goal">Daily goal</string>
-    <string name="goal_less">Lower goal</string>
-    <string name="goal_more">Raise goal</string>
+    <string name="hc_connected">Connected</string>
+    <string name="hc_needs_access">Needs access</string>
     <string name="set_widget">Ring</string>
     <string name="widget_style_soft">Soft</string>
     <string name="widget_style_fade">Fade</string>

@@ -6,10 +6,10 @@ import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -24,7 +24,6 @@ import app.wakesteps.data.DaySummary
 import app.wakesteps.data.DayTotals
 import app.wakesteps.data.TodaySummary
 import app.wakesteps.data.WidgetStyle
-import app.wakesteps.ui.theme.Palette
 import app.wakesteps.ui.theme.WakeStepsTheme
 import app.wakesteps.widget.RenderTestApp
 import org.junit.Test
@@ -99,22 +98,41 @@ class ScreenRenderTest {
             render("goal_$tag", settings, Tab.TODAY) {
                 TodayScreen(state.copy(today = today(13400)), settings, actions, {}, {}, bottom)
             }
+            render("scrub_$tag", settings, Tab.TODAY) {
+                TodayScreen(state, settings, actions, {}, {}, bottom, chartSelection = 7)
+            }
             render("history_$tag", settings, Tab.HISTORY) {
-                HistoryScreen(state, settings, Overrides.NONE, {}, bottom)
+                HistoryScreen(state, settings, Overrides.NONE, {}, bottom, chartSelection = 3)
+            }
+            render("day_$tag", settings, Tab.HISTORY) {
+                DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom)
             }
             render("settings_$tag", settings, Tab.SETTINGS) {
-                SettingsScreen(settings, {}, actions, {}, bottom)
+                SettingsScreen(settings, {}, actions, state.access, now.minus(Duration.ofMinutes(6)), {}, bottom)
             }
+        }
+    }
+
+    /** A tall screen, to see a whole day page at once. */
+    @Test
+    @Config(qualifiers = "w411dp-h1500dp-420dpi")
+    fun renderDayPage() {
+        val settings = AppSettings()
+        render("day_full", settings, Tab.HISTORY) {
+            DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom)
         }
     }
 
     private fun render(name: String, settings: AppSettings, tab: Tab, screen: @Composable () -> Unit) {
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent {
-            WakeStepsTheme(settings.widgetStyle) {
-                Box(Modifier.fillMaxSize().background(Palette.background)) {
-                    screen()
-                    TabBar(tab, onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter))
+            CompositionLocalProvider(LocalSnapAnimations provides true) {
+                WakeStepsTheme(settings.widgetStyle) {
+                    Box(Modifier.fillMaxSize()) {
+                        Backdrop()
+                        screen()
+                        TabBar(tab, onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter))
+                    }
                 }
             }
         }

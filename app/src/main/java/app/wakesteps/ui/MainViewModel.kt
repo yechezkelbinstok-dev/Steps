@@ -166,6 +166,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Hour-by-hour steps for a day opened from History. */
+    suspend fun hourly(window: DayWindow): List<Pair<Instant, Long>> = app.engine.hourly(window, settings.value)
+
     fun permissionsToRequest(): Set<String> = HealthSource.CORE_PERMISSIONS + HealthSource.EXTRA_PERMISSIONS
     fun backgroundPermission(): Set<String> = setOf(HealthSource.BACKGROUND_PERMISSION)
 }

@@ -32,9 +32,13 @@ class AppColors(
     val style: WidgetStyle,
     /** Page background: near black with a hint of the wallpaper colour. */
     val background: Color,
+    /** Top of the page, where the background is a little deeper in colour. */
+    val backgroundTop: Color,
     /** The widget's card colour, behind the hero ring as a soft glow. */
     val glow: Color,
+    /** Panels: slightly see-through, so the backdrop's glow reaches them. */
     val card: Color,
+    /** Opaque raised surfaces: sheets, the tab bar, buttons. */
     val cardHigh: Color,
     /** Hairline edge on cards. */
     val outline: Color,
@@ -62,16 +66,17 @@ class AppColors(
             fun c(@ColorRes id: Int) = Color(context.getColor(id))
             val tint = c(R.color.app_tint)
             val card = c(R.color.widget_bg)
-            val background = lerp(Color.Black, tint, 0.38f)
+            val background = lerp(Color.Black, tint, 0.3f)
             val vivid = style == WidgetStyle.VIVID
             val accent = c(if (vivid) R.color.widget_aqua else R.color.widget_accent)
             return AppColors(
                 style = style,
                 background = background,
+                backgroundTop = lerp(Color.Black, tint, 0.75f),
                 glow = card,
-                card = lerp(background, card, 0.42f),
-                cardHigh = lerp(background, card, 0.7f),
-                outline = Color.White.copy(alpha = 0.06f),
+                card = lerp(background, card, 0.42f).copy(alpha = 0.86f),
+                cardHigh = lerp(background, card, 0.72f),
+                outline = Color.White.copy(alpha = 0.07f),
                 text = c(R.color.widget_text),
                 muted = c(R.color.widget_muted),
                 faint = c(R.color.widget_muted).copy(alpha = 0.55f),
@@ -97,7 +102,7 @@ val Palette: AppColors
     @Composable get() = LocalAppColors.current
 
 /** Google Sans Flex, bundled so every phone gets the same type as a Pixel. */
-private val Sans = FontFamily(
+val Sans = FontFamily(
     Font(R.font.gsans_regular, FontWeight.Normal),
     Font(R.font.gsans_medium, FontWeight.Medium),
     Font(R.font.gsans_semibold, FontWeight.SemiBold),
@@ -105,6 +110,23 @@ private val Sans = FontFamily(
 
 /** Cut for large sizes: tighter and finer, for the big numbers. */
 val Display = FontFamily(Font(R.font.gsans_display, FontWeight.Normal))
+
+/** Type outside the Material scale. */
+object AppType {
+    /** Small spaced capitals over a section: "HOUR BY HOUR". */
+    val eyebrow = TextStyle(fontFamily = Sans, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 1.4.sp)
+
+    /** Screen titles in the display cut. */
+    val title = TextStyle(fontFamily = Display, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.01).em)
+
+    /** Big numbers, in the display cut. */
+    fun number(size: Float) = TextStyle(
+        fontFamily = Display,
+        fontSize = size.sp,
+        lineHeight = (size * 1.08f).sp,
+        letterSpacing = (-0.02).em,
+    )
+}
 
 private fun typography(): Typography {
     val base = Typography()
@@ -146,11 +168,11 @@ fun WakeStepsTheme(style: WidgetStyle = WidgetStyle.SOFT, content: @Composable (
         onBackground = colors.text,
         surface = colors.background,
         onSurface = colors.text,
-        surfaceVariant = colors.card,
+        surfaceVariant = colors.cardHigh,
         onSurfaceVariant = colors.muted,
         surfaceContainerLowest = colors.background,
-        surfaceContainerLow = colors.card,
-        surfaceContainer = colors.card,
+        surfaceContainerLow = colors.cardHigh,
+        surfaceContainer = colors.cardHigh,
         surfaceContainerHigh = colors.cardHigh,
         surfaceContainerHighest = colors.cardHigh,
         outline = colors.faint,

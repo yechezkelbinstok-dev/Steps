@@ -65,6 +65,10 @@ class StepsEngine(
         return TodaySummary(window, night, totals, hourly, latest, now)
     }
 
+    /** Steps hour by hour across one awake day (up to now if it's still going). */
+    suspend fun hourly(window: DayWindow, settings: AppSettings): List<Pair<Instant, Long>> =
+        health.stepsBuckets(window.start, window.endOr(Instant.now()), Duration.ofHours(1), settings.sourcePackage)
+
     suspend fun history(settings: AppSettings, days: Long = 14): List<DaySummary> {
         val now = Instant.now()
         val granted = health.grantedPermissions()
