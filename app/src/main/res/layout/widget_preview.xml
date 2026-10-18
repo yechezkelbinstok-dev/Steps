@@ -29,7 +29,7 @@
                 android:layout_height="match_parent"
                 android:importantForAccessibility="no"
                 android:src="@drawable/ring_glow"
-                android:tint="@color/widget_aqua" />
+                android:tint="@color/widget_accent" />
 
             <ImageView
                 android:layout_width="match_parent"
@@ -42,7 +42,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:importantForAccessibility="no"
-                android:src="@drawable/ring_p084" />
+                android:src="@drawable/ring_p084"
+                android:tint="@color/widget_accent" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -57,7 +58,7 @@
                     android:layout_height="18dp"
                     android:importantForAccessibility="no"
                     android:src="@drawable/ic_steps"
-                    android:tint="@color/widget_aqua" />
+                    android:tint="@color/widget_accent" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -81,14 +82,14 @@
         <TextView
             style="@style/WidgetPreviewMetric"
             android:drawableStart="@drawable/ic_fire"
-            android:drawableTint="@color/widget_calories"
+            android:drawableTint="@color/widget_accent"
             android:text="@string/preview_calories" />
 
         <TextView
             style="@style/WidgetPreviewMetric"
             android:layout_marginTop="8dp"
             android:drawableStart="@drawable/ic_distance"
-            android:drawableTint="@color/widget_distance"
+            android:drawableTint="@color/widget_accent"
             android:text="@string/preview_distance" />
 
     </LinearLayout>

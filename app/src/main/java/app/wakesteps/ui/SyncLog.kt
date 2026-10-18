@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.Format
 import app.wakesteps.data.SyncEvent
+import app.wakesteps.ui.theme.Palette
 import java.time.Duration
 
 /**
@@ -27,14 +28,14 @@ import java.time.Duration
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncLogSheet(events: List<SyncEvent>, onDone: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDone) {
+    ModalBottomSheet(onDismissRequest = onDone, containerColor = Palette.card) {
         LazyColumn(
             Modifier.padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(stringResource(R.string.sync_log_title), style = MaterialTheme.typography.headlineSmall)
+                    Text(stringResource(R.string.sync_log_title), style = MaterialTheme.typography.headlineSmall, color = Palette.text)
                     val gaps = events.zipWithNext { newer, older -> Duration.between(older.seenAt, newer.seenAt) }
                     val lags = events.map { Duration.between(it.dataUpTo, it.seenAt) }
                     if (gaps.size >= 2) {
@@ -45,12 +46,13 @@ fun SyncLogSheet(events: List<SyncEvent>, onDone: () -> Unit) {
                                 Format.duration(median(lags)),
                             ),
                             style = MaterialTheme.typography.bodyLarge,
+                            color = Palette.text,
                         )
                     }
                     Text(
                         stringResource(R.string.sync_log_note),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Palette.muted,
                     )
                 }
             }
@@ -60,15 +62,15 @@ fun SyncLogSheet(events: List<SyncEvent>, onDone: () -> Unit) {
             items(events, key = { it.seenAt.epochSecond }) { e ->
                 Row(Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
-                        Text("${Format.day(e.seenAt)}, ${Format.time(e.seenAt)}", style = MaterialTheme.typography.bodyLarge)
+                        Text("${Format.day(e.seenAt)}, ${Format.time(e.seenAt)}", style = MaterialTheme.typography.bodyLarge, color = Palette.text)
                         Text(
                             stringResource(R.string.sync_log_up_to, Format.time(e.dataUpTo)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Palette.muted,
                         )
                     }
                     if (e.stepsDelta > 0) {
-                        Text("+${Format.number(e.stepsDelta)}", style = MaterialTheme.typography.titleMedium)
+                        Text("+${Format.number(e.stepsDelta)}", style = MaterialTheme.typography.titleMedium, color = Palette.accent)
                     }
                 }
             }

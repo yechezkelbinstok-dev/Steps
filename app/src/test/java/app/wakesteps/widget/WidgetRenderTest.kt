@@ -48,7 +48,7 @@ class WidgetRenderTest {
 
     @Test
     @Config(qualifiers = "+night")
-    fun renderAllSizesDark() = renderAll("dark", WidgetStyle.VIVID, steps = 8432)
+    fun renderAllSizesDark() = renderAll("dark", WidgetStyle.SOFT, steps = 8432)
 
     @Test
     fun renderPastGoal() = WidgetStyle.entries.forEach { renderAll("lap_${it.name.lowercase()}", it, steps = 13400) }

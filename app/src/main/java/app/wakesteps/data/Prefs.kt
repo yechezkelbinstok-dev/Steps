@@ -26,14 +26,12 @@ private val Context.dataStore by preferencesDataStore(name = "wakesteps")
 enum class CalorieMode { TOTAL, ACTIVE }
 enum class DistanceUnit { AUTO, KILOMETERS, MILES }
 
-/** How the widget's goal ring is drawn. */
+/** How the goal ring fills up to the goal, in the wallpaper's colour. Past it, it's gold either way. */
 enum class WidgetStyle {
-    /** One soft colour from the wallpaper. */
+    /** One even colour. */
     SOFT,
-    /** Wallpaper colour that fades in toward the tip. */
+    /** Faint at the start, fading in toward the tip. */
     FADE,
-    /** Aqua-to-blue gradient with coloured stat icons. */
-    VIVID,
 }
 
 /**
@@ -42,7 +40,7 @@ enum class WidgetStyle {
  */
 data class AppSettings(
     val goal: Int = 10_000,
-    val widgetStyle: WidgetStyle = WidgetStyle.VIVID,
+    val widgetStyle: WidgetStyle = WidgetStyle.SOFT,
     /** Sleep mostly during the user's night counts (starts a new day) from this long. */
     val minNightSleepMinutes: Int = 60,
     /** Sleep mostly during the day is a nap unless it's at least this long. */

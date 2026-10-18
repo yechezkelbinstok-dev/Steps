@@ -4,6 +4,17 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's derived from the version: 1.4 → 104, 1.5 → 105, 2.0 → 200.
 
+## 1.7
+- New app design to match the widget: always dark in your wallpaper's tones, Google Sans
+  bundled (so it looks the same on Samsung), a big ring with footprints over the count, calorie
+  and distance tiles, an hour-by-hour chart and a floating tab bar. Pull down to refresh.
+- Today shows the stretch being counted as one small tag ("Since 7:12 AM"; tap to adjust)
+  instead of a card of text, and "Synced 6 min ago" at the bottom opens the sync log.
+- History: a last-7-days chart with your average and a goal line, and each day with its own
+  ring. Settings: goal with − / + buttons, ring style, Health Connect and the sync log.
+- The ring is your wallpaper colour until the goal and gold once you hit it, in both styles
+  (Soft and Fade), on the widget and in the app. The aqua-to-blue Vivid style is gone.
+
 ## 1.6
 - Widget card is solid again, in a deep tone of your wallpaper colour with a soft light from
   the top-left (the 1.4 look), instead of see-through glass.

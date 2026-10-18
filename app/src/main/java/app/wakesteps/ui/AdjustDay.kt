@@ -14,7 +14,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,6 +28,7 @@ import app.wakesteps.core.Format
 import app.wakesteps.core.Overrides
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.StartReason
+import app.wakesteps.ui.theme.Palette
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -58,7 +58,7 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
         onDone()
     }
 
-    ModalBottomSheet(onDismissRequest = onDone) {
+    ModalBottomSheet(onDismissRequest = onDone, containerColor = Palette.card) {
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())
@@ -70,11 +70,12 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
                 Text(
                     stringResource(R.string.adjust_title, Format.day(day.start)),
                     style = MaterialTheme.typography.headlineSmall,
+                    color = Palette.text,
                 )
                 Text(
                     "${Format.time(day.start)} – ${if (day.isOngoing) stringResource(R.string.now) else Format.time(end)}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Palette.muted,
                 )
             }
 
@@ -93,27 +94,19 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
                                 ) + if (yours) " " + stringResource(R.string.adjust_your_call_sleep) else "",
                             )
                             if (yours) {
-                                OutlinedButton(onClick = { act { vm.clearSleepCall(sleep) } }) {
-                                    Text(stringResource(R.string.adjust_undo))
-                                }
+                                SoftButton(stringResource(R.string.adjust_undo), onClick = { act { vm.clearSleepCall(sleep) } })
                             } else {
-                                OutlinedButton(onClick = { act { vm.setSleepCall(sleep, main = false) } }) {
-                                    Text(stringResource(R.string.adjust_was_nap))
-                                }
+                                SoftButton(stringResource(R.string.adjust_was_nap), onClick = { act { vm.setSleepCall(sleep, main = false) } })
                             }
                         }
                     }
                     StartReason.FALLBACK -> {
                         Text(stringResource(R.string.adjust_fallback, Format.time(day.start)))
-                        OutlinedButton(onClick = { act { vm.setResetSkipped(day.start, skipped = true) } }) {
-                            Text(stringResource(R.string.adjust_skip_reset))
-                        }
+                        SoftButton(stringResource(R.string.adjust_skip_reset), onClick = { act { vm.setResetSkipped(day.start, skipped = true) } })
                     }
                     StartReason.MANUAL -> {
                         Text(stringResource(R.string.adjust_manual, Format.time(day.start)))
-                        OutlinedButton(onClick = { act { vm.setManualStart(day.start, present = false) } }) {
-                            Text(stringResource(R.string.adjust_remove_start))
-                        }
+                        SoftButton(stringResource(R.string.adjust_remove_start), onClick = { act { vm.setManualStart(day.start, present = false) } })
                     }
                 }
             }
@@ -142,7 +135,7 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
             }
 
             Section(stringResource(R.string.adjust_manual_title)) {
-                OutlinedButton(onClick = {
+                SoftButton(stringResource(R.string.adjust_manual_button), onClick = {
                     val zone = ZoneId.systemDefault()
                     val start = day.start.atZone(zone)
                     TimePickerDialog(
@@ -162,13 +155,11 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
                         },
                         start.hour, start.minute, DateFormat.is24HourFormat(context),
                     ).show()
-                }) {
-                    Text(stringResource(R.string.adjust_manual_button))
-                }
+                })
             }
 
             if (overrides.touches(day, now)) {
-                HorizontalDivider()
+                HorizontalDivider(color = Palette.outline)
                 TextButton(onClick = { act { vm.resetDay(day) } }) {
                     Text(stringResource(R.string.adjust_reset_day))
                 }
@@ -185,7 +176,7 @@ private fun NapRow(nap: SleepSpan, yours: Boolean, vm: MainViewModel, act: (() -
             Text(
                 Format.duration(nap.duration) + if (yours) " · " + stringResource(R.string.adjust_your_call) else "",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Palette.muted,
             )
         }
         if (yours) {
@@ -200,8 +191,8 @@ private fun NapRow(nap: SleepSpan, yours: Boolean, vm: MainViewModel, act: (() -
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge, color = Palette.muted)
         content()
     }
 }

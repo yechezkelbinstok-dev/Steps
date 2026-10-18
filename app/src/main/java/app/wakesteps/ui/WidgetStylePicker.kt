@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -37,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.data.WidgetStyle
 
-/** The three widget looks as tiny widgets, side by side; tap one to use it. */
+/** The widget looks as tiny widgets, side by side; tap one to use it. */
 @Composable
 fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
     Row(
@@ -59,7 +60,6 @@ fun WidgetStylePicker(selected: WidgetStyle, onSelect: (WidgetStyle) -> Unit) {
                         when (style) {
                             WidgetStyle.SOFT -> R.string.widget_style_soft
                             WidgetStyle.FADE -> R.string.widget_style_fade
-                            WidgetStyle.VIVID -> R.string.widget_style_vivid
                         }
                     ),
                     style = MaterialTheme.typography.labelLarge,
@@ -77,7 +77,7 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
     fun color(id: Int) = Color(context.getColor(id))
     val card = color(R.color.widget_bg)
     val track = color(R.color.widget_track)
-    val accent = color(if (style == WidgetStyle.VIVID) R.color.widget_aqua else R.color.widget_accent)
+    val accent = color(R.color.widget_accent)
     val shape = RoundedCornerShape(18.dp)
     Box(
         modifier = Modifier
@@ -105,12 +105,9 @@ private fun MiniWidget(style: WidgetStyle, selected: Boolean) {
             drawArc(track, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
             val sweep = 0.75f
             val brush = when (style) {
-                WidgetStyle.SOFT -> Brush.sweepGradient(listOf(accent, accent))
+                WidgetStyle.SOFT -> SolidColor(accent)
                 WidgetStyle.FADE -> Brush.sweepGradient(
                     0f to accent.copy(alpha = 0.42f), sweep to accent, 1f to accent.copy(alpha = 0.42f),
-                )
-                WidgetStyle.VIVID -> Brush.sweepGradient(
-                    0f to accent, sweep to color(R.color.widget_ring_end), 1f to accent,
                 )
             }
             // Sweep gradients start at 3 o'clock; turn the canvas so the arc starts at 12.

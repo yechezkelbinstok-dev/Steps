@@ -5,14 +5,7 @@
     android:width="100dp" android:height="100dp"
     android:viewportWidth="100" android:viewportHeight="100">
     <group android:rotation="-90" android:pivotX="50.0" android:pivotY="50.0">
-        <path android:strokeWidth="11" android:strokeLineCap="round" android:pathData="M94.5,50.0 A44.5,44.5 0 0,1 61.07,93.10">
-            <aapt:attr name="android:strokeColor">
-                <gradient android:type="sweep" android:centerX="50.0" android:centerY="50.0">
-                    <item android:offset="0.000" android:color="#FF2BE7C8" />
-                    <item android:offset="0.210" android:color="#FF3A8DFF" />
-                    <item android:offset="1.000" android:color="#FF2BE7C8" />
-                </gradient>
-            </aapt:attr>
-        </path>
+        <path android:strokeColor="#FFFFFFFF" android:strokeWidth="11" android:strokeLineCap="round"
+            android:pathData="M94.5,50.0 A44.5,44.5 0 0,1 61.07,93.10" />
     </group>
 </vector>

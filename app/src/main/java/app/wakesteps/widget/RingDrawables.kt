@@ -4,7 +4,7 @@ package app.wakesteps.widget
 import app.wakesteps.R
 
 
-/** Index n (1..100) is an aqua-to-blue arc covering n% of the ring; index 0 is unused. */
+/** Index n (1..100) is a plain white arc covering n% of the ring; index 0 is unused. */
 internal val RING_ARCS = intArrayOf(
     0,
     R.drawable.ring_p001,

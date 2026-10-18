@@ -1,22 +1,21 @@
 <resources>
     <color name="ic_launcher_background">#00696E</color>
 
-    <!-- Widget card: deep tones, the same in light and dark mode. Android 12+ takes these from
-         the wallpaper instead (values-v31). -->
+    <!-- Widget (and app) palette: deep tones, the same in light and dark mode. Android 12+ takes
+         these from the wallpaper instead (values-v31). -->
     <color name="widget_bg">#FF00373A</color>
     <color name="widget_track">#FF004F53</color>
     <color name="widget_text">#FFFFFFFF</color>
     <color name="widget_muted">#FFA9C9CA</color>
-    <!-- Ring and icons in the soft and fade styles. -->
+    <!-- The ring, footprints and icons until the goal is met. -->
     <color name="widget_accent">#FF6FF6FC</color>
-    <color name="widget_accent_goal">#FFFFD480</color>
     <color name="widget_error">#FFFFB4AB</color>
+    <!-- The app's background: near black with a little of this mixed in. -->
+    <color name="app_tint">#FF002022</color>
 
-    <!-- Vivid style: fixed, so they pop on any card. -->
-    <color name="widget_aqua">#FF2BE7C8</color>
-    <!-- Where the aqua ring ends up (tools/gen_rings.py); only the in-app style picker needs it. -->
-    <color name="widget_ring_end">#FF3A8DFF</color>
+    <!-- Goal met: the same gold everywhere (tools/gen_rings.py bakes it into the widget's rings). -->
     <color name="widget_gold">#FFFFC94D</color>
-    <color name="widget_calories">#FFFF7A59</color>
-    <color name="widget_distance">#FF5CB8FF</color>
+    <color name="widget_gold_start">#FFFFE082</color>
+    <color name="widget_gold_end">#FFFF9F1C</color>
+    <color name="widget_lap_end">#FFFF8A00</color>
 </resources>
