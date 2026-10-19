@@ -17,7 +17,7 @@ class SleepNightsTest {
     private fun span(from: Long, to: Long, stage: SleepStage) = StageSpan(at(from), at(to), stage)
     private fun mins(n: Long): Duration = Duration.ofMinutes(n)
 
-    /** 11 PM to 7 AM: 15 min to drift off, a wake-up at 3 AM, a few minutes up before rising. */
+    /** 11 PM to 7 AM: 15 min to drift off, a 10-minute wake-up, two brief stirs, a few minutes up before rising. */
     private val night = SleepSession(
         start = at(0), end = at(480),
         stages = listOf(
@@ -38,18 +38,53 @@ class SleepNightsTest {
         val n = SleepNights.build(SleepSpan(at(0), at(480)), listOf(night))
         assertTrue(n.staged)
         assertEquals(mins(480), n.inBed)
-        assertEquals(mins(255), n.time(SleepStage.LIGHT))
-        assertEquals(mins(80), n.time(SleepStage.DEEP))
+        // The brief stirs are cut out of the deep and light sleep they interrupted.
+        assertEquals(mins(253), n.time(SleepStage.LIGHT))
+        assertEquals(mins(79), n.time(SleepStage.DEEP))
         assertEquals(mins(110), n.time(SleepStage.REM))
-        assertEquals(mins(445), n.asleep)
+        assertEquals(mins(3), n.time(SleepStage.RESTLESS))
+        assertEquals("restless counts as asleep", mins(445), n.asleep)
         assertEquals(mins(35), n.awake)
         assertEquals(445f / 480f, n.efficiency, 0.0001f)
+        assertEquals(mins(442), n.soundSleep)
         assertEquals(mins(15), n.fellAsleepIn)
-        assertEquals("only the 3 AM one counts as waking up", 1, n.wakeUps)
-        assertEquals(2, n.shortAwakenings)
-        assertEquals(listOf(SleepStage.AWAKE, SleepStage.REM, SleepStage.LIGHT, SleepStage.DEEP), n.lanes)
+        assertEquals(mins(15), n.timeToSoundSleep)
+        assertEquals("only the 10-minute one is a full awakening", 1, n.fullAwakenings)
+        assertEquals(mins(10), n.interruptions)
+        assertEquals(2, n.restlessMoments)
+        assertEquals(
+            listOf(SleepStage.AWAKE, SleepStage.RESTLESS, SleepStage.REM, SleepStage.LIGHT, SleepStage.DEEP),
+            n.lanes,
+        )
         assertEquals(SleepStage.DEEP, n.stageAt(at(150)))
+        assertEquals(SleepStage.RESTLESS, n.stageAt(at(301)))
         assertNull(n.stageAt(at(500)))
+    }
+
+    @Test
+    fun restlessCanCountAsAwake() {
+        val n = SleepNights.build(SleepSpan(at(0), at(480)), listOf(night)).restlessAsAwake()
+        assertEquals(Duration.ZERO, n.time(SleepStage.RESTLESS))
+        assertEquals(mins(38), n.awake)
+        assertEquals(mins(442), n.asleep)
+        assertEquals("each stir counts as waking up", 3, n.fullAwakenings)
+        assertEquals(mins(13), n.interruptions)
+        assertEquals(0, n.restlessMoments)
+        assertFalse(SleepStage.RESTLESS in n.lanes)
+    }
+
+    @Test
+    fun aWakeUpOfFiveMinutesOrLessIsRestless() {
+        val session = SleepSession(
+            at(0), at(200),
+            listOf(span(0, 3, SleepStage.AWAKE), span(3, 100, SleepStage.LIGHT), span(100, 104, SleepStage.AWAKE), span(104, 200, SleepStage.LIGHT)),
+        )
+        val n = SleepNights.build(SleepSpan(at(0), at(200)), listOf(session))
+        assertEquals("drifting off stays awake, however short", span(0, 3, SleepStage.AWAKE), n.stages.first())
+        assertEquals(span(100, 104, SleepStage.RESTLESS), n.stages[2])
+        assertEquals(0, n.fullAwakenings)
+        assertEquals(1, n.restlessMoments)
+        assertEquals(mins(197), n.asleep)
     }
 
     @Test
@@ -61,7 +96,8 @@ class SleepNightsTest {
             listOf(span(0, 180, SleepStage.LIGHT), span(180, 200, SleepStage.AWAKE), span(200, 420, SleepStage.DEEP)),
             n.stages,
         )
-        assertEquals(1, n.wakeUps)
+        assertEquals(1, n.fullAwakenings)
+        assertEquals(mins(20), n.interruptions)
         assertEquals(mins(400), n.asleep)
     }
 
@@ -73,6 +109,7 @@ class SleepNightsTest {
         assertEquals(listOf(span(0, 420, SleepStage.ASLEEP)), n.stages)
         assertEquals(mins(420), n.asleep)
         assertEquals(mins(12), n.fellAsleepIn)
+        assertNull(n.timeToSoundSleep)
         assertEquals(listOf(SleepStage.AWAKE, SleepStage.ASLEEP), n.lanes)
     }
 
@@ -103,5 +140,6 @@ class SleepNightsTest {
         assertTrue(n.stages.isEmpty())
         assertEquals(mins(420), n.asleep)
         assertNull(n.fellAsleepIn)
+        assertEquals(0, n.fullAwakenings)
     }
 }

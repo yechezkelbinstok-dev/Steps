@@ -93,10 +93,21 @@ You'll only see Awake Steps listed under "active apps" in quick settings.
 ## Sleep
 
 The Sleep tab shows each night the app starts a day from (the sleep you woke from, your own
-calls included), stage by stage: a ring of the night's makeup with the time asleep, efficiency,
-time to fall asleep, wake-ups and restless moments, time in each stage, a chart of the night you
+calls included): its sleep score, what went into it, time in each stage, a chart of the night you
 can scrub, and the last 7 nights. Stages come from Google Health when it's connected, otherwise
-from Health Connect. Fitbit's sleep score isn't available to other apps, so it isn't shown.
+from Health Connect.
+
+* **Sleep score.** Google Health doesn't share its sleep score with other apps, so the app
+  estimates it from the six things Google says it weighs (duration, time to sound sleep, sound
+  sleep, restlessness, full awakenings, interruptions) and rates it the same way (Excellent 90+,
+  Good 80+, Fair 60+, Poor). Tap the score to enter the one Google Health gave a night; entered
+  scores are shown as they are, and the estimates learn from them (with fewer than 4 just an
+  offset, then a line held close to 1:1, from the latest 30). Like Google, no score for a night
+  without stages.
+* **Restless moments** are brief stirs of 5 minutes or less, counted as asleep the way Google
+  counts them, and shown as their own category. Longer wake-ups are full awakenings. Settings →
+  Restless moments → Count as awake counts them as awake time instead (the score is unchanged:
+  it's Google's, so it uses Google's rules).
 
 ## Google Health (optional, faster data)
 

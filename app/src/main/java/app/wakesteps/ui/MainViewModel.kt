@@ -9,16 +9,20 @@ import androidx.lifecycle.viewModelScope
 import app.wakesteps.R
 import app.wakesteps.app
 import app.wakesteps.core.DayWindow
+import app.wakesteps.core.NightScore
 import app.wakesteps.core.Overrides
 import app.wakesteps.core.SleepNight
+import app.wakesteps.core.SleepScore
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalendarDay
 import app.wakesteps.data.DaySummary
 import app.wakesteps.data.GoogleHealth
 import app.wakesteps.data.HealthSource
+import app.wakesteps.data.NightScores
 import app.wakesteps.data.SyncEvent
 import app.wakesteps.data.TodaySummary
+import app.wakesteps.data.wakeDate
 import app.wakesteps.sync.LiveModeService
 import app.wakesteps.widget.WidgetPusher
 import com.google.android.gms.auth.api.identity.AuthorizationResult
@@ -36,6 +40,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 
 sealed interface Access {
     data object Checking : Access
@@ -78,6 +83,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val syncLog: StateFlow<List<SyncEvent>> =
         app.prefs.syncLog.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Each loaded night's sleep score (entered, or estimated), by the morning it ended. */
+    val scores: StateFlow<Map<LocalDate, NightScore>> =
+        combine(_state.map { it.nights }.distinctUntilChanged(), app.prefs.sleepScores) { nights, entries -> NightScores.of(nights, entries) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Saves the score Google Health gave [night] (or with null, removes it, back to the estimate). */
+    fun setScore(night: SleepNight, score: Int?) {
+        viewModelScope.launch { app.prefs.setSleepScore(night.wakeDate(), score, SleepScore.estimate(night)) }
+    }
 
     /** Steps the phone counted since the tracker's newest data, shown on top of its total. */
     val liveSteps: StateFlow<Long> =
@@ -128,8 +143,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val calendar = runCatching { app.engine.calendarDays(s) }.getOrDefault(emptyList())
                 _state.update { it.copy(history = history, calendar = calendar, loading = false, error = null) }
                 // Sleep last: the steps are up before its extra read comes back.
+                app.prefs.seedSleepScores()
                 val nights = app.engine.nights(s, history)
                 _state.update { it.copy(nights = nights) }
+                // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
+                app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
             } catch (e: CancellationException) {
                 throw e // a newer reload replaced this one: not an error
             } catch (e: Exception) {

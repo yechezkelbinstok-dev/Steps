@@ -5,12 +5,17 @@ import java.time.Instant
 
 /** Sleep stages, in the order the night chart stacks them, top to bottom. */
 enum class SleepStage {
-    AWAKE, REM, LIGHT, DEEP,
+    AWAKE,
 
-    /** Older trackers, and nights without stages ("classic" sleep), only tell these apart. */
-    RESTLESS, ASLEEP;
+    /** Brief stirs: moving or half-waking without really waking up, under [SleepNights.BRIEF]. */
+    RESTLESS,
+    REM, LIGHT, DEEP,
 
-    val asleep: Boolean get() = this != AWAKE && this != RESTLESS
+    /** Asleep, from a session the tracker didn't work out stages for. */
+    ASLEEP;
+
+    /** Restless counts as asleep, as Google counts it: time you'd feel you were asleep, though stirring. */
+    val asleep: Boolean get() = this != AWAKE
 }
 
 data class StageSpan(val start: Instant, val end: Instant, val stage: SleepStage) {
@@ -23,7 +28,7 @@ data class SleepSession(
     val end: Instant,
     /** Contiguous stages covering the session, when the tracker worked them out. */
     val stages: List<StageSpan> = emptyList(),
-    /** Wake-ups too brief to count as awake time (Google Health only). */
+    /** Brief stirs, overlapping the stages they interrupted (Google Health only). */
     val shortAwakenings: List<StageSpan> = emptyList(),
     val minutesToFallAsleep: Long? = null,
 )
@@ -36,9 +41,14 @@ data class SleepNight(
     val span: SleepSpan,
     val start: Instant,
     val end: Instant,
-    /** Stage by stage; a gap between sessions is awake, a session without stages is [SleepStage.ASLEEP]. */
+    /** Stage by stage, contiguous; a session without stages is [SleepStage.ASLEEP]. */
     val stages: List<StageSpan>,
-    val shortAwakenings: Int,
+    /** Wake-ups long enough to remember (over [SleepNights.BRIEF]), not counting falling asleep or getting up. */
+    val fullAwakenings: Int,
+    /** Brief stirs: [SleepStage.RESTLESS] stretches. */
+    val restlessMoments: Int,
+    /** Time spent in those full awakenings. */
+    val interruptions: Duration,
     /** From lying down to falling asleep, when known. */
     val fellAsleepIn: Duration?,
 ) {
@@ -55,29 +65,64 @@ data class SleepNight(
     /** Whether the tracker told deep, light and REM apart this night. */
     val staged: Boolean get() = stages.any { it.stage == SleepStage.DEEP || it.stage == SleepStage.LIGHT || it.stage == SleepStage.REM }
 
+    /** Steady sleep: light, deep and REM, without the restless moments. */
+    val soundSleep: Duration get() = time(SleepStage.LIGHT) + time(SleepStage.DEEP) + time(SleepStage.REM)
+
+    /** From lying down to the first ten minutes of steady sleep. */
+    val timeToSoundSleep: Duration?
+        get() {
+            if (!staged) return null
+            var runStart: Instant? = null
+            for (s in stages) {
+                val steady = s.stage == SleepStage.LIGHT || s.stage == SleepStage.DEEP || s.stage == SleepStage.REM
+                if (!steady) {
+                    runStart = null
+                    continue
+                }
+                val from = runStart ?: s.start.also { runStart = it }
+                if (Duration.between(from, s.end) >= Duration.ofMinutes(10)) return Duration.between(start, from)
+            }
+            return null
+        }
+
     /** The chart's rows, top to bottom. */
     val lanes: List<SleepStage>
-        get() = if (staged) listOf(SleepStage.AWAKE, SleepStage.REM, SleepStage.LIGHT, SleepStage.DEEP)
-        else listOfNotNull(SleepStage.AWAKE, SleepStage.RESTLESS.takeIf { time(it) > Duration.ZERO }, SleepStage.ASLEEP)
-
-    /** Times awake in the middle of the night (not before falling asleep or after waking up). */
-    val wakeUps: Int get() = stages.drop(1).dropLast(1).count { it.stage == SleepStage.AWAKE }
+        get() {
+            val restless = SleepStage.RESTLESS.takeIf { time(it) > Duration.ZERO }
+            return if (staged) listOfNotNull(SleepStage.AWAKE, restless, SleepStage.REM, SleepStage.LIGHT, SleepStage.DEEP)
+            else listOfNotNull(SleepStage.AWAKE, restless, SleepStage.ASLEEP)
+        }
 
     /** The stage at [t], if it's within the night. */
     fun stageAt(t: Instant): SleepStage? = stages.firstOrNull { !t.isBefore(it.start) && t.isBefore(it.end) }?.stage
+
+    /**
+     * The same night with restless moments counted as awake (a setting): they join the awake
+     * time, and each one counts as waking up.
+     */
+    fun restlessAsAwake(): SleepNight {
+        val folded = SleepNights.joined(stages.map { if (it.stage == SleepStage.RESTLESS) it.copy(stage = SleepStage.AWAKE) else it })
+        val wakeUps = folded.drop(1).dropLast(1).filter { it.stage == SleepStage.AWAKE }
+        return copy(stages = folded, fullAwakenings = wakeUps.size, restlessMoments = 0, interruptions = wakeUps.total())
+    }
 }
 
 object SleepNights {
 
+    /** Awake for this long or less is restless, not a wake-up (Google: only longer ones count as waking). */
+    val BRIEF: Duration = Duration.ofMinutes(5)
+
     /**
      * The night spanning [span], put together from the tracker's [sessions] that overlap it:
-     * stages clipped to the span, a gap between two sessions counted as awake, and neighbouring
-     * stretches of the same stage joined. Where sessions overlap (two apps recorded the same
-     * night), the one that started first wins.
+     * stages clipped to the span, a gap between two sessions counted as awake, the tracker's
+     * brief stirs cut into the stages they interrupted as restless, any wake-up of [BRIEF] or less
+     * in the middle of the night counted as restless too, and neighbouring stretches of the same
+     * stage joined. Where sessions overlap (two apps recorded the same night), the one that
+     * started first wins.
      */
     fun build(span: SleepSpan, sessions: List<SleepSession>): SleepNight {
         val overlapping = sessions.filter { it.end > span.start && it.start < span.end }.sortedBy { it.start }
-        if (overlapping.isEmpty()) return SleepNight(span, span.start, span.end, emptyList(), 0, null)
+        if (overlapping.isEmpty()) return SleepNight(span, span.start, span.end, emptyList(), 0, 0, Duration.ZERO, null)
         val start = maxOf(span.start, overlapping.first().start)
         val end = minOf(span.end, overlapping.maxOf { it.end })
         val pieces = mutableListOf<StageSpan>()
@@ -95,18 +140,56 @@ object SleepNights {
             }
             covered = maxOf(covered, to)
         }
-        val stages = joined(pieces)
+        val stirs = overlapping.flatMap { it.shortAwakenings }.filter { it.end > start && it.start < end }
+        val marked = joined(withRestless(joined(pieces), stirs))
+        val stages = joined(
+            marked.mapIndexed { i, s ->
+                val inMiddle = i != 0 && i != marked.lastIndex
+                if (s.stage == SleepStage.AWAKE && inMiddle && s.duration <= BRIEF) s.copy(stage = SleepStage.RESTLESS) else s
+            }
+        )
+        val wakeUps = stages.drop(1).dropLast(1).filter { it.stage == SleepStage.AWAKE }
         val anyStages = overlapping.any { it.stages.isNotEmpty() }
         val fellAsleepIn = if (anyStages) {
             stages.firstOrNull()?.takeIf { it.stage == SleepStage.AWAKE }?.duration ?: Duration.ZERO
         } else {
             overlapping.first().minutesToFallAsleep?.let(Duration::ofMinutes)
         }
-        val shortAwakenings = overlapping.sumOf { s -> s.shortAwakenings.count { it.start >= start && it.start < end } }
-        return SleepNight(span, start, end, stages, shortAwakenings, fellAsleepIn)
+        return SleepNight(
+            span, start, end, stages,
+            fullAwakenings = wakeUps.size,
+            restlessMoments = stages.count { it.stage == SleepStage.RESTLESS },
+            interruptions = wakeUps.total(),
+            fellAsleepIn = fellAsleepIn,
+        )
     }
 
-    private fun joined(pieces: List<StageSpan>): List<StageSpan> {
+    /** [timeline] with the [stirs] cut into whatever sleep they interrupted, as restless. */
+    private fun withRestless(timeline: List<StageSpan>, stirs: List<StageSpan>): List<StageSpan> {
+        if (stirs.isEmpty()) return timeline
+        val marks = joined(stirs.sortedBy { it.start }.map { it.copy(stage = SleepStage.RESTLESS) })
+        val out = mutableListOf<StageSpan>()
+        for (piece in timeline) {
+            if (piece.stage == SleepStage.AWAKE || piece.stage == SleepStage.RESTLESS) {
+                out += piece
+                continue
+            }
+            var cursor = piece.start
+            for (mark in marks) {
+                if (!mark.end.isAfter(cursor) || !mark.start.isBefore(piece.end)) continue
+                val from = maxOf(mark.start, cursor)
+                val to = minOf(mark.end, piece.end)
+                if (from.isAfter(cursor)) out += StageSpan(cursor, from, piece.stage)
+                out += StageSpan(from, to, SleepStage.RESTLESS)
+                cursor = to
+            }
+            if (piece.end.isAfter(cursor)) out += StageSpan(cursor, piece.end, piece.stage)
+        }
+        return out
+    }
+
+    /** Neighbouring stretches of the same stage, joined into one. */
+    fun joined(pieces: List<StageSpan>): List<StageSpan> {
         val out = mutableListOf<StageSpan>()
         for (p in pieces) {
             val last = out.lastOrNull()

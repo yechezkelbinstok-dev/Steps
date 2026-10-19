@@ -80,6 +80,7 @@ import app.wakesteps.R
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.SleepNight
 import app.wakesteps.data.HealthSource
+import app.wakesteps.data.wakeDate
 import app.wakesteps.ui.theme.Palette
 import app.wakesteps.ui.theme.WakeStepsTheme
 
@@ -131,6 +132,8 @@ private fun App(vm: MainViewModel) {
     }
     val syncLog by vm.syncLog.collectAsStateWithLifecycle()
     val liveSteps by vm.liveSteps.collectAsStateWithLifecycle()
+    val scores by vm.scores.collectAsStateWithLifecycle()
+    var editingScore by remember { mutableStateOf<SleepNight?>(null) }
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     // Only show the pull-to-refresh spinner for a pull, not for the automatic reloads.
     var pulled by remember { mutableStateOf(false) }
@@ -200,9 +203,13 @@ private fun App(vm: MainViewModel) {
                         onAdjust = { adjusting = it }, onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
                         liveSteps = liveSteps,
                         lastNight = nightBefore(state.today?.window),
+                        lastNightScore = nightBefore(state.today?.window)?.let { scores[it.wakeDate()] },
                         onOpenSleep = { tab = Tab.SLEEP },
                     )
-                    Tab.SLEEP -> SleepScreen(state, onOpenNight = { openNight = it }, bottomPadding = bottom)
+                    Tab.SLEEP -> SleepScreen(
+                        state, scores, settings.restlessAsAwake,
+                        onOpenNight = { openNight = it }, onEditScore = { editingScore = it }, bottomPadding = bottom,
+                    )
                     Tab.HISTORY -> HistoryScreen(state, settings, overrides, onOpenDay = { openDay = it }, bottomPadding = bottom)
                     Tab.SETTINGS -> SettingsScreen(
                         settings, vm::updateSettings, actions, state.access, state.today?.latestDataAt,
@@ -233,6 +240,7 @@ private fun App(vm: MainViewModel) {
                         onBack = { openDay = null },
                         bottomPadding = bottom,
                         night = nightBefore(day.window),
+                        nightScore = nightBefore(day.window)?.let { scores[it.wakeDate()] },
                     )
                 }
             }
@@ -246,7 +254,12 @@ private fun App(vm: MainViewModel) {
             val night = remember { mutableStateOf(openNight) }.apply { if (openNight != null) value = openNight }.value
             Box(Modifier.fillMaxSize()) {
                 Backdrop()
-                if (night != null) NightDetail(night, onBack = { openNight = null }, bottomPadding = bottom)
+                if (night != null) {
+                    NightDetail(
+                        night, scores[night.wakeDate()], settings.restlessAsAwake,
+                        onEditScore = { editingScore = night }, onBack = { openNight = null }, bottomPadding = bottom,
+                    )
+                }
             }
         }
         // Content fades out under the tab bar instead of running into it.
@@ -261,6 +274,14 @@ private fun App(vm: MainViewModel) {
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
         if (showDiagnostics) DiagnosticsSheet(onDone = { showDiagnostics = false })
+        editingScore?.let { night ->
+            ScoreSheet(
+                night, scores[night.wakeDate()],
+                onSave = { vm.setScore(night, it) },
+                onClear = { vm.setScore(night, null) },
+                onDone = { editingScore = null },
+            )
+        }
         if (showGoogleHealth) {
             GoogleHealthSheet(
                 connected = settings.googleHealth,

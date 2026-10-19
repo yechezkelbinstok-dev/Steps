@@ -106,7 +106,12 @@ fun SettingsScreen(
                 Text(Format.number(goal.toLong()), style = AppType.number(56f), color = Palette.text)
             }
             Spacer(Modifier.height(8.dp))
-            GoalDial(goal, onChange = { goal = it }, Modifier.fillMaxWidth().height(76.dp))
+            RulerDial(
+                goal, GOAL_RANGE, step = GOAL_STEP, mid = 1_000, major = 5_000,
+                label = { Format.compact(it.toLong()) },
+                onChange = { goal = it },
+                modifier = Modifier.fillMaxWidth().height(76.dp),
+            )
         }
 
         Panel(Modifier.fillMaxWidth().entrance(2)) {
@@ -115,7 +120,18 @@ fun SettingsScreen(
             WidgetStylePicker(settings.widgetStyle) { style -> update { s -> s.copy(widgetStyle = style) } }
         }
 
-        Panel(Modifier.fillMaxWidth().entrance(3), padding = PaddingValues(vertical = 6.dp)) {
+        Panel(Modifier.fillMaxWidth().entrance(3)) {
+            Eyebrow(stringResource(R.string.set_restless))
+            Spacer(Modifier.height(14.dp))
+            PillToggle(
+                listOf(stringResource(R.string.restless_own), stringResource(R.string.restless_awake)),
+                selected = if (settings.restlessAsAwake) 1 else 0,
+                onSelect = { i -> update { it.copy(restlessAsAwake = i == 1) } },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Panel(Modifier.fillMaxWidth().entrance(4), padding = PaddingValues(vertical = 6.dp)) {
             val connected = access is Access.Ready
             LinkRow(stringResource(R.string.set_open_hc), actions.openHealthConnect) {
                 StatusDot(if (connected) Palette.accent else Palette.error)
@@ -170,75 +186,6 @@ private fun Divider() {
 @Composable
 private fun StatusDot(color: Color) {
     Box(Modifier.size(7.dp).clip(CircleShape).background(color))
-}
-
-/**
- * A ruler you drag sideways to set the goal: a tick every 500 steps, taller ones every 1,000,
- * labelled every 5,000, fading out towards the edges. Each tick past the marker clicks.
- */
-@Composable
-private fun GoalDial(value: Int, onChange: (Int) -> Unit, modifier: Modifier) {
-    val colors = Palette
-    val haptics = LocalHapticFeedback.current
-    val measurer = rememberTextMeasurer()
-    val labelStyle = AppType.eyebrow
-    val current by rememberUpdatedState(value)
-    var dragging by remember { mutableStateOf(false) }
-    var startValue by remember { mutableIntStateOf(value) }
-    var drag by remember { mutableFloatStateOf(0f) }
-    val tickSpacing = 13.dp
-
-    Canvas(
-        modifier.pointerInput(Unit) {
-            val tickPx = tickSpacing.toPx()
-            detectHorizontalDragGestures(
-                onDragStart = { startValue = current; drag = 0f; dragging = true },
-                onDragEnd = { dragging = false },
-                onDragCancel = { dragging = false },
-            ) { change, dx ->
-                change.consume()
-                drag += dx
-                val v = (startValue + (-drag / tickPx).roundToInt() * GOAL_STEP).coerceIn(GOAL_RANGE)
-                if (v != current) {
-                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                    onChange(v)
-                }
-            }
-        },
-    ) {
-        val tickPx = tickSpacing.toPx()
-        // While dragging the ruler follows the finger smoothly; otherwise it rests on the value.
-        val pos = if (dragging) {
-            (startValue - drag / tickPx * GOAL_STEP).coerceIn(GOAL_RANGE.first.toFloat(), GOAL_RANGE.last.toFloat())
-        } else value.toFloat()
-        val cx = size.width / 2
-        val span = size.width / 2 / tickPx * GOAL_STEP
-        val first = (ceil((pos - span) / GOAL_STEP) * GOAL_STEP).toInt().coerceAtLeast(GOAL_RANGE.first)
-        val last = (floor((pos + span) / GOAL_STEP) * GOAL_STEP).toInt().coerceAtMost(GOAL_RANGE.last)
-        val base = size.height * 0.62f
-        for (t in first..last step GOAL_STEP) {
-            val x = cx + (t - pos) / GOAL_STEP * tickPx
-            val fade = (1f - abs(x - cx) / cx).coerceIn(0f, 1f)
-            val (h, w) = when {
-                t % 5000 == 0 -> 26.dp.toPx() to 2.dp.toPx()
-                t % 1000 == 0 -> 16.dp.toPx() to 1.5.dp.toPx()
-                else -> 9.dp.toPx() to 1.dp.toPx()
-            }
-            drawRoundRect(
-                colors.muted.copy(alpha = 0.75f * fade * fade),
-                Offset(x - w / 2, base - h), Size(w, h), CornerRadius(w / 2),
-            )
-            if (t % 5000 == 0) {
-                val text = measurer.measure(Format.compact(t.toLong()), labelStyle.copy(color = colors.faint.copy(alpha = fade)))
-                drawText(text, topLeft = Offset(x - text.size.width / 2f, base + 8.dp.toPx()))
-            }
-        }
-        // The marker.
-        val mw = 3.dp.toPx()
-        val mh = 38.dp.toPx()
-        drawRoundRect(colors.accent.copy(alpha = 0.2f), Offset(cx - mw * 2, base - mh - 2.dp.toPx()), Size(mw * 4, mh + 4.dp.toPx()), CornerRadius(mw * 2))
-        drawRoundRect(colors.accent, Offset(cx - mw / 2, base - mh), Size(mw, mh), CornerRadius(mw / 2))
-    }
 }
 
 @Composable

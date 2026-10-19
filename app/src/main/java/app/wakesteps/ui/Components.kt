@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -58,6 +59,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -74,6 +76,22 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToLong
 import kotlin.math.sin
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 val PanelShape = RoundedCornerShape(28.dp)
 
@@ -81,13 +99,22 @@ val PanelShape = RoundedCornerShape(28.dp)
 @Composable
 fun glassEdge(): Brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.03f)))
 
-/** The app's panel: the widget's tone over the backdrop, a glass edge, soft corners. */
+/** A panel's fill: the widget's tone, lit a touch from above. */
+@Composable
+fun panelFill(): Brush = Palette.card.let { Brush.verticalGradient(listOf(lerp(it, Color.White, 0.045f), it)) }
+
+/**
+ * The app's panel: the widget's tone over the backdrop, lit from above, a glass edge, soft
+ * corners. [decoration] draws over the fill, under the content.
+ */
 @Composable
 fun Panel(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     padding: PaddingValues = PaddingValues(20.dp),
     shape: Shape = PanelShape,
+    fill: Brush = panelFill(),
+    decoration: (DrawScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -95,7 +122,8 @@ fun Panel(
         modifier
             .then(if (onClick != null) Modifier.pressScale(source) else Modifier)
             .clip(shape)
-            .background(Palette.card)
+            .background(fill)
+            .then(if (decoration != null) Modifier.drawBehind(decoration) else Modifier)
             .border(1.dp, glassEdge(), shape)
             .then(if (onClick != null) Modifier.clickable(source, indication = null, onClick = onClick) else Modifier)
             .padding(padding),
@@ -281,6 +309,9 @@ fun Backdrop(modifier: Modifier = Modifier) {
         glow(w * (0.3f + 0.08f * sin(a)), w * (0.42f + 0.05f * cos(a)), w * 0.8f, c.glow.copy(alpha = 0.6f))
         glow(w * (0.85f + 0.06f * cos(a)), w * (0.12f + 0.06f * sin(a)), w * 0.62f, c.accent.copy(alpha = 0.12f))
         glow(w * (0.1f + 0.08f * sin(a + 2f)), w * (0.95f + 0.06f * cos(a + 1f)), w * 0.55f, c.accentEnd.copy(alpha = 0.07f))
+        // Low down too, so the bottom of the page isn't a flat black.
+        glow(w * (0.9f + 0.06f * cos(a + 3f)), size.height * (0.8f + 0.03f * sin(a + 1f)), w * 0.75f, c.glow.copy(alpha = 0.3f))
+        glow(w * (0.05f + 0.05f * sin(a + 4f)), size.height * (0.97f + 0.02f * cos(a)), w * 0.6f, c.accent.copy(alpha = 0.05f))
     }
 }
 
@@ -410,4 +441,83 @@ fun VerticalRule(modifier: Modifier = Modifier) {
 @Composable
 fun Caption(text: String, modifier: Modifier = Modifier, color: Color = Palette.muted, style: TextStyle = MaterialTheme.typography.bodyMedium) {
     Text(text, style = style, color = color, modifier = modifier, maxLines = 1)
+}
+
+/**
+ * A ruler you drag sideways to pick a value: a tick every [step], taller ones every [mid],
+ * labelled every [major], fading out towards the edges. Each tick past the marker clicks.
+ */
+@Composable
+fun RulerDial(
+    value: Int,
+    range: IntRange,
+    step: Int,
+    mid: Int,
+    major: Int,
+    label: (Int) -> String,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    tickSpacing: Dp = 13.dp,
+) {
+    val colors = Palette
+    val haptics = LocalHapticFeedback.current
+    val measurer = rememberTextMeasurer()
+    val labelStyle = AppType.eyebrow
+    val current by rememberUpdatedState(value)
+    val change by rememberUpdatedState(onChange)
+    var dragging by remember { mutableStateOf(false) }
+    var startValue by remember { mutableIntStateOf(value) }
+    var drag by remember { mutableFloatStateOf(0f) }
+
+    Canvas(
+        modifier.pointerInput(Unit) {
+            val tickPx = tickSpacing.toPx()
+            detectHorizontalDragGestures(
+                onDragStart = { startValue = current; drag = 0f; dragging = true },
+                onDragEnd = { dragging = false },
+                onDragCancel = { dragging = false },
+            ) { pointer, dx ->
+                pointer.consume()
+                drag += dx
+                val v = (startValue + (-drag / tickPx).roundToInt() * step).coerceIn(range)
+                if (v != current) {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    change(v)
+                }
+            }
+        },
+    ) {
+        val tickPx = tickSpacing.toPx()
+        // While dragging the ruler follows the finger smoothly; otherwise it rests on the value.
+        val pos = if (dragging) {
+            (startValue - drag / tickPx * step).coerceIn(range.first.toFloat(), range.last.toFloat())
+        } else value.toFloat()
+        val cx = size.width / 2
+        val span = size.width / 2 / tickPx * step
+        val first = (ceil((pos - span) / step) * step).toInt().coerceAtLeast(range.first)
+        val last = (floor((pos + span) / step) * step).toInt().coerceAtMost(range.last)
+        val base = size.height * 0.62f
+        for (t in first..last step step) {
+            val x = cx + (t - pos) / step * tickPx
+            val fade = (1f - abs(x - cx) / cx).coerceIn(0f, 1f)
+            val (h, w) = when {
+                t % major == 0 -> 26.dp.toPx() to 2.dp.toPx()
+                t % mid == 0 -> 16.dp.toPx() to 1.5.dp.toPx()
+                else -> 9.dp.toPx() to 1.dp.toPx()
+            }
+            drawRoundRect(
+                colors.muted.copy(alpha = 0.75f * fade * fade),
+                Offset(x - w / 2, base - h), Size(w, h), CornerRadius(w / 2),
+            )
+            if (t % major == 0) {
+                val text = measurer.measure(label(t), labelStyle.copy(color = colors.faint.copy(alpha = fade)))
+                drawText(text, topLeft = Offset(x - text.size.width / 2f, base + 8.dp.toPx()))
+            }
+        }
+        // The marker.
+        val mw = 3.dp.toPx()
+        val mh = 38.dp.toPx()
+        drawRoundRect(colors.accent.copy(alpha = 0.2f), Offset(cx - mw * 2, base - mh - 2.dp.toPx()), Size(mw * 4, mh + 4.dp.toPx()), CornerRadius(mw * 2))
+        drawRoundRect(colors.accent, Offset(cx - mw / 2, base - mh), Size(mw, mh), CornerRadius(mw / 2))
+    }
 }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 
 private val Context.dataStore by preferencesDataStore(name = "wakesteps")
@@ -45,14 +46,17 @@ enum class WidgetStyle {
 }
 
 /**
- * Only [goal], [widgetStyle] and [googleHealth] are chosen in the app. Everything else is tuned in code (the user
- * asks for changes rather than fiddling with settings), so those values are never read from storage.
+ * Only [goal], [widgetStyle], [googleHealth] and [restlessAsAwake] are chosen in the app. Everything else is
+ * tuned in code (the user asks for changes rather than fiddling with settings), so those values are never read
+ * from storage.
  */
 data class AppSettings(
     val goal: Int = 10_000,
     val widgetStyle: WidgetStyle = WidgetStyle.SOFT,
     /** Read activity and sleep from Google Health (falling back to Health Connect when it can't). */
     val googleHealth: Boolean = false,
+    /** Count restless moments as awake, rather than as their own category (which counts as asleep, like Google). */
+    val restlessAsAwake: Boolean = false,
     /** Sleep mostly during the user's night counts (starts a new day) from this long. */
     val minNightSleepMinutes: Int = 60,
     /** Sleep mostly during the day is a nap unless it's at least this long. */
@@ -93,6 +97,20 @@ data class Snapshot(
     val error: String?,
 )
 
+/** A sleep score read off the Google Health app for the night ending on [date], and the app's estimate for it. */
+data class ScoreEntry(val date: LocalDate, val score: Int, val estimate: Int?)
+
+/**
+ * The scores the user read off the Google Health app on Oct 19, 2026 and sent over, so the
+ * estimates start out calibrated. Added once; anything entered in the app wins.
+ */
+private val SEED_SCORES = mapOf(
+    LocalDate.of(2026, 10, 18) to 71,
+    LocalDate.of(2026, 10, 15) to 52,
+    LocalDate.of(2026, 10, 14) to 89,
+    LocalDate.of(2026, 10, 13) to 47,
+)
+
 /** New tracker data was found: seen at [seenAt], covering steps up to [dataUpTo]. */
 data class SyncEvent(val seenAt: Instant, val dataUpTo: Instant, val stepsDelta: Long)
 
@@ -103,6 +121,7 @@ class Prefs(private val context: Context) {
         val goal = intPreferencesKey("goal")
         val widgetStyle = stringPreferencesKey("widget_style")
         val googleHealth = booleanPreferencesKey("google_health")
+        val restlessAsAwake = booleanPreferencesKey("restless_as_awake")
         val googleHealthError = stringPreferencesKey("google_health_error")
         /** The user said no to the phone's step counter, so stop offering it. */
         val liveStepsDeclined = booleanPreferencesKey("live_steps_declined")
@@ -123,6 +142,10 @@ class Prefs(private val context: Context) {
 
         /** Newline-separated "<seenAtEpochSec>|<dataUpToEpochSec>|<stepsDelta>", newest first. */
         val syncLog = stringPreferencesKey("sync_log")
+
+        /** Newline-separated "<wake date>|<score>|<estimate or empty>". */
+        val sleepScores = stringPreferencesKey("sleep_scores")
+        val scoresSeeded = booleanPreferencesKey("sleep_scores_seeded")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -160,6 +183,48 @@ class Prefs(private val context: Context) {
 
     /** The recorded Google Health error as it stands now (for diagnostics). */
     suspend fun googleHealthErrorNow(): String? = googleHealthError.first()
+
+    /** Sleep scores from the Google Health app, by the date of the morning the night ended. */
+    val sleepScores: Flow<Map<LocalDate, ScoreEntry>> = context.dataStore.data.map { p -> parseScores(p[K.sleepScores]) }
+
+    /** Saves (or with a null [score], removes) the Google Health score for the night ending on [date]. */
+    suspend fun setSleepScore(date: LocalDate, score: Int?, estimate: Int?) = editScores { entries ->
+        if (score == null) entries.remove(date) else entries[date] = ScoreEntry(date, score, estimate)
+    }
+
+    /** Keeps the app's estimate next to each entered score that doesn't have one yet, so it can keep learning from it. */
+    suspend fun noteEstimates(estimates: Map<LocalDate, Int>) = editScores { entries ->
+        for ((date, estimate) in estimates) entries[date]?.takeIf { it.estimate == null }?.let { entries[date] = it.copy(estimate = estimate) }
+    }
+
+    /** Adds the scores the user sent over, once. */
+    suspend fun seedSleepScores() {
+        context.dataStore.edit { p ->
+            if (p[K.scoresSeeded] == true) return@edit
+            val entries = parseScores(p[K.sleepScores]).toMutableMap()
+            for ((date, score) in SEED_SCORES) if (date !in entries) entries[date] = ScoreEntry(date, score, null)
+            p[K.sleepScores] = formatScores(entries)
+            p[K.scoresSeeded] = true
+        }
+    }
+
+    private suspend fun editScores(change: (MutableMap<LocalDate, ScoreEntry>) -> Unit) {
+        context.dataStore.edit { p ->
+            val entries = parseScores(p[K.sleepScores]).toMutableMap()
+            change(entries)
+            p[K.sleepScores] = formatScores(entries)
+        }
+    }
+
+    private fun parseScores(text: String?): Map<LocalDate, ScoreEntry> = text.orEmpty().lineSequence().mapNotNull { line ->
+        val parts = line.split('|')
+        val date = parts.getOrNull(0)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapNotNull null
+        val score = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+        date to ScoreEntry(date, score, parts.getOrNull(2)?.toIntOrNull())
+    }.toMap()
+
+    private fun formatScores(entries: Map<LocalDate, ScoreEntry>): String =
+        entries.values.sortedByDescending { it.date }.take(400).joinToString("\n") { "${it.date}|${it.score}|${it.estimate ?: ""}" }
 
     suspend fun liveStepsDeclined(): Boolean = context.dataStore.data.first()[K.liveStepsDeclined] ?: false
 
@@ -232,6 +297,7 @@ class Prefs(private val context: Context) {
             p[K.goal] = s.goal
             p[K.widgetStyle] = s.widgetStyle.name
             p[K.googleHealth] = s.googleHealth
+            p[K.restlessAsAwake] = s.restlessAsAwake
         }
     }
 
@@ -265,6 +331,7 @@ class Prefs(private val context: Context) {
         goal = this[K.goal] ?: AppSettings().goal,
         widgetStyle = enumOr(this[K.widgetStyle], AppSettings().widgetStyle),
         googleHealth = this[K.googleHealth] ?: false,
+        restlessAsAwake = this[K.restlessAsAwake] ?: false,
     )
 
     private fun Preferences.toSnapshot(): Snapshot? {
