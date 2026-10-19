@@ -718,7 +718,7 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
         }
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth().height((lanes.size * LANE_HEIGHT).dp)) {
-            LaneLabels(lanes, night, pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
+            LaneNames(lanes, pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
             Canvas(
                 Modifier
                     .weight(1f)
@@ -733,9 +733,14 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
             ) {
                 drawNight(night, chart, lanes, 0f, 1f, picked, pickedStage, colors.text, reveal)
             }
+            Spacer(Modifier.width(LANE_GAP))
+            LaneTimes(lanes, night, pickedStage, Modifier.width(LANE_TIMES).fillMaxHeight())
         }
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth().padding(start = LANE_LABELS), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = LANE_LABELS, end = LANE_GAP + LANE_TIMES),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(Format.time(night.start), style = AppType.eyebrow, color = colors.faint)
             Text(Format.time(night.end), style = AppType.eyebrow, color = colors.faint)
         }
@@ -743,23 +748,39 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
 }
 
 private val LANE_LABELS = 66.dp
-private const val LANE_HEIGHT = 46
+/** Each row's time sits at its end, past a gap. */
+private val LANE_TIMES = 50.dp
+private val LANE_GAP = 12.dp
+private const val LANE_HEIGHT = 40
 
-/** The chart's rows, top to bottom: each stage's name and its time in [night], the picked one lit. */
+/** The chart's rows by name, top to bottom; the picked one lit. */
 @Composable
-private fun LaneLabels(lanes: List<SleepStage>, night: SleepNight, picked: SleepStage?, modifier: Modifier) {
+private fun LaneNames(lanes: List<SleepStage>, picked: SleepStage?, modifier: Modifier) {
     Column(modifier) {
         lanes.forEach { lane ->
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                val lit = lane == picked
-                val name by animateColorAsState(if (lit) stageTextColor(lane) else Palette.faint, label = "lane")
-                val time by animateColorAsState(if (lit) Palette.text else Palette.muted, label = "laneTime")
-                Text(stageName(lane).uppercase(), style = AppType.eyebrow.copy(fontSize = 10.sp), color = name, maxLines = 1)
-                Text(durationText(night.time(lane).toMinutes(), 14f), style = AppType.number(14f), color = time, maxLines = 1)
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                val tone by animateColorAsState(if (lane == picked) stageTextColor(lane) else Palette.faint, label = "lane")
+                Text(stageName(lane).uppercase(), style = AppType.eyebrow.copy(fontSize = 10.sp), color = tone, maxLines = 1)
             }
         }
     }
 }
+
+/** Each row's time in [night], at its end, all in one size; the picked one lit. */
+@Composable
+private fun LaneTimes(lanes: List<SleepStage>, night: SleepNight, picked: SleepStage?, modifier: Modifier) {
+    Column(modifier) {
+        lanes.forEach { lane ->
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                val tone by animateColorAsState(if (lane == picked) Palette.text else Palette.muted, label = "laneTime")
+                Text(plainDuration(night.time(lane).toMinutes()), style = AppType.number(13f), color = tone, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** "4h 06m" or "45m", all one size, for small labels. */
+private fun plainDuration(minutes: Long): String = if (minutes >= 60) "${minutes / 60}h %02dm".format(minutes % 60) else "${minutes}m"
 
 /**
  * The part of [night] from [from] to [to] (fractions of it) across this canvas, a row per lane:
@@ -1085,7 +1106,7 @@ private fun ZoomableNight(night: SleepNight, view: NightView, modifier: Modifier
         }
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth().height((lanes.size * 56).dp)) {
-            LaneLabels(lanes, night.within(from, to), pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
+            LaneNames(lanes, pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
             Canvas(
                 Modifier
                     .weight(1f)
@@ -1101,11 +1122,14 @@ private fun ZoomableNight(night: SleepNight, view: NightView, modifier: Modifier
             ) {
                 drawNight(night, chart, lanes, view.left, view.right, picked, pickedStage, colors.text, ticks = marks)
             }
+            Spacer(Modifier.width(LANE_GAP))
+            LaneTimes(lanes, night.within(from, to), pickedStage, Modifier.width(LANE_TIMES).fillMaxHeight())
         }
         Spacer(Modifier.height(8.dp))
-        TickLabels(marks, from, to, Modifier.padding(start = LANE_LABELS).fillMaxWidth().height(16.dp))
+        val alongChart = Modifier.padding(start = LANE_LABELS, end = LANE_GAP + LANE_TIMES).fillMaxWidth()
+        TickLabels(marks, from, to, alongChart.height(16.dp))
         Spacer(Modifier.height(16.dp))
-        WholeNight(night, chart, lanes, view, scope, Modifier.padding(start = LANE_LABELS).fillMaxWidth().height(44.dp))
+        WholeNight(night, chart, lanes, view, scope, alongChart.height(44.dp))
     }
 }
 
