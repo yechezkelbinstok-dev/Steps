@@ -12,10 +12,12 @@ android {
         applicationId = "app.wakesteps"
         minSdk = 28
         targetSdk = 36
-        // Bump both together: versionCode is major * 100 + minor (1.8 -> 108, 1.10 -> 110), so the
-        // two always match and every release installs over the previous one. Builds before 1.4 used 1-6.
-        versionName = "1.12"
-        versionCode = 112
+        // Bump both together: a new feature is the next minor (1.13), a small fix or update the next
+        // patch (1.12.1). versionCode is the version with two digits for minor and patch (1.12.1 ->
+        // 11201, 1.13 -> 11300), so the two always match and every release installs over the
+        // previous one. Before 1.12.1 it was major * 100 + minor (1.12 -> 112); before 1.4, 1-6.
+        versionName = "1.12.1"
+        versionCode = 11201
     }
 
     signingConfigs {

@@ -57,6 +57,23 @@ class NightScoresTest {
     }
 
     @Test
+    fun aNightShownIsEstimatedAfreshAndAnOlderOneByItsKeptEstimate() {
+        val nights = listOf(night(oct15), night(oct14))
+        val raw = SleepScore.estimate(nights[0])!!
+        val fresh = SleepScore.estimate(nights[1])!!
+        val sep14 = LocalDate.of(2026, 9, 14)
+        val entries = mapOf(
+            // Kept from an older way of estimating: the fresh estimate is used instead.
+            oct14 to ScoreEntry(oct14, fresh - 6, fresh + 20),
+            // Not shown any more: its kept estimate is all there is.
+            sep14 to ScoreEntry(sep14, 70, 76),
+        )
+        // Both say Google scores 6 below the estimate.
+        assertEquals(raw - 6, NightScores.of(nights, entries, zone).getValue(oct15).value)
+        assertNull("only nights shown get a score", NightScores.of(nights, entries, zone)[sep14])
+    }
+
+    @Test
     fun noScoreWithoutStagesUnlessEntered() {
         val end = oct15.atTime(7, 0).toInstant(zone)
         val start = end.minus(Duration.ofHours(7))

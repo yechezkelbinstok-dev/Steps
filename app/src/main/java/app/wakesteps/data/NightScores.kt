@@ -19,7 +19,8 @@ object NightScores {
      */
     fun of(nights: List<SleepNight>, entries: Map<LocalDate, ScoreEntry>, zone: ZoneId = ZoneId.systemDefault()): Map<LocalDate, NightScore> {
         val estimates = nights.associate { it.wakeDate(zone) to SleepScore.estimate(it) }
-        val pairs = entries.values.sortedBy { it.date }.mapNotNull { e -> (e.estimate ?: estimates[e.date])?.let { it to e.score } }
+        // A night still shown is estimated afresh; an older one by the estimate kept from when it was.
+        val pairs = entries.values.sortedBy { it.date }.mapNotNull { e -> (estimates[e.date] ?: e.estimate)?.let { it to e.score } }
         val calibration = ScoreCalibration.fit(pairs)
         return nights.mapNotNull { night ->
             val date = night.wakeDate(zone)

@@ -147,13 +147,28 @@ class StepsEngine(
     suspend fun nights(settings: AppSettings, days: List<DaySummary>): List<SleepNight> {
         val spans = days.mapNotNull { it.window.wokeFrom }.distinct()
         if (spans.isEmpty()) return emptyList()
-        val from = spans.minOf { it.start }
-        val to = spans.maxOf { it.end }
+        val sessions = sleepSessions(settings, spans.minOf { it.start }, spans.maxOf { it.end })
+        return spans.map { SleepNights.build(it, sessions) }
+    }
+
+    /**
+     * The main sleep (the longest) that ended on each of [dates], for learning from scores entered
+     * for nights older than the ones shown. One read per date; a date with no sleep is left out.
+     */
+    suspend fun nightsEndingOn(settings: AppSettings, dates: Set<LocalDate>, zone: ZoneId = ZoneId.systemDefault()): Map<LocalDate, SleepNight> =
+        dates.mapNotNull { date ->
+            // Bedtime can be any time from the afternoon before.
+            val sessions = sleepSessions(settings, date.minusDays(1).atTime(12, 0).atZone(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
+            val main = sessions.filter { it.end.atZone(zone).toLocalDate() == date }.maxByOrNull { Duration.between(it.start, it.end) }
+            main?.let { date to SleepNights.build(SleepSpan(it.start, it.end), sessions) }
+        }.toMap()
+
+    /** Google Health has the band's stages; without it (or if it has nothing), Health Connect. */
+    private suspend fun sleepSessions(settings: AppSettings, from: Instant, to: Instant): List<SleepSession> {
         val cloud: List<SleepSession> = if (settings.googleHealth) {
             read(settings, { sleepSessions(it, from.minusSeconds(60), to) }) { emptyList() }
         } else emptyList()
-        // Google Health has the band's stages; without it (or if it has nothing), Health Connect.
-        val sessions = cloud.ifEmpty {
+        return cloud.ifEmpty {
             try {
                 health.sleepSessions(from, to, settings.sourcePackage)
             } catch (e: CancellationException) {
@@ -162,7 +177,6 @@ class StepsEngine(
                 emptyList()
             }
         }
-        return spans.map { SleepNights.build(it, sessions) }
     }
 
     suspend fun calendarDays(settings: AppSettings, days: Long = 14): List<CalendarDay> {

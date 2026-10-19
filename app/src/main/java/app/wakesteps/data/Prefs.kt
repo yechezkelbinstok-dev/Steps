@@ -101,15 +101,45 @@ data class Snapshot(
 data class ScoreEntry(val date: LocalDate, val score: Int, val estimate: Int?)
 
 /**
- * The scores the user read off the Google Health app on Oct 19, 2026 and sent over, so the
- * estimates start out calibrated. Added once; anything entered in the app wins.
+ * The scores the user read off the Google Health app and sent over (Oct 19, 2026), so the
+ * estimates start out calibrated. Each is added once; anything entered in the app wins.
  */
 private val SEED_SCORES = mapOf(
     LocalDate.of(2026, 10, 18) to 71,
     LocalDate.of(2026, 10, 15) to 52,
     LocalDate.of(2026, 10, 14) to 89,
     LocalDate.of(2026, 10, 13) to 47,
+    // The second batch.
+    LocalDate.of(2026, 10, 12) to 61,
+    LocalDate.of(2026, 10, 11) to 60,
+    LocalDate.of(2026, 10, 9) to 85,
+    LocalDate.of(2026, 9, 18) to 75,
+    LocalDate.of(2026, 9, 17) to 83,
+    LocalDate.of(2026, 9, 16) to 84,
+    LocalDate.of(2026, 9, 15) to 66,
+    LocalDate.of(2026, 9, 14) to 77,
 )
+
+/** The first batch, which 1.12 marked as added with a single flag. */
+private val FIRST_SEEDS = SEED_SCORES.keys.take(4).toSet()
+
+/**
+ * [entries] with each sent-over score not added before, and the dates added so far; null when
+ * there's nothing new. A score already entered for a date stays. [added] is null until dates were
+ * tracked, when [firstBatchAdded] says whether 1.12 added the first batch.
+ */
+internal fun withSeedScores(
+    entries: Map<LocalDate, ScoreEntry>,
+    added: Set<LocalDate>?,
+    firstBatchAdded: Boolean,
+): Pair<Map<LocalDate, ScoreEntry>, Set<LocalDate>>? {
+    val done = added ?: if (firstBatchAdded) FIRST_SEEDS else emptySet()
+    val fresh = SEED_SCORES.filterKeys { it !in done }
+    if (fresh.isEmpty()) return null
+    val out = entries.toMutableMap()
+    for ((date, score) in fresh) if (date !in out) out[date] = ScoreEntry(date, score, null)
+    return out to done + fresh.keys
+}
 
 /** New tracker data was found: seen at [seenAt], covering steps up to [dataUpTo]. */
 data class SyncEvent(val seenAt: Instant, val dataUpTo: Instant, val stepsDelta: Long)
@@ -145,7 +175,10 @@ class Prefs(private val context: Context) {
 
         /** Newline-separated "<wake date>|<score>|<estimate or empty>". */
         val sleepScores = stringPreferencesKey("sleep_scores")
+        /** 1.12 only: the first batch of scores was added. */
         val scoresSeeded = booleanPreferencesKey("sleep_scores_seeded")
+        /** Comma-separated dates whose sent-over score has been added, so each is added only once. */
+        val seededScoreDates = stringPreferencesKey("sleep_scores_seeded_dates")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -192,19 +225,21 @@ class Prefs(private val context: Context) {
         if (score == null) entries.remove(date) else entries[date] = ScoreEntry(date, score, estimate)
     }
 
-    /** Keeps the app's estimate next to each entered score that doesn't have one yet, so it can keep learning from it. */
+    /**
+     * Keeps the app's latest estimate next to each entered score, so the learning outlives the
+     * nights shown (and follows any change in how nights are estimated while they're shown).
+     */
     suspend fun noteEstimates(estimates: Map<LocalDate, Int>) = editScores { entries ->
-        for ((date, estimate) in estimates) entries[date]?.takeIf { it.estimate == null }?.let { entries[date] = it.copy(estimate = estimate) }
+        for ((date, estimate) in estimates) entries[date]?.takeIf { it.estimate != estimate }?.let { entries[date] = it.copy(estimate = estimate) }
     }
 
-    /** Adds the scores the user sent over, once. */
+    /** Adds each score the user sent over, once. */
     suspend fun seedSleepScores() {
         context.dataStore.edit { p ->
-            if (p[K.scoresSeeded] == true) return@edit
-            val entries = parseScores(p[K.sleepScores]).toMutableMap()
-            for ((date, score) in SEED_SCORES) if (date !in entries) entries[date] = ScoreEntry(date, score, null)
+            val added = p[K.seededScoreDates]?.split(',')?.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }?.toSet()
+            val (entries, dates) = withSeedScores(parseScores(p[K.sleepScores]), added, p[K.scoresSeeded] == true) ?: return@edit
             p[K.sleepScores] = formatScores(entries)
-            p[K.scoresSeeded] = true
+            p[K.seededScoreDates] = dates.sorted().joinToString(",")
         }
     }
 

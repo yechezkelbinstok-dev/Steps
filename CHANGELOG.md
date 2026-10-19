@@ -2,9 +2,19 @@
 
 Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered as below. The
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
-one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Builds that
+one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
+get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201, and
+1.13 will be 11300. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.12.1
+- The rest of the sleep scores you sent: Sep 14, 15, 16, 17 and 18, Oct 9, 11 and 12. With the
+  first four, the estimates now learn from 12 of Google Health's scores.
+- Scores for nights older than the two weeks the app shows count too: the app reads those nights
+  once to see what it would have estimated for them.
+- A night still shown is estimated afresh each time, rather than by the estimate kept from when
+  its score was entered, so an improvement to the estimates doesn't leave stale numbers behind.
 
 ## 1.12
 - Sleep score. Google Health doesn't share its sleep score with other apps, so the app estimates

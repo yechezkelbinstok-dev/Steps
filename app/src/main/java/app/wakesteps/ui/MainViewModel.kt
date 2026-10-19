@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -121,6 +122,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Whether this run of the app has looked up the older nights that scores were entered for. */
+    private var olderNightsRead = false
+
     fun reload() {
         reloadJob?.cancel()
         reloadJob = viewModelScope.launch {
@@ -148,6 +152,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(nights = nights) }
                 // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
                 app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
+                // Scores entered for older nights (sent over from Google Health): read those nights once to learn from.
+                if (!olderNightsRead) {
+                    val shown = nights.map { it.wakeDate() }.toSet()
+                    val older = app.prefs.sleepScores.first().values.filter { it.estimate == null && it.date !in shown }.map { it.date }.toSet()
+                    if (older.isNotEmpty()) {
+                        app.prefs.noteEstimates(
+                            app.engine.nightsEndingOn(s, older).mapNotNull { (date, n) -> SleepScore.estimate(n)?.let { date to it } }.toMap()
+                        )
+                    }
+                    olderNightsRead = true
+                }
             } catch (e: CancellationException) {
                 throw e // a newer reload replaced this one: not an error
             } catch (e: Exception) {
