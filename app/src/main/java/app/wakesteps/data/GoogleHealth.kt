@@ -26,6 +26,7 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -44,6 +45,8 @@ class GoogleHealth(private val context: Context) {
     companion object {
         const val SCOPE_ACTIVITY = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"
         const val SCOPE_SLEEP = "https://www.googleapis.com/auth/googlehealth.sleep.readonly"
+        /** Heart rate (for sound sleep): asked for on its own, so steps and sleep never wait on it. */
+        const val SCOPE_HEALTH = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
         private const val BASE = "https://health.googleapis.com/v4/users/me/dataTypes"
 
         /** Google Play services' code for an app it doesn't recognise (no matching OAuth client). */
@@ -64,6 +67,23 @@ class GoogleHealth(private val context: Context) {
 
         val steps: (JSONObject) -> Double? = { it.optJSONObject("steps")?.optString("countSum")?.toDoubleOrNull() }
         val kcal: (JSONObject) -> Double? = { it.optJSONObject("totalCalories")?.optDouble("kcalSum")?.takeUnless(Double::isNaN) }
+        /** A heart-rate window's average, in beats a minute. */
+        val bpm: (JSONObject) -> Double? = { it.optJSONObject("heartRate")?.optDouble("beatsPerMinuteAvg")?.takeUnless(Double::isNaN) }
+
+        /** Resting heart rate by day, from a `daily-resting-heart-rate` list. */
+        fun parseRestingHeartRates(json: String): Map<LocalDate, Double> {
+            val points = JSONObject(json).optJSONArray("dataPoints") ?: JSONArray()
+            return (0 until points.length()).mapNotNull { i ->
+                val p = points.getJSONObject(i).optJSONObject("dailyRestingHeartRate") ?: return@mapNotNull null
+                val date = when (val d = p.opt("date")) {
+                    is JSONObject -> runCatching { LocalDate.of(d.getInt("year"), d.getInt("month"), d.getInt("day")) }.getOrNull()
+                    is String -> runCatching { LocalDate.parse(d) }.getOrNull()
+                    else -> null
+                } ?: return@mapNotNull null
+                number(p, "beatsPerMinute")?.let { date to it.toDouble() }
+            }.toMap()
+        }
+
         val meters: (JSONObject) -> Double? = {
             it.optJSONObject("distance")?.optString("millimetersSum")?.toDoubleOrNull()?.div(1000.0)
         }
@@ -146,6 +166,12 @@ class GoogleHealth(private val context: Context) {
 
     @Volatile private var cached: Pair<String, Instant>? = null
 
+    private fun heartRequest(): AuthorizationRequest = AuthorizationRequest.builder()
+        .setRequestedScopes(listOf(Scope(SCOPE_HEALTH)))
+        .build()
+
+    @Volatile private var heartCached: Pair<String, Instant>? = null
+
     /**
      * Asks Google for access. If the user still has to agree (first time, or after it lapsed) the
      * result carries a screen to show; from the app, launch it. Throws with a readable message when
@@ -175,6 +201,27 @@ class GoogleHealth(private val context: Context) {
 
     fun forgetToken() {
         cached = null
+        heartCached = null
+    }
+
+    /** Asks for heart rate. As with [authorize], the result may carry Google's consent screen to show. */
+    suspend fun authorizeHeart(): AuthorizationResult = try {
+        authorization.authorize(heartRequest()).await()
+    } catch (e: ApiException) {
+        throw IOException("Google sign-in failed (${e.statusCode}).", e)
+    }
+
+    /** A token for heart rate without showing anything, or null until the user allows it. */
+    suspend fun heartToken(): String? {
+        heartCached?.let { (token, at) -> if (Duration.between(at, Instant.now()) < Duration.ofMinutes(40)) return token }
+        val result = runCatching { authorizeHeart() }.getOrNull() ?: return null
+        if (result.hasResolution()) return null
+        return result.accessToken?.also { heartCached = it to Instant.now() }
+    }
+
+    /** Keeps the token from the consent screen, so heart rate can be read straight away. */
+    fun keepHeartToken(result: AuthorizationResult) {
+        result.accessToken?.let { heartCached = it to Instant.now() }
     }
 
     // ------------------------------------------------ reads
@@ -236,6 +283,16 @@ class GoogleHealth(private val context: Context) {
         } while (page != null)
         return out.distinctBy { it.start to it.end }
     }
+
+    /** Each minute's average heart rate from [from] to [to], oldest first; minutes without any are left out. */
+    suspend fun heartRate(token: String, from: Instant, to: Instant): List<Pair<Instant, Double>> =
+        rollUp(token, "heart-rate", from, to, "60s")
+            .mapNotNull { p -> start(p)?.let { at -> bpm(p)?.let { at to it } } }
+            .sortedBy { it.first }
+
+    /** The resting heart rate Google worked out for each of the last couple of months. */
+    suspend fun restingHeartRates(token: String): Map<LocalDate, Double> =
+        parseRestingHeartRates(call(token, "GET", "$BASE/daily-resting-heart-rate/dataPoints?pageSize=60", null))
 
     /** Every rolled-up window of [type] between [from] and [to], all pages. */
     private suspend fun rollUp(token: String, type: String, from: Instant, to: Instant, window: String): List<JSONObject> {

@@ -11,6 +11,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.Instant
+import java.time.LocalDate
 
 /** Google Health responses, shaped like the examples in Google's API docs. */
 @RunWith(RobolectricTestRunner::class) // for Android's org.json
@@ -107,6 +108,32 @@ class GoogleHealthParseTest {
         // Brief wake-ups come without a type.
         assertEquals(StageSpan(Instant.parse("2026-10-19T03:10:00Z"), Instant.parse("2026-10-19T03:11:00Z"), SleepStage.AWAKE), s.shortAwakenings.single())
         assertEquals(12L, s.minutesToFallAsleep)
+    }
+
+    @Test
+    fun heartRateAndRestingHeartRate() {
+        val (points, _) = GoogleHealth.parseRollup(
+            """
+            {"rollupDataPoints": [
+              {"startTime": "2026-10-19T03:01:00Z", "endTime": "2026-10-19T03:02:00Z",
+               "heartRate": {"beatsPerMinuteAvg": 54.5, "beatsPerMinuteMax": 57, "beatsPerMinuteMin": 52}},
+              {"startTime": "2026-10-19T03:00:00Z", "endTime": "2026-10-19T03:01:00Z"}
+            ]}
+            """,
+        )
+        assertEquals(54.5, GoogleHealth.bpm(points[0])!!, 0.0)
+        assertNull("a minute without any", GoogleHealth.bpm(points[1]))
+
+        val resting = GoogleHealth.parseRestingHeartRates(
+            """
+            {"dataPoints": [
+              {"dailyRestingHeartRate": {"date": {"year": 2026, "month": 10, "day": 19}, "beatsPerMinute": "58"}},
+              {"dailyRestingHeartRate": {"date": "2026-10-18", "beatsPerMinute": 61}},
+              {"steps": {"countSum": "5"}}
+            ]}
+            """,
+        )
+        assertEquals(mapOf(LocalDate.of(2026, 10, 19) to 58.0, LocalDate.of(2026, 10, 18) to 61.0), resting)
     }
 
     @Test

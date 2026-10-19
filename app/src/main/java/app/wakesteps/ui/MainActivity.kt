@@ -132,6 +132,10 @@ private fun App(vm: MainViewModel) {
     val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
         vm.googleConsentResult(it.data)
     }
+    val heartLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        vm.heartConsentResult(it.data)
+    }
+    val googleHeart by vm.googleHeart.collectAsStateWithLifecycle()
     val syncLog by vm.syncLog.collectAsStateWithLifecycle()
     val liveSteps by vm.liveSteps.collectAsStateWithLifecycle()
     val scores by vm.scores.collectAsStateWithLifecycle()
@@ -304,10 +308,14 @@ private fun App(vm: MainViewModel) {
         if (showGoogleHealth) {
             GoogleHealthSheet(
                 connected = settings.googleHealth,
+                heart = googleHeart,
                 problem = googleMessage ?: googleError.takeIf { settings.googleHealth },
                 busy = googleBusy,
                 onConnect = {
                     vm.connectGoogleHealth { consentLauncher.launch(IntentSenderRequest.Builder(it).build()) }
+                },
+                onAllowHeart = {
+                    vm.allowHeartRate { heartLauncher.launch(IntentSenderRequest.Builder(it).build()) }
                 },
                 onDisconnect = vm::disconnectGoogleHealth,
                 onDone = { showGoogleHealth = false },

@@ -104,6 +104,12 @@ from Health Connect.
   scores are shown as they are, and the estimates learn from them (with fewer than 4 just an
   offset, then a line held close to 1:1, from the latest 30). Like Google, no score for a night
   without stages.
+* **Sound sleep** is measured the way Google describes it, from heart rate: the stretches of
+  light, deep or REM sleep with a low, steady heart rate (at or under the day's resting rate and
+  the night's own middle rate, within 4 beats a minute across five minutes, lasting five minutes
+  or more). Time to sound sleep runs to the first of them. Google doesn't publish its thresholds,
+  so these are the app's. Without heart rate (Google Health not connected, or heart rate not
+  allowed) the two show "needs heart rate", and the estimate uses deep and REM in their place.
 * **Restless moments** are brief stirs of 5 minutes or less, counted as asleep the way Google
   counts them, and shown as their own category. Longer wake-ups are full awakenings. Settings →
   Restless moments → Count as awake counts them as awake time instead (the score is unchanged:
@@ -123,13 +129,15 @@ links each page and has every value ready to copy:
 
 1. Create a project, and turn on the Google Health API in it.
 2. Set up the sign-in screen (Google Auth Platform): app name "Awake Steps", audience External.
-3. Add the scopes `…/auth/googlehealth.activity_and_fitness.readonly` and
-   `…/auth/googlehealth.sleep.readonly`.
+3. Add the scopes `…/auth/googlehealth.activity_and_fitness.readonly`,
+   `…/auth/googlehealth.sleep.readonly` and
+   `…/auth/googlehealth.health_metrics_and_measurements.readonly` (heart rate, for sound sleep).
 4. Add your Google account as a test user, then publish the app (otherwise sign-in lapses every
    7 days).
 5. Create an OAuth client of type Android: package `app.wakesteps` and the SHA-1 of the signing
    key (`keystore/wakesteps.keystore`, shown in the sheet).
 6. Make sure the Google Health app is signed in with the same account, then tap Connect.
+7. Tap Allow heart rate. Heart rate is asked for on its own, so steps and sleep work without it.
 
 ## Comparing with the Fitbit / Google app
 

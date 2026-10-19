@@ -249,9 +249,16 @@ class ScreenRenderTest {
     fun renderGoogleHealth() {
         render("google_health", AppSettings(), Tab.SETTINGS) {
             GoogleHealthContent(
-                connected = false, problem = null, busy = false,
+                connected = false, heart = false, problem = null, busy = false,
                 sha1 = "B0:26:35:22:6D:29:49:EE:FA:30:07:C2:5B:2F:AC:1A:0F:37:87:D3",
-                onConnect = {}, onDisconnect = {},
+                onConnect = {}, onAllowHeart = {}, onDisconnect = {},
+            )
+        }
+        render("google_health_heart", AppSettings(), Tab.SETTINGS) {
+            GoogleHealthContent(
+                connected = true, heart = false, problem = null, busy = false,
+                sha1 = "B0:26:35:22:6D:29:49:EE:FA:30:07:C2:5B:2F:AC:1A:0F:37:87:D3",
+                onConnect = {}, onAllowHeart = {}, onDisconnect = {},
             )
         }
     }

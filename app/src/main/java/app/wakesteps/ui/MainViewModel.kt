@@ -188,8 +188,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** The nights [windows] began with, then the sleep scores learn from them. */
     private suspend fun loadNights(s: AppSettings, windows: List<DayWindow>) {
         app.prefs.seedSleepScores()
-        val nights = app.engine.nights(s, windows)
-        _state.update { it.copy(nights = nights, nightsLoaded = true) }
+        app.prefs.forgetEstimatesUnless(SleepScore.MODEL)
+        val read = app.engine.nights(s, windows)
+        _state.update { it.copy(nights = read, nightsLoaded = true) }
+        // Sound sleep from heart rate fills in once it's read (a read for each night not yet worked out).
+        _googleHeart.value = app.engine.heartAllowed(s)
+        val nights = app.engine.withSoundSleep(s, read)
+        if (nights != read) _state.update { it.copy(nights = nights) }
         // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
         app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
         // Scores entered for older nights (sent over from Google Health): read those nights once to learn from.
@@ -197,8 +202,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val shown = nights.map { it.wakeDate() }.toSet()
             val older = app.prefs.sleepScores.first().values.filter { it.estimate == null && it.date !in shown }.map { it.date }.toSet()
             if (older.isNotEmpty()) {
+                val found = app.engine.nightsEndingOn(s, older).entries.toList()
+                val measured = app.engine.withSoundSleep(s, found.map { it.value })
                 app.prefs.noteEstimates(
-                    app.engine.nightsEndingOn(s, older).mapNotNull { (date, n) -> SleepScore.estimate(n)?.let { date to it } }.toMap()
+                    found.zip(measured).mapNotNull { (e, n) -> SleepScore.estimate(n)?.let { e.key to it } }.toMap()
                 )
             }
             olderNightsRead = true
@@ -285,6 +292,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _googleBusy = MutableStateFlow(false)
     val googleBusy: StateFlow<Boolean> = _googleBusy.asStateFlow()
+
+    private val _googleHeart = MutableStateFlow(false)
+    /** Whether heart rate can be read, so sound sleep is measured the way Google measures it. */
+    val googleHeart: StateFlow<Boolean> = _googleHeart.asStateFlow()
+
+    /** Asks Google for heart rate; [showConsent] launches Google's consent screen when one is needed. */
+    fun allowHeartRate(showConsent: (PendingIntent) -> Unit) {
+        viewModelScope.launch {
+            _googleBusy.value = true
+            _googleMessage.value = null
+            try {
+                val result = app.googleHealth.authorizeHeart()
+                val consent = result.pendingIntent
+                if (result.hasResolution() && consent != null) showConsent(consent) else finishHeartRate(result)
+            } catch (e: Exception) {
+                _googleMessage.value = e.message
+            } finally {
+                _googleBusy.value = false
+            }
+        }
+    }
+
+    /** Back from Google's consent screen for heart rate. */
+    fun heartConsentResult(data: Intent?) {
+        viewModelScope.launch {
+            val result = runCatching { app.googleHealth.resultFrom(data) }.getOrNull()
+            if (result == null) _googleMessage.value = app.getString(R.string.gh_cancelled) else finishHeartRate(result)
+        }
+    }
+
+    private fun finishHeartRate(result: AuthorizationResult) {
+        if (result.accessToken == null || result.grantedScopes.none { it == GoogleHealth.SCOPE_HEALTH }) {
+            _googleMessage.value = app.getString(R.string.gh_no_heart)
+            return
+        }
+        app.googleHealth.keepHeartToken(result)
+        _googleHeart.value = true
+        _googleMessage.value = null
+        reload()
+    }
 
     /** Asks Google for access; [showConsent] launches Google's consent screen when one is needed. */
     fun connectGoogleHealth(showConsent: (PendingIntent) -> Unit) {

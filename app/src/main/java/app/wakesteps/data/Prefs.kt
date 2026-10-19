@@ -17,6 +17,7 @@ import app.wakesteps.core.StartReason
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import app.wakesteps.core.SoundSleep
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -96,6 +97,9 @@ data class Snapshot(
     val latestDataAt: Instant?,
     val error: String?,
 )
+
+/** A night's sound sleep as worked out from heart rate; [settled] once all its heart rate has surely arrived. */
+data class KeptSound(val sound: SoundSleep, val settled: Boolean)
 
 /** A sleep score read off the Google Health app for the night ending on [date], and the app's estimate for it. */
 data class ScoreEntry(val date: LocalDate, val score: Int, val estimate: Int?)
@@ -179,6 +183,12 @@ class Prefs(private val context: Context) {
         val scoresSeeded = booleanPreferencesKey("sleep_scores_seeded")
         /** Comma-separated dates whose sent-over score has been added, so each is added only once. */
         val seededScoreDates = stringPreferencesKey("sleep_scores_seeded_dates")
+
+        /** Which way of estimating the kept estimates came from (SleepScore.MODEL). */
+        val scoreModel = intPreferencesKey("sleep_score_model")
+
+        /** Newline-separated "<night start s>|<night end s>|<sound min>|<time to sound min or empty>|<1 if settled>". */
+        val soundSleeps = stringPreferencesKey("sound_sleeps")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -233,6 +243,15 @@ class Prefs(private val context: Context) {
         for ((date, estimate) in estimates) entries[date]?.takeIf { it.estimate != estimate }?.let { entries[date] = it.copy(estimate = estimate) }
     }
 
+    /** Drops the kept estimates if they came from another way of estimating ([model]), to be worked out again. */
+    suspend fun forgetEstimatesUnless(model: Int) {
+        context.dataStore.edit { p ->
+            if (p[K.scoreModel] == model) return@edit
+            p[K.sleepScores] = formatScores(parseScores(p[K.sleepScores]).mapValues { it.value.copy(estimate = null) })
+            p[K.scoreModel] = model
+        }
+    }
+
     /** Adds each score the user sent over, once. */
     suspend fun seedSleepScores() {
         context.dataStore.edit { p ->
@@ -242,6 +261,28 @@ class Prefs(private val context: Context) {
             p[K.seededScoreDates] = dates.sorted().joinToString(",")
         }
     }
+
+    /** Sound sleep already worked out, by night (its start and end). */
+    suspend fun soundSleeps(): Map<Pair<Instant, Instant>, KeptSound> = parseSounds(context.dataStore.data.first()[K.soundSleeps])
+
+    suspend fun keepSoundSleeps(fresh: Map<Pair<Instant, Instant>, KeptSound>) {
+        context.dataStore.edit { p ->
+            val all = parseSounds(p[K.soundSleeps]) + fresh
+            p[K.soundSleeps] = all.entries.sortedByDescending { it.key.first }.take(120).joinToString("\n") { (night, kept) ->
+                val (start, end) = night
+                "${start.epochSecond}|${end.epochSecond}|${kept.sound.total.toMinutes()}|${kept.sound.timeTo?.toMinutes() ?: ""}|${if (kept.settled) 1 else 0}"
+            }
+        }
+    }
+
+    private fun parseSounds(text: String?): Map<Pair<Instant, Instant>, KeptSound> = text.orEmpty().lineSequence().mapNotNull { line ->
+        val f = line.split('|')
+        val start = f.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
+        val end = f.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
+        val total = f.getOrNull(2)?.toLongOrNull() ?: return@mapNotNull null
+        val sound = SoundSleep(Duration.ofMinutes(total), f.getOrNull(3)?.toLongOrNull()?.let(Duration::ofMinutes))
+        (Instant.ofEpochSecond(start) to Instant.ofEpochSecond(end)) to KeptSound(sound, f.getOrNull(4) == "1")
+    }.toMap()
 
     private suspend fun editScores(change: (MutableMap<LocalDate, ScoreEntry>) -> Unit) {
         context.dataStore.edit { p ->

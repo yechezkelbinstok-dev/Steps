@@ -4,9 +4,23 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.14
+- Sound sleep is measured from your heart rate, the way Google measures it, instead of counting
+  every minute of light, deep and REM (which came out hours more than Google's). It's the
+  stretches of light, deep or REM sleep with a low, steady heart rate; time to sound sleep runs
+  from going to bed to the first of them. Google doesn't publish its exact thresholds, so the
+  app's are its own: at or under the day's resting heart rate, steady within 4 beats a minute,
+  for five minutes or more.
+- Heart rate needs one more permission: add the third scope in step 4 of the Google Health setup
+  (Settings → Google Health), then tap Allow heart rate. It's asked for on its own, so steps and
+  sleep carry on without it; until then, sound sleep and time to sound sleep show "needs heart
+  rate" rather than a number the app can't get right.
+- Each night's sound sleep is worked out once and kept, so only the newest night is read again
+  (for its first half day, while its heart rate may still be arriving).
 
 ## 1.13.2
 - The night chart runs the full width of its panel, here and opened up: each stage's name and

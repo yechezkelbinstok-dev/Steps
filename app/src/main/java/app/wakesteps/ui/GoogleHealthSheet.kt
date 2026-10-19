@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -52,7 +55,7 @@ private val STEPS = listOf(
     SetupStep(R.string.gh_step_branding, "https://console.cloud.google.com/auth/overview", listOf("Awake Steps")),
     SetupStep(
         R.string.gh_step_scopes, "https://console.cloud.google.com/auth/scopes",
-        listOf(GoogleHealth.SCOPE_ACTIVITY, GoogleHealth.SCOPE_SLEEP),
+        listOf(GoogleHealth.SCOPE_ACTIVITY, GoogleHealth.SCOPE_SLEEP, GoogleHealth.SCOPE_HEALTH),
     ),
     SetupStep(R.string.gh_step_audience, "https://console.cloud.google.com/auth/audience"),
     // Package name and fingerprint are filled in below, from the installed app itself.
@@ -68,27 +71,31 @@ private val STEPS = listOf(
 @Composable
 fun GoogleHealthSheet(
     connected: Boolean,
+    heart: Boolean,
     problem: String?,
     busy: Boolean,
     onConnect: () -> Unit,
+    onAllowHeart: () -> Unit,
     onDisconnect: () -> Unit,
     onDone: () -> Unit,
 ) {
     val context = LocalContext.current
     val sha1 = remember { context.app.googleHealth.signingSha1() }
     ModalBottomSheet(onDismissRequest = onDone, containerColor = Palette.cardHigh) {
-        GoogleHealthContent(connected, problem, busy, sha1, onConnect, onDisconnect)
+        GoogleHealthContent(connected, heart, problem, busy, sha1, onConnect, onAllowHeart, onDisconnect)
     }
 }
 
-/** The sheet's content: status, Connect / Disconnect, and the setup steps. */
+/** The sheet's content: status, Connect / Disconnect (and, once connected, heart rate), and the setup steps. */
 @Composable
 fun GoogleHealthContent(
     connected: Boolean,
+    heart: Boolean,
     problem: String?,
     busy: Boolean,
     sha1: String?,
     onConnect: () -> Unit,
+    onAllowHeart: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -109,6 +116,16 @@ fun GoogleHealthContent(
         }
         problem?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Palette.error) }
         if (connected) {
+            if (heart) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = Palette.accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.gh_heart_on), style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+                }
+            } else {
+                Text(stringResource(R.string.gh_heart_body), style = MaterialTheme.typography.bodyMedium, color = Palette.text)
+                PrimaryButton(stringResource(if (busy) R.string.gh_connecting else R.string.gh_heart_allow), { if (!busy) onAllowHeart() })
+            }
             SoftButton(stringResource(R.string.gh_disconnect), onDisconnect)
         } else {
             PrimaryButton(stringResource(if (busy) R.string.gh_connecting else R.string.gh_connect), { if (!busy) onConnect() })

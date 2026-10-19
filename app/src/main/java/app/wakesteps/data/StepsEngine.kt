@@ -8,6 +8,7 @@ import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepNights
 import app.wakesteps.core.SleepSession
 import app.wakesteps.core.SleepSpan
+import app.wakesteps.core.SoundSleeps
 import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -167,6 +168,52 @@ class StepsEngine(
             val main = sessions.filter { it.end.atZone(zone).toLocalDate() == date }.maxByOrNull { Duration.between(it.start, it.end) }
             main?.let { date to SleepNights.build(SleepSpan(it.start, it.end), sessions) }
         }.toMap()
+
+    /**
+     * [nights] with their sound sleep measured from heart rate, where Google Health has the band's
+     * heart rate and the user has allowed it. Each night is worked out once and kept, except in its
+     * first half day, while its heart rate may still be arriving.
+     */
+    suspend fun withSoundSleep(settings: AppSettings, nights: List<SleepNight>): List<SleepNight> {
+        if (!settings.googleHealth || nights.none { it.staged }) return nights
+        val kept = prefs.soundSleeps()
+        val now = Instant.now()
+        val zone = ZoneId.systemDefault()
+        var token: String? = null
+        var asked = false
+        var resting: Map<LocalDate, Double>? = null
+        val fresh = mutableMapOf<Pair<Instant, Instant>, KeptSound>()
+        val out = nights.map { night ->
+            if (!night.staged) return@map night
+            val key = night.start to night.end
+            val known = kept[key]
+            if (known?.settled == true) return@map night.copy(sound = known.sound)
+            if (!asked) {
+                asked = true
+                token = google.heartToken()
+            }
+            val measured = token?.let { t ->
+                try {
+                    val heart = google.heartRate(t, night.start, night.end)
+                    val rates = resting ?: runCatching { google.restingHeartRates(t) }.getOrDefault(emptyMap()).also { resting = it }
+                    val day = night.end.atZone(zone).toLocalDate()
+                    SoundSleeps.of(night, heart, rates[day] ?: rates[day.minusDays(1)])
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (measured == null) return@map known?.let { night.copy(sound = it.sound) } ?: night
+            fresh[key] = KeptSound(measured, settled = night.end.isBefore(now.minus(Duration.ofHours(12))))
+            night.copy(sound = measured)
+        }
+        if (fresh.isNotEmpty()) prefs.keepSoundSleeps(fresh)
+        return out
+    }
+
+    /** Whether heart rate can be read: Google Health connected and heart rate allowed. */
+    suspend fun heartAllowed(settings: AppSettings): Boolean = settings.googleHealth && google.heartToken() != null
 
     /**
      * Sleep sessions overlapping [from]..[to]. Google Health has the band's stages; without it (or

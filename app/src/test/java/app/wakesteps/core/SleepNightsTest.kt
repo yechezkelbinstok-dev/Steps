@@ -46,7 +46,7 @@ class SleepNightsTest {
         assertEquals("restless counts as asleep", mins(445), n.asleep)
         assertEquals(mins(35), n.awake)
         assertEquals(445f / 480f, n.efficiency, 0.0001f)
-        assertEquals(mins(442), n.soundSleep)
+        assertEquals("without heart rate, deep and REM stand in", mins(189), n.soundSleep)
         assertEquals(mins(15), n.fellAsleepIn)
         assertEquals(mins(15), n.timeToSoundSleep)
         assertEquals("only the 10-minute one is a full awakening", 1, n.fullAwakenings)

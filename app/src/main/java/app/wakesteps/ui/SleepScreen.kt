@@ -555,7 +555,7 @@ private fun ScoreBar(parts: List<ScorePart>, modifier: Modifier) {
             val color = factorColor(part.factor)
             drawRoundRect(color.copy(alpha = 0.16f), Offset(x, 0f), Size(width, size.height), radius)
             val p = ((grow - i * stagger) / (1f - (parts.size - 1) * stagger)).coerceIn(0f, 1f)
-            val lit = width * part.quality * p
+            val lit = if (part.measured) width * part.quality * p else 0f
             if (lit > 0.5f) {
                 drawRoundRect(
                     Brush.horizontalGradient(listOf(color.copy(alpha = 0.7f), color), startX = x, endX = x + lit),
@@ -579,13 +579,18 @@ private fun FactorTile(part: ScorePart, delayMillis: Int, modifier: Modifier) {
             .border(1.dp, Brush.verticalGradient(listOf(color.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))), shape)
             .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val value = when (part.factor) {
-                ScoreFactor.FULL_AWAKENINGS -> AnnotatedString("${part.count}")
-                else -> durationText(part.minutes, 22f)
+        Row(Modifier.height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (part.measured) {
+                val value = when (part.factor) {
+                    ScoreFactor.FULL_AWAKENINGS -> AnnotatedString("${part.count}")
+                    else -> durationText(part.minutes, 22f)
+                }
+                Text(value, style = AppType.number(22f), color = Palette.text, maxLines = 1, modifier = Modifier.weight(1f))
+            } else {
+                // Sound sleep is measured from heart rate; until that's allowed, say so rather than guess.
+                Text(stringResource(R.string.score_needs_heart), style = MaterialTheme.typography.bodySmall, color = Palette.faint, maxLines = 1, modifier = Modifier.weight(1f))
             }
-            Text(value, style = AppType.number(22f), color = Palette.text, maxLines = 1, modifier = Modifier.weight(1f))
-            QualityRing(part.quality, color, 28.dp, delayMillis)
+            QualityRing(if (part.measured) part.quality else 0f, color, 28.dp, delayMillis)
         }
         Spacer(Modifier.height(6.dp))
         Text(

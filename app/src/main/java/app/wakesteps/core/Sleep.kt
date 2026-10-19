@@ -51,6 +51,8 @@ data class SleepNight(
     val interruptions: Duration,
     /** From lying down to falling asleep, when known. */
     val fellAsleepIn: Duration?,
+    /** Sound sleep measured from heart rate, once it's been read; see [soundSleep]. */
+    val sound: SoundSleep? = null,
 ) {
     val inBed: Duration get() = Duration.between(start, end)
 
@@ -65,12 +67,19 @@ data class SleepNight(
     /** Whether the tracker told deep, light and REM apart this night. */
     val staged: Boolean get() = stages.any { it.stage == SleepStage.DEEP || it.stage == SleepStage.LIGHT || it.stage == SleepStage.REM }
 
-    /** Steady sleep: light, deep and REM, without the restless moments. */
-    val soundSleep: Duration get() = time(SleepStage.LIGHT) + time(SleepStage.DEEP) + time(SleepStage.REM)
+    /** Whether [soundSleep] and [timeToSoundSleep] were measured from heart rate, the way Google measures them. */
+    val soundMeasured: Boolean get() = sound != null
 
-    /** From lying down to the first ten minutes of steady sleep. */
+    /**
+     * Steady, undisturbed sleep: measured from heart rate when it could be ([sound]); until then
+     * deep and REM stand in for it, which is in the same range.
+     */
+    val soundSleep: Duration get() = sound?.total ?: (time(SleepStage.DEEP) + time(SleepStage.REM))
+
+    /** From lying down to the first sound sleep: measured from heart rate when it could be; until then, the first ten minutes of uninterrupted sleep. */
     val timeToSoundSleep: Duration?
         get() {
+            sound?.let { return it.timeTo }
             if (!staged) return null
             var runStart: Instant? = null
             for (s in stages) {
