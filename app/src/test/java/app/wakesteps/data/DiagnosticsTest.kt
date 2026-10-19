@@ -42,7 +42,8 @@ class DiagnosticsTest {
         // Kept as a sample of the format, like the widget renders.
         File("build/diagnostics").apply { mkdirs() }.resolve("sample.txt").writeText(report)
 
-        for (section in listOf("== App ==", "== Settings ==", "== Health Connect ==", "== Google Health ==", "== Sync log")) {
+        val sections = listOf("== App ==", "== Settings ==", "== Health Connect ==", "== Google Health ==", "== Phone step counter ==", "== Sync log")
+        for (section in sections) {
             assertTrue("has $section", report.contains(section))
         }
         assertTrue("the widget's current steps", report.contains("4,321"))

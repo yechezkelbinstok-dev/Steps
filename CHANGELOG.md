@@ -6,6 +6,17 @@ one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.1
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9).
 
+## 1.12
+- Live steps between syncs. Your band only syncs now and then, so the phone's own step counter
+  fills the gap: the number shown is the band's total plus the steps the phone counted since the
+  band's newest data. When the band's next batch arrives, the count corrects itself to the band's.
+  The widget and Today tick up as you walk while the screen is on, and Today's freshness pill
+  shows the part from the phone ("6 min ago · +312"). Nothing is added once the day has ended.
+- Android asks once for "physical activity" access, from a card on Today. Say no and the card
+  goes away for good.
+- Settings → Diagnostics has a section for the phone's step counter, including what it counted
+  over the same window as the tracker, to compare.
+
 ## 1.11
 - Settings → Diagnostics: a troubleshooting report to copy or share. It reads Health Connect and
   Google Health live, side by side (steps, calories and distance, plus the newest step each one

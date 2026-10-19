@@ -69,6 +69,8 @@ fun TodayScreen(
     onShowSyncLog: () -> Unit,
     bottomPadding: Dp,
     chartSelection: Int? = null,
+    /** Steps the phone counted since the tracker's newest data, added on top of its total. */
+    liveSteps: Long = 0,
 ) {
     val today = state.today
     Column(
@@ -79,11 +81,11 @@ fun TodayScreen(
             .padding(top = 12.dp, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Header(today?.now ?: Instant.now(), today?.latestDataAt, onShowSyncLog, Modifier.entrance(0))
-        AccessPrompts(state.access, actions)
+        Header(today?.now ?: Instant.now(), today?.latestDataAt, liveSteps, onShowSyncLog, Modifier.entrance(0))
+        AccessPrompts(state.access, state.liveStepsPrompt, actions)
         state.error?.let { ErrorNote(it) }
         if (today != null) {
-            Hero(today.totals.steps, settings.goal, today.window, today.now, onAdjust, Modifier.entrance(1))
+            Hero(today.totals.steps + liveSteps, settings.goal, today.window, today.now, onAdjust, Modifier.entrance(1))
             Metrics(today.totals, settings, Modifier.entrance(2))
             if (today.hourly.isNotEmpty()) {
                 HourlyPanel(today.hourly, settings.goal, ongoing = today.window.isOngoing, Modifier.entrance(3), chartSelection)
@@ -95,20 +97,23 @@ fun TodayScreen(
 
 /** Today's date, the title, and how fresh the tracker data is (tap for the sync log). */
 @Composable
-private fun Header(now: Instant, latest: Instant?, onShowSyncLog: () -> Unit, modifier: Modifier) {
+private fun Header(now: Instant, latest: Instant?, live: Long, onShowSyncLog: () -> Unit, modifier: Modifier) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
             Eyebrow(DateTimeFormatter.ofPattern("EEEE, MMM d").format(now.atZone(ZoneId.systemDefault())))
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.tab_today), style = AppType.title, color = Palette.text)
         }
-        if (latest != null) SyncPill(latest, now, onShowSyncLog)
+        if (latest != null) SyncPill(latest, now, live, onShowSyncLog)
     }
 }
 
-/** "● 6 min ago": the dot breathes while the data is fresh. */
+/**
+ * "● 6 min ago": the dot breathes while the data is fresh. With steps from the phone on top of
+ * the tracker's: "● 6 min ago · +312".
+ */
 @Composable
-private fun SyncPill(latest: Instant, now: Instant, onClick: () -> Unit) {
+private fun SyncPill(latest: Instant, now: Instant, live: Long, onClick: () -> Unit) {
     val fresh = Duration.between(latest, now) < Duration.ofMinutes(30)
     val pulse = if (!fresh || LocalSnapAnimations.current) 1f else {
         val t by rememberInfiniteTransition(label = "sync").animateFloat(
@@ -137,11 +142,15 @@ private fun SyncPill(latest: Instant, now: Instant, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(8.dp))
         Text(Format.ago(latest, now), style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+        if (live > 0) {
+            Text(" \u00b7 ", style = MaterialTheme.typography.labelMedium, color = Palette.faint)
+            Text("+${Format.number(live)}", style = MaterialTheme.typography.labelMedium, color = Palette.accent)
+        }
     }
 }
 
 @Composable
-private fun AccessPrompts(access: Access, actions: Actions) {
+private fun AccessPrompts(access: Access, liveStepsPrompt: Boolean, actions: Actions) {
     when (access) {
         is Access.Unavailable -> ActionCard(
             title = stringResource(R.string.hc_missing_title),
@@ -170,6 +179,14 @@ private fun AccessPrompts(access: Access, actions: Actions) {
                     body = stringResource(R.string.bg_body),
                     button = stringResource(R.string.perm_grant),
                     onClick = actions.requestBackground,
+                )
+            }
+            if (liveStepsPrompt) {
+                ActionCard(
+                    title = stringResource(R.string.live_title),
+                    body = stringResource(R.string.live_body),
+                    button = stringResource(R.string.live_allow),
+                    onClick = actions.requestLiveSteps,
                 )
             }
         }

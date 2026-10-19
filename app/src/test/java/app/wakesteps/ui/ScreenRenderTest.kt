@@ -92,6 +92,10 @@ class ScreenRenderTest {
         val settings = AppSettings()
         val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
         render("today", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom) }
+        render("today_live", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom, liveSteps = 312) }
+        render("today_prompt", settings, Tab.TODAY) {
+            TodayScreen(state.copy(liveStepsPrompt = true), settings, actions, {}, {}, bottom)
+        }
         render("goal", settings, Tab.TODAY) { TodayScreen(state.copy(today = today(13400)), settings, actions, {}, {}, bottom) }
         render("scrub", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom, chartSelection = 7) }
         render("history", settings, Tab.HISTORY) { HistoryScreen(state, settings, Overrides.NONE, {}, bottom, chartSelection = 3) }

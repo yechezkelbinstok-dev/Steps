@@ -104,6 +104,8 @@ class Prefs(private val context: Context) {
         val widgetStyle = stringPreferencesKey("widget_style")
         val googleHealth = booleanPreferencesKey("google_health")
         val googleHealthError = stringPreferencesKey("google_health_error")
+        /** The user said no to the phone's step counter, so stop offering it. */
+        val liveStepsDeclined = booleanPreferencesKey("live_steps_declined")
 
         val snapSteps = longPreferencesKey("snap_steps")
         val snapCalories = doublePreferencesKey("snap_calories")
@@ -158,6 +160,12 @@ class Prefs(private val context: Context) {
 
     /** The recorded Google Health error as it stands now (for diagnostics). */
     suspend fun googleHealthErrorNow(): String? = googleHealthError.first()
+
+    suspend fun liveStepsDeclined(): Boolean = context.dataStore.data.first()[K.liveStepsDeclined] ?: false
+
+    suspend fun declineLiveSteps() {
+        context.dataStore.edit { it[K.liveStepsDeclined] = true }
+    }
 
     suspend fun setGoogleHealthError(message: String?) {
         context.dataStore.edit { p -> if (message == null) p.remove(K.googleHealthError) else p[K.googleHealthError] = message }

@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -86,8 +87,11 @@ class StepsWidget : GlanceAppWidget() {
             val snapshot by app.prefs.snapshot.collectAsState(initialSnapshot)
             val settings by app.prefs.settings.collectAsState(initialSettings)
             val refreshing by WidgetRefresh.running.collectAsState()
+            // The phone's steps since the tracker's newest data, added on top until it syncs.
+            val phoneCount by app.phoneSteps.latest.collectAsState()
+            val extra = remember(snapshot, phoneCount) { app.phoneSteps.extraFor(snapshot) }
             CompositionLocalProvider(LocalPalette provides WidgetPalette(context, settings.widgetStyle)) {
-                WidgetBody(snapshot, settings, refreshing)
+                WidgetBody(snapshot, settings, refreshing, extra)
             }
         }
     }
@@ -135,7 +139,7 @@ private val Display = FontFamily("google-sans")
 private val Body = FontFamily("google-sans-text")
 
 @Composable
-private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings, refreshing: Boolean) {
+private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings, refreshing: Boolean, extra: Long) {
     val size = LocalSize.current
     Box(
         modifier = GlanceModifier
@@ -156,7 +160,7 @@ private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings, refreshing: B
             modifier = GlanceModifier.fillMaxSize(),
         )
         Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Content(snapshot, settings, size, refreshing)
+            Content(snapshot, settings, size, refreshing, extra)
         }
         // The two-row layouts all leave the top-right corner free for it; the strips place it themselves.
         if (snapshot != null && size.height >= TALL_HEIGHT) {
@@ -168,7 +172,7 @@ private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings, refreshing: B
 }
 
 @Composable
-private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize, refreshing: Boolean) {
+private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize, refreshing: Boolean, extra: Long) {
     val context = LocalContext.current
     if (snapshot == null) {
         Text(
@@ -178,7 +182,7 @@ private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize, re
         )
         return
     }
-    val m = WidgetModel(context, snapshot, settings, Palette, refreshing)
+    val m = WidgetModel(context, snapshot, settings, Palette, refreshing, extra)
     val wide = size.width >= WIDE_WIDTH
     val tall = size.height >= TALL_HEIGHT
     when {
@@ -198,13 +202,16 @@ private class WidgetModel(
     palette: WidgetPalette,
     /** A tap on the refresh button is being handled. */
     val refreshing: Boolean,
+    /** Steps the phone counted that the tracker hasn't reported yet. */
+    extra: Long,
 ) {
-    private val pct = (s.totals.steps * 100 / settings.goal.coerceAtLeast(1)).toInt()
+    private val total = s.totals.steps + extra
+    private val pct = (total * 100 / settings.goal.coerceAtLeast(1)).toInt()
     val ringPercent = pct.coerceIn(0, 100)
     val goalReached = pct >= 100
     /** Past the goal, how far round the current extra lap is (1..100), drawn over the full ring. */
     val lapPercent = if (pct > 100) (pct - 1) % 100 + 1 else 0
-    val steps = Format.number(s.totals.steps)
+    val steps = Format.number(total)
     val error = s.error
     val calories: Stat? = s.totals.calories?.let {
         Stat(

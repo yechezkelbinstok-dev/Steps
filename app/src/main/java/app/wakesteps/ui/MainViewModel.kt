@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
@@ -55,6 +56,8 @@ data class UiState(
     /** Midnight-to-midnight totals, for comparing with the Fitbit / Google app. */
     val calendar: List<CalendarDay> = emptyList(),
     val error: String? = null,
+    /** Offer the phone's step counter: it has one, and the user hasn't answered yet. */
+    val liveStepsPrompt: Boolean = false,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -72,6 +75,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val syncLog: StateFlow<List<SyncEvent>> =
         app.prefs.syncLog.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Steps the phone counted since the tracker's newest data, shown on top of its total. */
+    val liveSteps: StateFlow<Long> =
+        combine(app.prefs.snapshot, app.phoneSteps.latest) { snapshot, _ -> app.phoneSteps.extraFor(snapshot) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
     private var reloadJob: Job? = null
 
@@ -100,7 +108,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         reloadJob = viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             val access = checkAccess()
-            _state.update { it.copy(access = access) }
+            _state.update { it.copy(access = access, liveStepsPrompt = liveStepsPrompt()) }
             if (access !is Access.Ready) {
                 _state.update { it.copy(loading = false) }
                 return@launch
@@ -121,6 +129,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = e.message ?: e.javaClass.simpleName) }
             }
+        }
+    }
+
+    /** Starts the phone's step counter if allowed; otherwise whether to offer it. */
+    private suspend fun liveStepsPrompt(): Boolean {
+        val phone = app.phoneSteps
+        if (phone.hasPermission()) {
+            phone.start()
+            return false
+        }
+        return phone.available && !app.prefs.liveStepsDeclined()
+    }
+
+    /** The answer to Android's "physical activity" question. */
+    fun liveStepsAnswered(granted: Boolean) {
+        viewModelScope.launch {
+            if (granted) app.phoneSteps.start() else app.prefs.declineLiveSteps()
+            _state.update { it.copy(liveStepsPrompt = false) }
         }
     }
 

@@ -115,6 +115,9 @@
     <string name="set_open_hc">Health Connect</string>
     <string name="app_version">Awake Steps %1$s</string>
     <string name="sync_log_open">Sync log</string>
+    <string name="live_title">Count steps between syncs</string>
+    <string name="live_body">Your band only syncs now and then. Let the phone fill in the steps since its last sync, and the band\'s own count takes over when it arrives.</string>
+    <string name="live_allow">Allow</string>
     <string name="diag_row">Diagnostics</string>
     <string name="diag_eyebrow">Troubleshooting</string>
     <string name="diag_title">Diagnostics</string>

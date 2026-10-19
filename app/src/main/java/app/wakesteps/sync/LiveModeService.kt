@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import app.wakesteps.R
 import app.wakesteps.app
 import app.wakesteps.ui.MainActivity
+import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,8 +34,9 @@ import java.time.Instant
 /**
  * Live refresh: re-reads Health Connect the moment the screen turns on (so the widget is current
  * when you look at it), then watches for new data every few seconds while it stays on, in Health
- * Connect and, when it's connected, Google Health.
- * Does nothing while the screen is off.
+ * Connect and, when it's connected, Google Health. While the screen is on it also redraws the
+ * widget as the phone counts steps (see [app.wakesteps.data.PhoneSteps]).
+ * Apart from keeping the phone's step counter subscribed, it does nothing while the screen is off.
  *
  * Android requires a notification for any long-running service, but this app never asks for
  * notification permission, so on Android 13+ the notification is never shown. The service only
@@ -64,6 +66,8 @@ class LiveModeService : Service() {
             addAction(Intent.ACTION_USER_PRESENT)
         }
         ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // Listen to the phone's step counter for as long as the service runs, screen on or off.
+        app.phoneSteps.start()
         if (getSystemService(PowerManager::class.java).isInteractive) startLoop()
     }
 
@@ -77,7 +81,10 @@ class LiveModeService : Service() {
      */
     private fun startLoop() {
         if (loop?.isActive == true) return
+        app.phoneSteps.start() // in case access was granted since the service started
+        app.phoneSteps.flush() // readings the counter held while the screen was off
         loop = scope.launch {
+            launch { followPhoneSteps() }
             val health = app.health
             var token: String? = null
             var tokenSource: String? = null
@@ -107,6 +114,20 @@ class LiveModeService : Service() {
                 // Back off if Health Connect pushed back (e.g. rate limiting).
                 delay(if (failed) BACKOFF_MS else POLL_MS)
             }
+        }
+    }
+
+    /** Redraws the widget as the phone counts steps, at most every [LIVE_REDRAW_MS]. */
+    private suspend fun followPhoneSteps() {
+        var shown = -1L
+        // A StateFlow hands a slow collector only the newest reading, so this never falls behind.
+        app.phoneSteps.latest.collect {
+            val extra = app.phoneSteps.extraFor(app.prefs.currentSnapshot())
+            if (extra != shown) {
+                shown = extra
+                WidgetPusher.pushAll(app)
+            }
+            delay(LIVE_REDRAW_MS)
         }
     }
 
@@ -155,6 +176,7 @@ class LiveModeService : Service() {
         private const val POLL_MS = 15_000L
         private const val FULL_REFRESH_MS = 5 * 60_000L
         private const val BACKOFF_MS = 2 * 60_000L
+        private const val LIVE_REDRAW_MS = 2_000L
 
         fun createChannel(context: Context) {
             val nm = context.getSystemService(NotificationManager::class.java)

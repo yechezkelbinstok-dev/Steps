@@ -35,6 +35,7 @@ object Diagnostics {
             settingsInfo(settings)
             val window = healthConnect(app, settings, now)
             googleHealth(app, settings, window, now)
+            phoneCounter(app, window, now)
             syncLog(app)
         }
     }
@@ -131,6 +132,24 @@ object Diagnostics {
         val latest = probe { google.latestStepTime(token, now.minus(Duration.ofHours(6)), now) }
         line("  newest step", latest.fold({ it?.let { t -> at(t, now) } ?: "none in the last 6 h" }, { "failed — ${reason(it)}" }))
         line("Last error", probe { app.prefs.googleHealthErrorNow() }.getOrNull())
+    }
+
+    /** The phone's own step counter, which fills in the steps since the tracker's newest data. */
+    private suspend fun StringBuilder.phoneCounter(app: WakeStepsApp, window: Window, now: Instant) {
+        section("Phone step counter")
+        val phone = app.phoneSteps
+        if (!phone.available) {
+            appendLine("This phone has no step counter.")
+            return
+        }
+        line("Permission", if (phone.hasPermission()) "granted" else "no")
+        line("Listening", if (phone.listening) "yes" else "no")
+        line("Readings kept", phone.readings().toString())
+        line("Newest reading", phone.newestReading()?.let { "${Format.number(it.count)} since boot, ${at(it.at, now)}" })
+        // What the phone counted over the same window as the live reads above, to compare.
+        line("Steps in day window", phone.stepsSince(window.start)?.let { Format.number(it) })
+        val snapshot = probe { app.prefs.currentSnapshot() }.getOrNull()
+        line("Added on top now", "+" + Format.number(phone.extraFor(snapshot)))
     }
 
     private suspend fun StringBuilder.syncLog(app: WakeStepsApp) {

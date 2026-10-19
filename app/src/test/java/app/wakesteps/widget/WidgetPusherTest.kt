@@ -28,6 +28,7 @@ class WidgetPusherTest {
 
     @Test
     fun pushDrawsLatestSnapshotOnPlacedWidget() = runBlocking {
+        org.robolectric.shadows.ShadowLog.stream = System.out // so a failed redraw shows why
         val app = ApplicationProvider.getApplicationContext<WakeStepsApp>()
         val shadow = shadowOf(AppWidgetManager.getInstance(app))
         // Place a widget the way a launcher would, with its provider info bound.

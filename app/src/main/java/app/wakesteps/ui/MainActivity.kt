@@ -1,6 +1,8 @@
 package app.wakesteps.ui
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
@@ -126,6 +128,7 @@ private fun App(vm: MainViewModel) {
         vm.googleConsentResult(it.data)
     }
     val syncLog by vm.syncLog.collectAsStateWithLifecycle()
+    val liveSteps by vm.liveSteps.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
     // Only show the pull-to-refresh spinner for a pull, not for the automatic reloads.
     var pulled by remember { mutableStateOf(false) }
@@ -137,6 +140,9 @@ private fun App(vm: MainViewModel) {
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { vm.reload() }
+    val activityLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        vm.liveStepsAnswered(it)
+    }
 
     val activity = LocalActivity.current as MainActivity
     val actions = Actions(
@@ -144,6 +150,9 @@ private fun App(vm: MainViewModel) {
         installHealthConnect = activity::installHealthConnect,
         requestCore = { permissionLauncher.launch(vm.permissionsToRequest()) },
         requestBackground = { permissionLauncher.launch(vm.backgroundPermission()) },
+        requestLiveSteps = {
+            if (Build.VERSION.SDK_INT >= 29) activityLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        },
     )
 
     var openDay by remember { mutableStateOf<DaySummary?>(null) }
@@ -184,6 +193,7 @@ private fun App(vm: MainViewModel) {
                     Tab.TODAY -> TodayScreen(
                         state, settings, actions,
                         onAdjust = { adjusting = it }, onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
+                        liveSteps = liveSteps,
                     )
                     Tab.HISTORY -> HistoryScreen(state, settings, overrides, onOpenDay = { openDay = it }, bottomPadding = bottom)
                     Tab.SETTINGS -> SettingsScreen(
@@ -293,4 +303,6 @@ class Actions(
     val installHealthConnect: () -> Unit,
     val requestCore: () -> Unit,
     val requestBackground: () -> Unit,
+    /** Asks for the phone's step counter ("physical activity"). */
+    val requestLiveSteps: () -> Unit = {},
 )
