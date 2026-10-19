@@ -4,9 +4,23 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.14.1
+- Restlessness and interruptions are counted the way Google counts them: a stretch of being awake
+  is taken whole, so a 4-minute wake-up running straight into a 2-minute stir is one 6-minute
+  interruption rather than two restless moments. (On Oct 18 the app had 45 minutes all restless;
+  Google split the same 45 into 35 restless and 10 of interruptions.)
+- What counts as sound sleep is learnt from Google's own figures: the 13 nights you sent from
+  Google Health's Coach (Sep 14 to Oct 19). Once heart rate is allowed, the app reads those nights'
+  heart rate once and picks the thresholds that come closest to Google's sound sleep and time to
+  sound sleep, then uses them for every night.
+- For those 13 nights, Behind the score shows Google's own time to sound sleep, sound sleep,
+  restlessness and interruptions.
+- Oct 19's score (72) is added to the ones the estimates learn from, and the estimates kept for
+  older nights are worked out again with the new measures.
 
 ## 1.14
 - Sound sleep is measured from your heart rate, the way Google measures it, instead of counting

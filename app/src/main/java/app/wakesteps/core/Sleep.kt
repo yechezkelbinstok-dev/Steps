@@ -135,9 +135,9 @@ object SleepNights {
     /**
      * The night spanning [span], put together from the tracker's [sessions] that overlap it:
      * stages clipped to the span, a gap between two sessions counted as awake, the tracker's
-     * brief stirs cut into the stages they interrupted as restless, any wake-up of [BRIEF] or less
-     * in the middle of the night counted as restless too, and neighbouring stretches of the same
-     * stage joined. Where sessions overlap (two apps recorded the same night), the one that
+     * brief stirs cut into the stages they interrupted, each stretch of wakefulness in the middle
+     * of the night restless if it lasted [BRIEF] or less and awake if longer, and neighbouring
+     * stretches of the same stage joined. Where sessions overlap (two apps recorded the same night), the one that
      * started first wins.
      */
     fun build(span: SleepSpan, sessions: List<SleepSession>): SleepNight {
@@ -161,13 +161,7 @@ object SleepNights {
             covered = maxOf(covered, to)
         }
         val stirs = overlapping.flatMap { it.shortAwakenings }.filter { it.end > start && it.start < end }
-        val marked = joined(withRestless(joined(pieces), stirs))
-        val stages = joined(
-            marked.mapIndexed { i, s ->
-                val inMiddle = i != 0 && i != marked.lastIndex
-                if (s.stage == SleepStage.AWAKE && inMiddle && s.duration <= BRIEF) s.copy(stage = SleepStage.RESTLESS) else s
-            }
-        )
+        val stages = joined(byWakefulness(joined(withRestless(joined(pieces), stirs))))
         val wakeUps = stages.drop(1).dropLast(1).filter { it.stage == SleepStage.AWAKE }
         val anyStages = overlapping.any { it.stages.isNotEmpty() }
         val fellAsleepIn = if (anyStages) {
@@ -183,6 +177,34 @@ object SleepNights {
             fellAsleepIn = fellAsleepIn,
         )
     }
+
+    /**
+     * Each stretch of wakefulness taken whole, the way Google counts it: awake and restless spans
+     * back to back are one stretch, and a stretch over [BRIEF] is waking up (all of it awake), any
+     * shorter one restless. So a 4-minute wake-up running into a 2-minute stir is a 6-minute
+     * interruption, not two restless moments. The first and last stay awake: falling asleep and
+     * getting up.
+     */
+    private fun byWakefulness(timeline: List<StageSpan>): List<StageSpan> {
+        val out = timeline.toMutableList()
+        var i = 0
+        while (i < out.size) {
+            if (out[i].stage !in WAKEFUL) {
+                i++
+                continue
+            }
+            var j = i
+            while (j + 1 < out.size && out[j + 1].stage in WAKEFUL && out[j + 1].start == out[j].end) j++
+            val edge = i == 0 || j == out.lastIndex
+            val long = Duration.between(out[i].start, out[j].end) > BRIEF
+            val stage = if (edge || long) SleepStage.AWAKE else SleepStage.RESTLESS
+            for (k in i..j) out[k] = out[k].copy(stage = stage)
+            i = j + 1
+        }
+        return out
+    }
+
+    private val WAKEFUL = setOf(SleepStage.AWAKE, SleepStage.RESTLESS)
 
     /** [timeline] with the [stirs] cut into whatever sleep they interrupted, as restless. */
     private fun withRestless(timeline: List<StageSpan>, stirs: List<StageSpan>): List<StageSpan> {

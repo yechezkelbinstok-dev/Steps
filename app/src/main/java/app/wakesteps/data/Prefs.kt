@@ -17,6 +17,7 @@ import app.wakesteps.core.StartReason
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import app.wakesteps.core.SoundRules
 import app.wakesteps.core.SoundSleep
 import java.time.Duration
 import java.time.Instant
@@ -122,6 +123,8 @@ private val SEED_SCORES = mapOf(
     LocalDate.of(2026, 9, 16) to 84,
     LocalDate.of(2026, 9, 15) to 66,
     LocalDate.of(2026, 9, 14) to 77,
+    // The third, from Google Health's Coach.
+    LocalDate.of(2026, 10, 19) to 72,
 )
 
 /** The first batch, which 1.12 marked as added with a single flag. */
@@ -189,6 +192,9 @@ class Prefs(private val context: Context) {
 
         /** Newline-separated "<night start s>|<night end s>|<sound min>|<time to sound min or empty>|<1 if settled>". */
         val soundSleeps = stringPreferencesKey("sound_sleeps")
+
+        /** The sound-sleep rules learnt from Google's figures: "<offset>|<steady>|<stretch>|<1 if capped>|<which nights>". */
+        val soundRules = stringPreferencesKey("sound_rules")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -259,6 +265,21 @@ class Prefs(private val context: Context) {
             val (entries, dates) = withSeedScores(parseScores(p[K.sleepScores]), added, p[K.scoresSeeded] == true) ?: return@edit
             p[K.sleepScores] = formatScores(entries)
             p[K.seededScoreDates] = dates.sorted().joinToString(",")
+        }
+    }
+
+    /** The sound-sleep rules learnt from the nights in [signature], if they've been learnt. */
+    suspend fun soundRules(signature: String): SoundRules? {
+        val f = context.dataStore.data.first()[K.soundRules]?.split('|') ?: return null
+        if (f.getOrNull(4) != signature) return null
+        return runCatching { SoundRules(f[0].toDouble(), f[1].toDouble(), f[2].toInt(), f[3] == "1") }.getOrNull()
+    }
+
+    /** Keeps newly learnt rules, and forgets the nights worked out by the old ones, to be worked out again. */
+    suspend fun keepSoundRules(rules: SoundRules, signature: String) {
+        context.dataStore.edit { p ->
+            p[K.soundRules] = "${rules.lowOffset}|${rules.steadyBpm}|${rules.minStretch}|${if (rules.capAtMiddle) 1 else 0}|$signature"
+            p.remove(K.soundSleeps)
         }
     }
 

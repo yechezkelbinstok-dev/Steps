@@ -43,23 +43,28 @@ object SleepScore {
      * Bumped whenever the estimates change meaning (2: sound sleep from heart rate), so the
      * estimates kept beside entered scores are worked out again rather than learnt from as they were.
      */
-    const val MODEL = 2
+    const val MODEL = 3
 
-    fun parts(night: SleepNight): List<ScorePart>? {
+    /**
+     * How each factor went. With [google]'s own figures for the night, those stand in for the
+     * app's measures (to show them as Google has them); the estimate always uses the app's own.
+     */
+    fun parts(night: SleepNight, google: GoogleFigures? = null): List<ScorePart>? {
         if (!night.staged) return null
         val asleep = night.asleep.toMinutes()
-        val sound = night.soundSleep.toMinutes()
-        val toSound = (night.timeToSoundSleep ?: night.inBed).toMinutes()
-        val restless = night.time(SleepStage.RESTLESS).toMinutes()
+        val sound = (google?.sound ?: night.soundSleep).toMinutes()
+        val toSound = (google?.timeToSound ?: night.timeToSoundSleep ?: night.inBed).toMinutes()
+        val restless = (google?.restlessness ?: night.time(SleepStage.RESTLESS)).toMinutes()
         val awakenings = night.fullAwakenings
-        val interrupted = night.interruptions.toMinutes()
+        val interrupted = (google?.interruptions ?: night.interruptions).toMinutes()
+        val measured = google != null || night.soundMeasured
         return listOf(
             // 3 hours earns nothing, 8½ hours full marks.
             ScorePart(ScoreFactor.DURATION, asleep, 0, ramp(asleep, 180, 510)),
             // Within 5 minutes is ideal; 45 or more earns nothing.
-            ScorePart(ScoreFactor.TIME_TO_SOUND_SLEEP, toSound, 0, 1f - ramp(toSound, 5, 45), night.soundMeasured),
+            ScorePart(ScoreFactor.TIME_TO_SOUND_SLEEP, toSound, 0, 1f - ramp(toSound, 5, 45), measured),
             // An hour earns nothing, four full marks.
-            ScorePart(ScoreFactor.SOUND_SLEEP, sound, 0, ramp(sound, 60, 240), night.soundMeasured),
+            ScorePart(ScoreFactor.SOUND_SLEEP, sound, 0, ramp(sound, 60, 240), measured),
             // As a share of the night: none is ideal, 15% earns nothing.
             ScorePart(ScoreFactor.RESTLESSNESS, restless, night.restlessMoments, 1f - (restless.toFloat() / asleep.coerceAtLeast(1) / 0.15f).coerceIn(0f, 1f)),
             // "Zero is ideal, but fewer than two is considered good for most people."

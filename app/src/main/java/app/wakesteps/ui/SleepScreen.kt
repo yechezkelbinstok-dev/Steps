@@ -99,6 +99,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.wakesteps.R
 import app.wakesteps.core.Format
+import app.wakesteps.core.GoogleFigures
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.ScoreFactor
 import app.wakesteps.core.ScorePart
@@ -1228,7 +1229,7 @@ private fun NightContent(
     val display = night.counted(restlessAsAwake)
     SleepHero(display, score, onEditScore, Modifier.entrance(first), ringSize)
     if (display.stages.size > 1) NightChart(display, Modifier.entrance(first + 1), chartMinute, onOpen = { onExplore(night) })
-    SleepScore.parts(night)?.let { ScoreFactors(it, Modifier.entrance(first + 2)) }
+    SleepScore.parts(night, GoogleFigures.KNOWN[night.wakeDate()])?.let { ScoreFactors(it, Modifier.entrance(first + 2)) }
     if (!display.staged) {
         Text(
             stringResource(R.string.sleep_no_stages),

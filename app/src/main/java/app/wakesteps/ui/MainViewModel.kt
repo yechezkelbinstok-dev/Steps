@@ -14,6 +14,7 @@ import app.wakesteps.core.Overrides
 import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepScore
 import app.wakesteps.core.SleepSpan
+import app.wakesteps.core.SoundRules
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalendarDay
 import app.wakesteps.data.DaySummary
@@ -193,7 +194,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(nights = read, nightsLoaded = true) }
         // Sound sleep from heart rate fills in once it's read (a read for each night not yet worked out).
         _googleHeart.value = app.engine.heartAllowed(s)
-        val nights = app.engine.withSoundSleep(s, read)
+        // What counts as sound is learnt from Google's own figures, once.
+        val rules = if (_googleHeart.value) app.engine.soundRules(s, read.associateBy { it.wakeDate() }) else SoundRules.DEFAULT
+        val nights = app.engine.withSoundSleep(s, read, rules)
         if (nights != read) _state.update { it.copy(nights = nights) }
         // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
         app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
@@ -203,7 +206,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val older = app.prefs.sleepScores.first().values.filter { it.estimate == null && it.date !in shown }.map { it.date }.toSet()
             if (older.isNotEmpty()) {
                 val found = app.engine.nightsEndingOn(s, older).entries.toList()
-                val measured = app.engine.withSoundSleep(s, found.map { it.value })
+                val measured = app.engine.withSoundSleep(s, found.map { it.value }, rules)
                 app.prefs.noteEstimates(
                     found.zip(measured).mapNotNull { (e, n) -> SleepScore.estimate(n)?.let { e.key to it } }.toMap()
                 )

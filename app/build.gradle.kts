@@ -16,8 +16,8 @@ android {
         // patch (1.12.1). versionCode is the version with two digits for minor and patch (1.12.1 ->
         // 11201, 1.13 -> 11300), so the two always match and every release installs over the
         // previous one. Before 1.12.1 it was major * 100 + minor (1.12 -> 112); before 1.4, 1-6.
-        versionName = "1.14"
-        versionCode = 11400
+        versionName = "1.14.1"
+        versionCode = 11401
     }
 
     signingConfigs {

@@ -105,12 +105,14 @@ from Health Connect.
   offset, then a line held close to 1:1, from the latest 30). Like Google, no score for a night
   without stages.
 * **Sound sleep** is measured the way Google describes it, from heart rate: the stretches of
-  light, deep or REM sleep with a low, steady heart rate (at or under the day's resting rate and
-  the night's own middle rate, within 4 beats a minute across five minutes, lasting five minutes
-  or more). Time to sound sleep runs to the first of them. Google doesn't publish its thresholds,
-  so these are the app's. Without heart rate (Google Health not connected, or heart rate not
+  light, deep or REM sleep with a low, steady heart rate. Time to sound sleep runs to the first
+  of them. Google doesn't publish its thresholds, so the app learns them from nights where it has
+  Google's own figures (sent over from Google Health's Coach), starting from: at or under the
+  day's resting rate and the night's own middle rate, within 4 beats a minute across five
+  minutes, lasting five minutes or more. Without heart rate (Google Health not connected, or heart rate not
   allowed) the two show "needs heart rate", and the estimate uses deep and REM in their place.
-* **Restless moments** are brief stirs of 5 minutes or less, counted as asleep the way Google
+* **Restless moments** are stretches of being awake of 5 minutes or less (a stretch taken whole,
+  however many pieces the band recorded it in), counted as asleep the way Google
   counts them, and shown as their own category. Longer wake-ups are full awakenings. Settings →
   Restless moments → Count as awake counts them as awake time instead (the score is unchanged:
   it's Google's, so it uses Google's rules).

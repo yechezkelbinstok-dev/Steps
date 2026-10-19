@@ -8,9 +8,13 @@ import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepNights
 import app.wakesteps.core.SleepSession
 import app.wakesteps.core.SleepSpan
+import app.wakesteps.core.GoogleFigures
+import app.wakesteps.core.SoundRules
 import app.wakesteps.core.SoundSleeps
 import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Duration
@@ -174,7 +178,7 @@ class StepsEngine(
      * heart rate and the user has allowed it. Each night is worked out once and kept, except in its
      * first half day, while its heart rate may still be arriving.
      */
-    suspend fun withSoundSleep(settings: AppSettings, nights: List<SleepNight>): List<SleepNight> {
+    suspend fun withSoundSleep(settings: AppSettings, nights: List<SleepNight>, rules: SoundRules): List<SleepNight> {
         if (!settings.googleHealth || nights.none { it.staged }) return nights
         val kept = prefs.soundSleeps()
         val now = Instant.now()
@@ -197,7 +201,7 @@ class StepsEngine(
                     val heart = google.heartRate(t, night.start, night.end)
                     val rates = resting ?: runCatching { google.restingHeartRates(t) }.getOrDefault(emptyMap()).also { resting = it }
                     val day = night.end.atZone(zone).toLocalDate()
-                    SoundSleeps.of(night, heart, rates[day] ?: rates[day.minusDays(1)])
+                    SoundSleeps.of(night, heart, rates[day] ?: rates[day.minusDays(1)], rules)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -210,6 +214,34 @@ class StepsEngine(
         }
         if (fresh.isNotEmpty()) prefs.keepSoundSleeps(fresh)
         return out
+    }
+
+    /**
+     * What counts as sound sleep, learnt once from the nights Google's own figures are known for
+     * ([GoogleFigures.KNOWN]) and their heart rate; the defaults until heart rate can be read.
+     * [loaded] are the nights already read, by the morning they ended; the others are read here.
+     */
+    suspend fun soundRules(settings: AppSettings, loaded: Map<LocalDate, SleepNight>): SoundRules {
+        val signature = GoogleFigures.KNOWN.keys.sorted().joinToString(",")
+        prefs.soundRules(signature)?.let { return it }
+        if (!settings.googleHealth) return SoundRules.DEFAULT
+        val token = google.heartToken() ?: return SoundRules.DEFAULT
+        val nights = loaded + nightsEndingOn(settings, GoogleFigures.KNOWN.keys.filter { it !in loaded }.toSet())
+        val resting = runCatching { google.restingHeartRates(token) }.getOrDefault(emptyMap())
+        val examples = GoogleFigures.KNOWN.mapNotNull { (date, figures) ->
+            val night = nights[date] ?: return@mapNotNull null
+            val heart = try {
+                google.heartRate(token, night.start, night.end)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@mapNotNull null
+            }
+            SoundSleeps.prepare(night, heart, resting[date] ?: resting[date.minusDays(1)])?.let { it to figures }
+        }
+        if (examples.size < 3) return SoundRules.DEFAULT
+        // Several hundred trial rules over each night: off the main thread.
+        return withContext(Dispatchers.Default) { SoundSleeps.tune(examples) }.also { prefs.keepSoundRules(it, signature) }
     }
 
     /** Whether heart rate can be read: Google Health connected and heart rate allowed. */

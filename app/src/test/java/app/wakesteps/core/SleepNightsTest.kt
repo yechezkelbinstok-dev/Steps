@@ -100,6 +100,22 @@ class SleepNightsTest {
     }
 
     @Test
+    fun aStirRunningIntoAShortWakeUpMakesOneInterruption() {
+        // 4 minutes awake, then a 2-minute stir straight after: 6 minutes awake in all, as Google counts it.
+        val session = SleepSession(
+            at(0), at(200),
+            listOf(span(0, 100, SleepStage.LIGHT), span(100, 104, SleepStage.AWAKE), span(104, 200, SleepStage.LIGHT)),
+            shortAwakenings = listOf(span(104, 106, SleepStage.AWAKE), span(150, 151, SleepStage.AWAKE)),
+        )
+        val n = SleepNights.build(SleepSpan(at(0), at(200)), listOf(session))
+        assertEquals(span(100, 106, SleepStage.AWAKE), n.stages[1])
+        assertEquals(1, n.fullAwakenings)
+        assertEquals(mins(6), n.interruptions)
+        assertEquals("the lone stir later is still restless", 1, n.restlessMoments)
+        assertEquals(mins(1), n.time(SleepStage.RESTLESS))
+    }
+
+    @Test
     fun twoSessionsMakeOneNightWithTheGapAwake() {
         val first = SleepSession(at(0), at(180), listOf(span(0, 180, SleepStage.LIGHT)))
         val second = SleepSession(at(200), at(420), listOf(span(200, 420, SleepStage.DEEP)))

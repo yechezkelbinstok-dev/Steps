@@ -75,6 +75,18 @@ class SoundSleepTest {
     }
 
     @Test
+    fun theRulesAreLearntFromGooglesFigures() {
+        val heart = SoundSleeps.prepare(night(), heart(), resting = 60.0)!!
+        // Google counted the steady 56 of the last light sleep too: a little more lenient than the defaults.
+        val google = SoundSleeps.measure(heart, SoundRules(lowOffset = 1.0))
+        val figures = GoogleFigures(google.timeTo!!, google.total, Duration.ZERO, Duration.ZERO)
+        val learnt = SoundSleeps.tune(List(3) { heart to figures })
+        assertEquals(google, SoundSleeps.measure(heart, learnt))
+        // With too few nights to learn from, the defaults.
+        assertEquals(SoundRules.DEFAULT, SoundSleeps.tune(listOf(heart to figures)))
+    }
+
+    @Test
     fun theNightUsesItForSoundSleep() {
         val measured = night().copy(sound = SoundSleep(mins(126), mins(32)))
         assertEquals(mins(126), measured.soundSleep)
