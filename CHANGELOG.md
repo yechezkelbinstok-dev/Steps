@@ -11,10 +11,16 @@ labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not
 ## 1.13
 - The Hebrew date, in Hebrew, beside the date: on Today ("SATURDAY, OCT 17 · ו׳ חשון") and at the
   top of each day's and night's page. It's the Hebrew date of the day itself.
-- On the Sleep tab and each night's page, the chart through the night and the stages now come
-  right after the score, and what went into the score comes after them, redesigned: one bar made
-  of the six factors, each part as wide as that factor counts and filled as far as it went well,
-  then a tile for each with how it went and a small ring for how well.
+- The night and its stages are one panel now, right under the score: a row for each stage, named
+  with its time that night, and the night drawn across them.
+- Tap it to open the night up full screen and zoom in: pinch, double-tap, or use − and +, down to
+  a quarter of an hour across, with the times marked along the bottom. Drag a finger along it to
+  read the moment and stage under it. The whole night sits below it with the part in view framed;
+  drag along it to move, or tap to jump. Each row's time, and the stages ring under it, count just
+  what's in view.
+- What went into the score comes after, redesigned: one bar made of the six factors, each part as
+  wide as that factor counts and filled as far as it went well, then a tile for each with how it
+  went and a small ring for how well.
 - Fixed: sleep never actually came from Google Health. The app asked for it by when it started,
   but Google only finds sleep by when it ended, so every sleep read failed (the "Invalid data point
   filter" error under Settings → Google Health) and the app quietly used Health Connect's instead.

@@ -96,6 +96,17 @@ data class SleepNight(
     /** The stage at [t], if it's within the night. */
     fun stageAt(t: Instant): SleepStage? = stages.firstOrNull { !t.isBefore(it.start) && t.isBefore(it.end) }?.stage
 
+    /** Just the part of the night from [from] to [to], as a night of its own: for its time in each stage. */
+    fun within(from: Instant, to: Instant): SleepNight = copy(
+        start = from,
+        end = to,
+        stages = stages.mapNotNull { s ->
+            val a = maxOf(s.start, from)
+            val b = minOf(s.end, to)
+            if (b.isAfter(a)) s.copy(start = a, end = b) else null
+        },
+    )
+
     /**
      * The same night with restless moments counted as awake (a setting): they join the awake
      * time, and each one counts as waking up.

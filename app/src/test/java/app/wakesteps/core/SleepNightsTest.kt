@@ -62,6 +62,18 @@ class SleepNightsTest {
     }
 
     @Test
+    fun partOfTheNight() {
+        val n = SleepNights.build(SleepSpan(at(0), at(480)), listOf(night)).within(at(100), at(260))
+        assertEquals(mins(160), n.inBed)
+        assertEquals("light 100-120 and 250-260", mins(30), n.time(SleepStage.LIGHT))
+        assertEquals("deep 120-200, less the stir", mins(79), n.time(SleepStage.DEEP))
+        assertEquals(mins(1), n.time(SleepStage.RESTLESS))
+        assertEquals(mins(40), n.time(SleepStage.REM))
+        assertEquals(mins(10), n.time(SleepStage.AWAKE))
+        assertEquals(StageSpan(at(100), at(120), SleepStage.LIGHT), n.stages.first())
+    }
+
+    @Test
     fun restlessCanCountAsAwake() {
         val n = SleepNights.build(SleepSpan(at(0), at(480)), listOf(night)).restlessAsAwake()
         assertEquals(Duration.ZERO, n.time(SleepStage.RESTLESS))

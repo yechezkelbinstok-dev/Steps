@@ -195,10 +195,12 @@ class ScreenRenderTest {
         val nights = nights()
         val scores = scores(nights)
         val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history(), nights = nights, nightsLoaded = true)
-        render("sleep", settings, Tab.SLEEP) { SleepScreen(state, scores, false, {}, {}, bottom) }
-        render("sleep_touch", settings, Tab.SLEEP) { SleepScreen(state, scores, false, {}, {}, bottom, chartSelection = 4, chartMinute = 140) }
-        render("sleep_restless_awake", settings, Tab.SLEEP) { SleepScreen(state, scores, true, {}, {}, bottom) }
-        render("night", settings, Tab.SLEEP) { NightDetail(nights[3], scores[nights[3].wakeDate()], false, {}, {}, bottom) }
+        render("sleep", settings, Tab.SLEEP) { SleepScreen(state, scores, false, {}, {}, {}, bottom) }
+        render("sleep_touch", settings, Tab.SLEEP) { SleepScreen(state, scores, false, {}, {}, {}, bottom, chartSelection = 4, chartMinute = 140) }
+        render("sleep_restless_awake", settings, Tab.SLEEP) { SleepScreen(state, scores, true, {}, {}, {}, bottom) }
+        render("night", settings, Tab.SLEEP) { NightDetail(nights[3], scores[nights[3].wakeDate()], false, {}, {}, {}, bottom) }
+        render("explore", settings, Tab.SLEEP) { NightExplorer(nights[0], false, {}, bottom) }
+        render("explore_zoomed", settings, Tab.SLEEP) { NightExplorer(nights[0], false, {}, bottom, initialView = 0.22f..0.42f, initialMinute = 120) }
         render("day_night", settings, Tab.HISTORY) {
             DayDetail(
                 history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom,
@@ -208,9 +210,9 @@ class ScreenRenderTest {
         // A night the band recorded without stages.
         val plainSpan = SleepSpan(now.minus(hours(16.0)), now.minus(hours(8.5)))
         render("night_plain", settings, Tab.SLEEP) {
-            NightDetail(SleepNights.build(plainSpan, listOf(SleepSession(plainSpan.start, plainSpan.end))), null, false, {}, {}, bottom)
+            NightDetail(SleepNights.build(plainSpan, listOf(SleepSession(plainSpan.start, plainSpan.end))), null, false, {}, {}, {}, bottom)
         }
-        render("sleep_empty", settings, Tab.SLEEP) { SleepScreen(state.copy(nights = emptyList()), emptyMap(), false, {}, {}, bottom) }
+        render("sleep_empty", settings, Tab.SLEEP) { SleepScreen(state.copy(nights = emptyList()), emptyMap(), false, {}, {}, {}, bottom) }
         render("score_sheet", settings, Tab.SLEEP) {
             Box(Modifier.fillMaxSize().background(Palette.cardHigh)) {
                 Column(Modifier.padding(top = 48.dp)) { ScoreContent(nights[1], scores[nights[1].wakeDate()], {}, {}) }

@@ -73,6 +73,8 @@ fun DayDetail(
     /** The night this day began with, if there was one. */
     night: SleepNight? = null,
     nightScore: NightScore? = null,
+    /** Opens the night to zoom into. */
+    onExploreNight: (SleepNight) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val now = remember { Instant.now() }
@@ -116,7 +118,7 @@ fun DayDetail(
         TimelinePanel(day, overrides, now, Modifier.entrance(4))
         night?.let {
             LastNightCard(it, nightScore, settings.restlessAsAwake, stringResource(R.string.sleep_night_before), onOpen = null, Modifier.entrance(5))
-            if (it.stages.size > 1) NightChart(it.counted(settings.restlessAsAwake), Modifier.entrance(6))
+            if (it.stages.size > 1) NightChart(it.counted(settings.restlessAsAwake), Modifier.entrance(6), onOpen = { onExploreNight(it) })
         }
         PrimaryButton(stringResource(R.string.detail_adjust), { onAdjust(w) }, Modifier.align(Alignment.CenterHorizontally).entrance(7))
     }

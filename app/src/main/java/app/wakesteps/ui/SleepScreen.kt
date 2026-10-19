@@ -2,7 +2,9 @@ package app.wakesteps.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -12,6 +14,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,9 +52,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +79,8 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -99,7 +113,12 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.math.sin
@@ -603,11 +622,11 @@ private fun factorName(factor: ScoreFactor): String = stringResource(
 
 /** The stages as a ring beside their times and shares, with how much of the night was asleep. */
 @Composable
-private fun StagesPanel(night: SleepNight, modifier: Modifier) {
+private fun StagesPanel(night: SleepNight, modifier: Modifier, title: String = stringResource(R.string.sleep_stages)) {
     val total = night.inBed.toMillis().coerceAtLeast(1).toFloat()
     Panel(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Eyebrow(stringResource(R.string.sleep_stages), Modifier.weight(1f))
+            Eyebrow(title, Modifier.weight(1f))
             Eyebrow(stringResource(R.string.sleep_asleep_share, (night.efficiency * 100).roundToInt()))
         }
         Spacer(Modifier.height(18.dp))
@@ -639,12 +658,14 @@ private fun StagesPanel(night: SleepNight, modifier: Modifier) {
 }
 
 /**
- * The night stage by stage, in rows from awake down to deep, sweeping in from bedtime. Touch or
- * drag along it to read the time and stage under your finger, with a tick each time the stage
- * changes; otherwise it shows the night's longest stretch of deep sleep.
+ * The night stage by stage, its stages and the chart in one: a row for each stage from awake down
+ * to deep, named with its time that night, the night sweeping in from bedtime. Drag along it to
+ * read the time and stage under your finger, with a tick each time the stage changes; otherwise it
+ * shows the night's longest stretch of deep sleep. With [onOpen], a tap opens the night to zoom
+ * into; without, a tap picks a moment.
  */
 @Composable
-fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: Int? = null) {
+fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: Int? = null, onOpen: (() -> Unit)? = null) {
     val lanes = night.lanes
     val minutes = night.inBed.toMinutes().toInt().coerceAtLeast(1)
     val selection = rememberChartSelection(initialMinute)
@@ -667,8 +688,15 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
         selection.index = m
     }
 
-    Panel(modifier.fillMaxWidth()) {
-        Eyebrow(stringResource(R.string.sleep_through_night))
+    Panel(modifier.fillMaxWidth(), onClick = onOpen) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Eyebrow(stringResource(R.string.sleep_through_night), Modifier.weight(1f))
+            if (night.staged) Eyebrow(stringResource(R.string.sleep_asleep_share, (night.efficiency * 100).roundToInt()))
+            if (onOpen != null) {
+                Spacer(Modifier.width(2.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint, modifier = Modifier.size(20.dp))
+            }
+        }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             if (picked != null) {
@@ -689,78 +717,21 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
             }
         }
         Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth().height((lanes.size * 38).dp)) {
-            Column(Modifier.width(LANE_LABELS).fillMaxHeight()) {
-                lanes.forEach { lane ->
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                        val tone by animateColorAsState(if (lane == pickedStage) stageTextColor(lane) else colors.faint, label = "lane")
-                        Text(stageName(lane).uppercase(), style = AppType.eyebrow.copy(fontSize = 10.sp), color = tone, maxLines = 1)
-                    }
-                }
-            }
+        Row(Modifier.fillMaxWidth().height((lanes.size * LANE_HEIGHT).dp)) {
+            LaneLabels(lanes, night, pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
             Canvas(
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .scrubbable(
                         night,
-                        onTap = { pick(it); selection.releasedAt = System.currentTimeMillis() },
+                        // With somewhere to open, the panel takes the tap.
+                        onTap = { if (onOpen == null) { pick(it); selection.releasedAt = System.currentTimeMillis() } },
                         onScrub = { selection.releasedAt = 0L; pick(it) },
                         onEnd = { selection.releasedAt = System.currentTimeMillis() },
                     ),
             ) {
-                val laneHeight = size.height / lanes.size
-                fun laneY(stage: SleepStage) = (lanes.indexOf(stage).takeIf { it >= 0 } ?: lanes.lastIndex) * laneHeight + laneHeight / 2
-                val total = night.inBed.toMillis().coerceAtLeast(1).toFloat()
-                fun x(t: Instant) = Duration.between(night.start, t).toMillis() / total * size.width
-                val barHeight = laneHeight * 0.54f
-                for (i in lanes.indices) {
-                    val y = i * laneHeight + laneHeight / 2
-                    drawLine(Color.White.copy(alpha = 0.04f), Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
-                }
-                clipRect(right = size.width * reveal) {
-                    // Steps between stages first, so the bars sit on top of them.
-                    chart.bars.zipWithNext { a, b ->
-                        val at = x(b.start)
-                        drawLine(Color.White.copy(alpha = 0.16f), Offset(at, laneY(a.stage)), Offset(at, laneY(b.stage)), 1.5.dp.toPx())
-                    }
-                    for (s in chart.bars) {
-                        val left = x(s.start)
-                        val width = (x(s.end) - left).coerceAtLeast(2.dp.toPx())
-                        val top = laneY(s.stage) - barHeight / 2
-                        val color = stageColor(s.stage)
-                        drawRoundRect(
-                            Brush.verticalGradient(listOf(color, color.copy(alpha = 0.7f)), startY = top, endY = top + barHeight),
-                            Offset(left, top), Size(width, barHeight), CornerRadius(minOf(barHeight / 2.6f, width / 2)),
-                        )
-                    }
-                    // Each stir as a slim mark with a soft glow, on its own row.
-                    val markWidth = 3.dp.toPx()
-                    for (m in chart.marks) {
-                        val color = stageColor(m.stage)
-                        val center = (x(m.start) + x(m.end)) / 2
-                        val width = maxOf(x(m.end) - x(m.start), markWidth)
-                        val y = laneY(m.stage)
-                        drawRoundRect(
-                            color.copy(alpha = 0.13f),
-                            Offset(center - width / 2 - markWidth, y - barHeight * 0.55f),
-                            Size(width + markWidth * 2, barHeight * 1.1f),
-                            CornerRadius(width / 2 + markWidth),
-                        )
-                        drawRoundRect(color, Offset(center - width / 2, y - barHeight * 0.4f), Size(width, barHeight * 0.8f), CornerRadius(width / 2))
-                    }
-                }
-                if (picked != null) {
-                    val at = x(picked)
-                    drawLine(
-                        colors.text.copy(alpha = 0.35f), Offset(at, 0f), Offset(at, size.height), 1.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())),
-                    )
-                    pickedStage?.let { s ->
-                        drawCircle(stageColor(s).copy(alpha = 0.25f), 11.dp.toPx(), Offset(at, laneY(s)))
-                        drawCircle(stageColor(s), 5.dp.toPx(), Offset(at, laneY(s)))
-                    }
-                }
+                drawNight(night, chart, lanes, 0f, 1f, picked, pickedStage, colors.text, reveal)
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -772,10 +743,444 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
 }
 
 private val LANE_LABELS = 66.dp
+private const val LANE_HEIGHT = 46
+
+/** The chart's rows, top to bottom: each stage's name and its time in [night], the picked one lit. */
+@Composable
+private fun LaneLabels(lanes: List<SleepStage>, night: SleepNight, picked: SleepStage?, modifier: Modifier) {
+    Column(modifier) {
+        lanes.forEach { lane ->
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                val lit = lane == picked
+                val name by animateColorAsState(if (lit) stageTextColor(lane) else Palette.faint, label = "lane")
+                val time by animateColorAsState(if (lit) Palette.text else Palette.muted, label = "laneTime")
+                Text(stageName(lane).uppercase(), style = AppType.eyebrow.copy(fontSize = 10.sp), color = name, maxLines = 1)
+                Text(durationText(night.time(lane).toMinutes(), 14f), style = AppType.number(14f), color = time, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * The part of [night] from [from] to [to] (fractions of it) across this canvas, a row per lane:
+ * faint [ticks], the steps between stages, the bars, the stirs as marks, and the picked moment's
+ * line and dot. [reveal] wipes it in from the left.
+ */
+private fun DrawScope.drawNight(
+    night: SleepNight,
+    chart: ChartNight,
+    lanes: List<SleepStage>,
+    from: Float,
+    to: Float,
+    picked: Instant?,
+    pickedStage: SleepStage?,
+    lineColor: Color,
+    reveal: Float = 1f,
+    ticks: List<Instant> = emptyList(),
+) {
+    val laneHeight = size.height / lanes.size
+    fun laneY(stage: SleepStage) = (lanes.indexOf(stage).takeIf { it >= 0 } ?: lanes.lastIndex) * laneHeight + laneHeight / 2
+    val total = night.inBed.toMillis().coerceAtLeast(1).toFloat()
+    val scale = size.width / (to - from)
+    fun x(t: Instant) = (Duration.between(night.start, t).toMillis() / total - from) * scale
+    val barHeight = laneHeight * 0.54f
+    for (i in lanes.indices) {
+        val y = i * laneHeight + laneHeight / 2
+        drawLine(Color.White.copy(alpha = 0.04f), Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+    }
+    for (t in ticks) {
+        val at = x(t)
+        drawLine(Color.White.copy(alpha = 0.06f), Offset(at, 0f), Offset(at, size.height), 1.dp.toPx())
+    }
+    clipRect(right = size.width * reveal) {
+        // Steps between stages first, so the bars sit on top of them.
+        chart.bars.zipWithNext { a, b ->
+            val at = x(b.start)
+            if (at in 0f..size.width) {
+                drawLine(Color.White.copy(alpha = 0.16f), Offset(at, laneY(a.stage)), Offset(at, laneY(b.stage)), 1.5.dp.toPx())
+            }
+        }
+        for (s in chart.bars) {
+            val left = x(s.start)
+            val right = x(s.end)
+            if (right < 0f || left > size.width) continue
+            val width = (right - left).coerceAtLeast(2.dp.toPx())
+            val top = laneY(s.stage) - barHeight / 2
+            val color = stageColor(s.stage)
+            drawRoundRect(
+                Brush.verticalGradient(listOf(color, color.copy(alpha = 0.7f)), startY = top, endY = top + barHeight),
+                Offset(left, top), Size(width, barHeight), CornerRadius(minOf(barHeight / 2.6f, width / 2)),
+            )
+        }
+        // Each stir as a slim mark with a soft glow, on its own row.
+        val markWidth = 3.dp.toPx()
+        for (m in chart.marks) {
+            val center = (x(m.start) + x(m.end)) / 2
+            if (center < -markWidth || center > size.width + markWidth) continue
+            val color = stageColor(m.stage)
+            val width = maxOf(x(m.end) - x(m.start), markWidth)
+            val y = laneY(m.stage)
+            drawRoundRect(
+                color.copy(alpha = 0.13f),
+                Offset(center - width / 2 - markWidth, y - barHeight * 0.55f),
+                Size(width + markWidth * 2, barHeight * 1.1f),
+                CornerRadius(minOf(width / 2 + markWidth, barHeight * 0.55f)),
+            )
+            drawRoundRect(color, Offset(center - width / 2, y - barHeight * 0.4f), Size(width, barHeight * 0.8f), CornerRadius(minOf(width / 2, barHeight * 0.4f)))
+        }
+    }
+    val at = picked?.let(::x)
+    if (at != null && at in 0f..size.width) {
+        drawLine(
+            lineColor.copy(alpha = 0.35f), Offset(at, 0f), Offset(at, size.height), 1.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())),
+        )
+        pickedStage?.let { s ->
+            drawCircle(stageColor(s).copy(alpha = 0.25f), 11.dp.toPx(), Offset(at, laneY(s)))
+            drawCircle(stageColor(s), 5.dp.toPx(), Offset(at, laneY(s)))
+        }
+    }
+}
+
+// ---------------------------------------------------------------- zooming into a night
+
+/** The part of the night in view, [left] to [right] as fractions of it, never narrower than [minWidth]. */
+@Stable
+private class NightView(initial: ClosedFloatingPointRange<Float>, val minWidth: Float) {
+    var left by mutableFloatStateOf(0f)
+        private set
+    var right by mutableFloatStateOf(1f)
+        private set
+    val width: Float get() = right - left
+    val zoomed: Boolean get() = width < 0.999f
+    val atClosest: Boolean get() = width <= minWidth * 1.01f
+    private var glide: Job? = null
+
+    init {
+        set(initial.start, initial.endInclusive)
+    }
+
+    /** [l]..[r], made wide enough and kept within the night. */
+    private fun fit(l: Float, r: Float): Pair<Float, Float> {
+        val w = (r - l).coerceIn(minWidth, 1f)
+        val fl = ((l + r) / 2 - w / 2).coerceIn(0f, 1f - w)
+        return fl to fl + w
+    }
+
+    private fun set(l: Float, r: Float) {
+        val (a, b) = fit(l, r)
+        left = a
+        right = b
+    }
+
+    /** Straight to [l]..[r], as fingers move. */
+    fun snap(l: Float, r: Float) {
+        glide?.cancel()
+        set(l, r)
+    }
+
+    /** Glides to [l]..[r], both edges together. */
+    fun glideTo(scope: CoroutineScope, l: Float, r: Float) {
+        glide?.cancel()
+        val (a, b) = fit(l, r)
+        val l0 = left
+        val r0 = right
+        glide = scope.launch {
+            animate(0f, 1f, animationSpec = tween(460, easing = FastOutSlowInEasing)) { t, _ ->
+                left = l0 + (a - l0) * t
+                right = r0 + (b - r0) * t
+            }
+        }
+    }
+
+    /** A pinch: zoom by [factor] about [focus] (a fraction across the view), moved by [pan] (a fraction of its width). */
+    fun pinch(focus: Float, factor: Float, pan: Float) {
+        val at = left + focus * width
+        val w = (width / factor).coerceIn(minWidth, 1f)
+        val l = at - focus * w - pan * w
+        snap(l, l + w)
+    }
+
+    /** Zooms in (or out, below 1) by [factor], about [focus] across the view. */
+    fun zoom(scope: CoroutineScope, factor: Float, focus: Float = 0.5f) {
+        val at = left + focus * width
+        val w = (width / factor).coerceIn(minWidth, 1f)
+        glideTo(scope, at - focus * w, at - focus * w + w)
+    }
+
+    fun moveBy(d: Float) = snap(left + d, right + d)
+
+    fun centerOn(scope: CoroutineScope, at: Float) = glideTo(scope, at - width / 2, at + width / 2)
+}
+
+/**
+ * Pinch (and two-finger drag) to zoom and move, one finger along to read the moment under it,
+ * tap to pick a moment, double-tap to zoom in there (or, all the way in, back out). Up-and-down
+ * drags are left to scroll the page. Positions are fractions across the view.
+ */
+private fun Modifier.zoomable(
+    key: Any?,
+    onTap: (Float) -> Unit,
+    onDoubleTap: (Float) -> Unit,
+    onScrub: (Float) -> Unit,
+    onScrubEnd: () -> Unit,
+    onPinch: (focus: Float, factor: Float, pan: Float) -> Unit,
+): Modifier = this
+    .pointerInput(key) {
+        detectTapGestures(
+            onTap = { onTap((it.x / size.width).coerceIn(0f, 0.9999f)) },
+            onDoubleTap = { onDoubleTap((it.x / size.width).coerceIn(0f, 1f)) },
+        )
+    }
+    .pointerInput(key) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var scrubbing = false
+            var pinching = false
+            var leftAlone = false
+            while (true) {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.filter { it.pressed }
+                if (pressed.isEmpty()) break
+                if (pressed.size >= 2) {
+                    if (scrubbing) {
+                        scrubbing = false
+                        onScrubEnd()
+                    }
+                    pinching = true
+                    val focus = event.calculateCentroid(useCurrent = true).x / size.width
+                    onPinch(focus, event.calculateZoom(), event.calculatePan().x / size.width)
+                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                } else if (!pinching && !leftAlone) {
+                    val change = pressed.first()
+                    if (change.isConsumed) break // the page took it as a scroll
+                    if (!scrubbing) {
+                        val d = change.position - down.position
+                        if (d.getDistance() > viewConfiguration.touchSlop) {
+                            if (abs(d.x) > abs(d.y)) scrubbing = true else leftAlone = true
+                        }
+                    }
+                    if (scrubbing) {
+                        change.consume()
+                        onScrub((change.position.x / size.width).coerceIn(0f, 0.9999f))
+                    }
+                }
+            }
+            if (scrubbing) onScrubEnd()
+        }
+    }
+
+/** Times worth marking across [from]..[to]: on the hour, or every half, quarter, 10 or 5 minutes as it narrows. */
+private fun ticks(from: Instant, to: Instant, zone: ZoneId): List<Instant> {
+    val span = Duration.between(from, to).toMinutes().coerceAtLeast(1)
+    val step = listOf(5L, 10L, 15L, 30L, 60L, 120L).firstOrNull { span / it <= 5 } ?: 180L
+    val day = from.atZone(zone).truncatedTo(ChronoUnit.DAYS)
+    val first = Duration.between(day.toInstant(), from).toMinutes().let { (it + step - 1) / step * step }
+    return generateSequence(day.plusMinutes(first).toInstant()) { it.plus(Duration.ofMinutes(step)) }
+        .takeWhile { it.isBefore(to) }
+        .filter { !it.isBefore(from) }
+        .toList()
+}
+
+private val HOUR_TICK = DateTimeFormatter.ofPattern("h a")
+private val MINUTE_TICK = DateTimeFormatter.ofPattern("h:mm")
+
+/**
+ * One night opened up to explore: the night stage by stage, big, to pinch and zoom into (or
+ * double-tap, or use − and +), with the whole night below it showing which part is in view (drag
+ * along it to move), and the stages in view.
+ */
+@Composable
+fun NightExplorer(
+    night: SleepNight,
+    restlessAsAwake: Boolean,
+    onBack: () -> Unit,
+    bottomPadding: Dp,
+    initialView: ClosedFloatingPointRange<Float>? = null,
+    initialMinute: Int? = null,
+) {
+    BackHandler(onBack = onBack)
+    val display = remember(night, restlessAsAwake) { night.counted(restlessAsAwake) }
+    // Close enough to see each stir: a quarter of an hour across.
+    val view = remember(display) { NightView(initialView ?: 0f..1f, (15f / display.inBed.toMinutes().coerceAtLeast(15)).coerceAtMost(1f)) }
+    val total = display.inBed.toMillis()
+    fun at(fraction: Float): Instant = display.start.plusMillis((fraction * total).toLong())
+    Box(Modifier.fillMaxSize()) {
+        NightSky()
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = bottomPadding),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.entrance(0)) {
+                RoundIconButton(onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Palette.text, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    DateEyebrow(stringResource(R.string.sleep_through_night), night.wakeDate())
+                    Text(Format.day(night.end), style = AppType.title.copy(fontSize = AppType.title.fontSize * 0.82f), color = Palette.text)
+                }
+            }
+            ZoomableNight(display, view, Modifier.entrance(1), initialMinute)
+            val from = at(view.left)
+            val to = at(view.right)
+            StagesPanel(
+                display.within(from, to),
+                Modifier.entrance(2),
+                title = if (view.zoomed) "${Format.time(from)} – ${Format.time(to)}" else stringResource(R.string.sleep_stages),
+            )
+        }
+    }
+}
+
+/** The night in view, big: its readout and zoom buttons, the rows, the times along it, and the whole night below. */
+@Composable
+private fun ZoomableNight(night: SleepNight, view: NightView, modifier: Modifier, initialMinute: Int?) {
+    val lanes = night.lanes
+    val chart = remember(night) { chartNight(night) }
+    val total = night.inBed.toMillis().coerceAtLeast(1)
+    val minutes = night.inBed.toMinutes().toInt().coerceAtLeast(1)
+    val selection = rememberChartSelection(initialMinute)
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val colors = Palette
+    val zone = ZoneId.systemDefault()
+    fun at(fraction: Float): Instant = night.start.plusMillis((fraction * total).toLong())
+    val from = at(view.left)
+    val to = at(view.right)
+    val picked = selection.index?.let { night.start.plus(Duration.ofMinutes(it.toLong())) }
+    val pickedStage = picked?.let { night.stageAt(it) }
+    val marks = ticks(from, to, zone)
+
+    fun pick(across: Float) {
+        val m = ((view.left + across * view.width) * minutes).toInt().coerceIn(0, minutes - 1)
+        val before = selection.index?.let { night.stageAt(night.start.plus(Duration.ofMinutes(it.toLong()))) }
+        if (selection.index == null || night.stageAt(night.start.plus(Duration.ofMinutes(m.toLong()))) != before) {
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        }
+        selection.index = m
+    }
+
+    Panel(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                if (picked != null) {
+                    Text(Format.time(picked), style = AppType.number(30f), color = colors.text)
+                    Spacer(Modifier.width(10.dp))
+                    val tone by animateColorAsState(pickedStage?.let(::stageTextColor) ?: colors.muted, label = "stage")
+                    Caption(pickedStage?.let { stageName(it) } ?: "", Modifier.padding(bottom = 5.dp), color = tone)
+                } else {
+                    Text(durationText(Duration.between(from, to).toMinutes(), 30f), style = AppType.number(30f), color = colors.text, maxLines = 1)
+                    Spacer(Modifier.width(10.dp))
+                    Caption("${Format.time(from)} – ${Format.time(to)}", Modifier.padding(bottom = 5.dp))
+                }
+            }
+            ZoomButton("−", enabled = view.zoomed) { view.zoom(scope, 0.5f) }
+            Spacer(Modifier.width(8.dp))
+            ZoomButton("+", enabled = !view.atClosest) { view.zoom(scope, 2f) }
+        }
+        Spacer(Modifier.height(18.dp))
+        Row(Modifier.fillMaxWidth().height((lanes.size * 56).dp)) {
+            LaneLabels(lanes, night.within(from, to), pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
+            Canvas(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .zoomable(
+                        view,
+                        onTap = { pick(it); selection.releasedAt = System.currentTimeMillis() },
+                        onDoubleTap = { if (view.atClosest) view.glideTo(scope, 0f, 1f) else view.zoom(scope, 2.5f, it) },
+                        onScrub = { selection.releasedAt = 0L; pick(it) },
+                        onScrubEnd = { selection.releasedAt = System.currentTimeMillis() },
+                        onPinch = { focus, factor, pan -> view.pinch(focus, factor, pan) },
+                    ),
+            ) {
+                drawNight(night, chart, lanes, view.left, view.right, picked, pickedStage, colors.text, ticks = marks)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        TickLabels(marks, from, to, Modifier.padding(start = LANE_LABELS).fillMaxWidth().height(16.dp))
+        Spacer(Modifier.height(16.dp))
+        WholeNight(night, chart, lanes, view, scope, Modifier.padding(start = LANE_LABELS).fillMaxWidth().height(44.dp))
+    }
+}
+
+/** The tick times under the chart, each centred under its line (kept inside the edges). */
+@Composable
+private fun TickLabels(ticks: List<Instant>, from: Instant, to: Instant, modifier: Modifier) {
+    val measurer = rememberTextMeasurer()
+    val style = AppType.eyebrow.copy(color = Palette.faint, fontSize = 10.5.sp)
+    val zone = ZoneId.systemDefault()
+    Canvas(modifier) {
+        val span = Duration.between(from, to).toMillis().coerceAtLeast(1).toFloat()
+        for (t in ticks) {
+            val local = t.atZone(zone)
+            val text = (if (local.minute == 0) HOUR_TICK else MINUTE_TICK).format(local)
+            val m = measurer.measure(text, style)
+            val x = Duration.between(from, t).toMillis() / span * size.width
+            val left = (x - m.size.width / 2f).coerceIn(0f, size.width - m.size.width)
+            drawText(m, topLeft = Offset(left, 0f))
+        }
+    }
+}
+
+/**
+ * The whole night, small, with the part in view lit and framed: drag along it to move the view,
+ * tap to centre it there.
+ */
+@Composable
+private fun WholeNight(night: SleepNight, chart: ChartNight, lanes: List<SleepStage>, view: NightView, scope: CoroutineScope, modifier: Modifier) {
+    val shade = Color(0xFF04060F)
+    val frame = Palette.text
+    Canvas(
+        modifier
+            .pointerInput(view) { detectTapGestures { view.centerOn(scope, it.x / size.width) } }
+            .pointerInput(view) {
+                detectHorizontalDragGestures { change, amount ->
+                    change.consume()
+                    view.moveBy(amount / size.width)
+                }
+            },
+    ) {
+        val radius = CornerRadius(10.dp.toPx())
+        drawRoundRect(Color.White.copy(alpha = 0.04f), cornerRadius = radius)
+        val laneHeight = size.height / lanes.size
+        val total = night.inBed.toMillis().coerceAtLeast(1).toFloat()
+        fun x(t: Instant) = Duration.between(night.start, t).toMillis() / total * size.width
+        for (s in chart.bars) {
+            val i = lanes.indexOf(s.stage).takeIf { it >= 0 } ?: lanes.lastIndex
+            val h = laneHeight * 0.6f
+            drawRoundRect(
+                stageColor(s.stage), Offset(x(s.start), i * laneHeight + (laneHeight - h) / 2),
+                Size((x(s.end) - x(s.start)).coerceAtLeast(1.dp.toPx()), h), CornerRadius(h / 2),
+            )
+        }
+        if (view.zoomed) {
+            val l = view.left * size.width
+            val r = view.right * size.width
+            drawRect(shade.copy(alpha = 0.62f), Offset.Zero, Size(l, size.height))
+            drawRect(shade.copy(alpha = 0.62f), Offset(r, 0f), Size(size.width - r, size.height))
+            drawRoundRect(frame.copy(alpha = 0.08f), Offset(l, 0f), Size(r - l, size.height), radius)
+            drawRoundRect(frame.copy(alpha = 0.8f), Offset(l, 0f), Size(r - l, size.height), radius, style = Stroke(1.5.dp.toPx()))
+        }
+    }
+}
+
+@Composable
+private fun ZoomButton(symbol: String, enabled: Boolean, onClick: () -> Unit) {
+    val tone by animateColorAsState(if (enabled) Palette.text else Palette.faint.copy(alpha = 0.4f), label = "zoomButton")
+    RoundIconButton(onClick = { if (enabled) onClick() }, size = 40.dp) {
+        Text(symbol, style = AppType.number(22f), color = tone)
+    }
+}
 
 /**
  * A night in full, entering in turn from [first]: the score (or the stages) as the hero, the
- * chart through the night, the stages, and what went into the score.
+ * night stage by stage (tap to open it up and zoom in), and what went into the score.
  */
 @Composable
 private fun NightContent(
@@ -783,15 +1188,15 @@ private fun NightContent(
     score: NightScore?,
     restlessAsAwake: Boolean,
     onEditScore: () -> Unit,
+    onExplore: (SleepNight) -> Unit,
     ringSize: Dp,
     first: Int,
     chartMinute: Int?,
 ) {
     val display = night.counted(restlessAsAwake)
     SleepHero(display, score, onEditScore, Modifier.entrance(first), ringSize)
-    if (display.stages.size > 1) NightChart(display, Modifier.entrance(first + 1), chartMinute)
-    if (display.staged) StagesPanel(display, Modifier.entrance(first + 2))
-    SleepScore.parts(night)?.let { ScoreFactors(it, Modifier.entrance(first + 3)) }
+    if (display.stages.size > 1) NightChart(display, Modifier.entrance(first + 1), chartMinute, onOpen = { onExplore(night) })
+    SleepScore.parts(night)?.let { ScoreFactors(it, Modifier.entrance(first + 2)) }
     if (!display.staged) {
         Text(
             stringResource(R.string.sleep_no_stages),
@@ -1010,6 +1415,7 @@ fun SleepScreen(
     restlessAsAwake: Boolean,
     onOpenNight: (SleepNight) -> Unit,
     onEditScore: (SleepNight) -> Unit,
+    onExplore: (SleepNight) -> Unit,
     bottomPadding: Dp,
     chartSelection: Int? = null,
     chartMinute: Int? = null,
@@ -1048,7 +1454,7 @@ fun SleepScreen(
                 )
                 return@Column
             }
-            NightContent(latest, scores[latest.wakeDate()], restlessAsAwake, { onEditScore(latest) }, 268.dp, first = 1, chartMinute)
+            NightContent(latest, scores[latest.wakeDate()], restlessAsAwake, { onEditScore(latest) }, onExplore, 268.dp, first = 1, chartMinute)
             if (nights.size > 1) {
                 val week = nights.take(7).reversed()
                 NightsPanel(
@@ -1071,6 +1477,7 @@ fun NightDetail(
     score: NightScore?,
     restlessAsAwake: Boolean,
     onEditScore: () -> Unit,
+    onExplore: (SleepNight) -> Unit,
     onBack: () -> Unit,
     bottomPadding: Dp,
 ) {
@@ -1095,7 +1502,7 @@ fun NightDetail(
                     Text(Format.day(night.end), style = AppType.title.copy(fontSize = AppType.title.fontSize * 0.82f), color = Palette.text)
                 }
             }
-            NightContent(night, score, restlessAsAwake, onEditScore, 236.dp, first = 1, chartMinute = null)
+            NightContent(night, score, restlessAsAwake, onEditScore, onExplore, 236.dp, first = 1, chartMinute = null)
         }
     }
 }

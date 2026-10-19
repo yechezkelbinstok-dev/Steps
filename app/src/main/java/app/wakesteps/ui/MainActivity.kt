@@ -21,6 +21,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -162,6 +164,8 @@ private fun App(vm: MainViewModel) {
 
     var openDay by remember { mutableStateOf<DaySummary?>(null) }
     var openNight by remember { mutableStateOf<SleepNight?>(null) }
+    // A night opened up to zoom into, from any night's chart.
+    var exploring by remember { mutableStateOf<SleepNight?>(null) }
     // The night today began with, and the one before each day in History.
     fun nightBefore(day: DayWindow?): SleepNight? = day?.wokeFrom?.let { span -> state.nights.firstOrNull { it.span == span } }
     // Keep an open day in step with fresh data (e.g. after adjusting it).
@@ -208,7 +212,8 @@ private fun App(vm: MainViewModel) {
                     )
                     Tab.SLEEP -> SleepScreen(
                         state, scores, settings.restlessAsAwake,
-                        onOpenNight = { openNight = it }, onEditScore = { editingScore = it }, bottomPadding = bottom,
+                        onOpenNight = { openNight = it }, onEditScore = { editingScore = it }, onExplore = { exploring = it },
+                        bottomPadding = bottom,
                     )
                     Tab.HISTORY -> HistoryScreen(state, settings, overrides, onOpenDay = { openDay = it }, bottomPadding = bottom)
                     Tab.SETTINGS -> SettingsScreen(
@@ -241,6 +246,7 @@ private fun App(vm: MainViewModel) {
                         bottomPadding = bottom,
                         night = nightBefore(day.window),
                         nightScore = nightBefore(day.window)?.let { scores[it.wakeDate()] },
+                        onExploreNight = { exploring = it },
                     )
                 }
             }
@@ -257,9 +263,22 @@ private fun App(vm: MainViewModel) {
                 if (night != null) {
                     NightDetail(
                         night, scores[night.wakeDate()], settings.restlessAsAwake,
-                        onEditScore = { editingScore = night }, onBack = { openNight = null }, bottomPadding = bottom,
+                        onEditScore = { editingScore = night }, onExplore = { exploring = it }, onBack = { openNight = null },
+                        bottomPadding = bottom,
                     )
                 }
+            }
+        }
+        // A night opened up grows out of its chart, over whatever it was opened from.
+        AnimatedVisibility(
+            visible = exploring != null,
+            enter = fadeIn(tween(260)) + scaleIn(tween(420, easing = Glide), initialScale = 0.92f),
+            exit = fadeOut(tween(200)) + scaleOut(tween(260, easing = Glide), targetScale = 0.96f),
+        ) {
+            val night = remember { mutableStateOf(exploring) }.apply { if (exploring != null) value = exploring }.value
+            Box(Modifier.fillMaxSize()) {
+                Backdrop()
+                if (night != null) NightExplorer(night, settings.restlessAsAwake, onBack = { exploring = null }, bottomPadding = bottom)
             }
         }
         // Content fades out under the tab bar instead of running into it.
@@ -270,7 +289,7 @@ private fun App(vm: MainViewModel) {
                 .height(bottom)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.background.copy(alpha = 0.94f)))),
         )
-        TabBar(tab, onSelect = { openDay = null; openNight = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
+        TabBar(tab, onSelect = { openDay = null; openNight = null; exploring = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
         if (showDiagnostics) DiagnosticsSheet(onDone = { showDiagnostics = false })
