@@ -4,9 +4,18 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.13.2
+- The night chart runs the full width of its panel, here and opened up: each stage's name and
+  time sit small above its own row instead of in columns at the sides, which had squeezed the
+  night into the middle.
+- Brief stirs are slim ticks without a glow, so a night with dozens of them reads as a row of fine
+  marks rather than a solid amber band.
+- The times along the bottom of the zoomed night are spaced for the room there is, and never run
+  into each other.
 
 ## 1.13.1
 - The night panel's rows are back to just the stage's name; each stage's time sits at the end of

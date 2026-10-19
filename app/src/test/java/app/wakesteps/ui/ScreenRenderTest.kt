@@ -132,6 +132,17 @@ class ScreenRenderTest {
         return SleepNights.build(span, listOf(SleepSession(span.start, span.end, stages, restless)))
     }
 
+    /** A restless night like a real one from the band: brief stirs every few minutes through most of it. */
+    private fun restlessNight(): SleepNight {
+        val span = SleepSpan(now.minus(hours(9.5)), now.minus(hours(2.0)))
+        val base = night(span, 1)
+        val stirs = List(60) { i -> span.start.plus(Duration.ofMinutes(20L + i * 7)) }
+            .filter { it.isBefore(span.end.minus(Duration.ofMinutes(10))) }
+            .map { StageSpan(it, it.plusSeconds(45), SleepStage.AWAKE) }
+        val stages = base.stages.map { if (it.stage == SleepStage.RESTLESS) it.copy(stage = SleepStage.LIGHT) else it }
+        return SleepNights.build(span, listOf(SleepSession(span.start, span.end, SleepNights.joined(stages), stirs)))
+    }
+
     /** The night before each day in [history], newest first; none before the all-nighter. */
     private fun nights(): List<SleepNight> =
         listOf(7.5, 6.6, 8.1, 7.0, null, 7.8, 6.2, 7.4, 8.4, 6.9).mapIndexedNotNull { i, h ->
@@ -200,6 +211,8 @@ class ScreenRenderTest {
         render("sleep_restless_awake", settings, Tab.SLEEP) { SleepScreen(state, scores, true, {}, {}, {}, bottom) }
         render("night", settings, Tab.SLEEP) { NightDetail(nights[3], scores[nights[3].wakeDate()], false, {}, {}, {}, bottom) }
         render("explore", settings, Tab.SLEEP) { NightExplorer(nights[0], false, {}, bottom) }
+        render("explore_restless", settings, Tab.SLEEP) { NightExplorer(restlessNight(), false, {}, bottom) }
+        render("night_restless", settings, Tab.SLEEP) { NightDetail(restlessNight(), null, false, {}, {}, {}, bottom) }
         render("explore_zoomed", settings, Tab.SLEEP) { NightExplorer(nights[0], false, {}, bottom, initialView = 0.22f..0.42f, initialMinute = 120) }
         render("day_night", settings, Tab.HISTORY) {
             DayDetail(

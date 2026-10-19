@@ -24,6 +24,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -85,7 +86,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -106,6 +109,7 @@ import app.wakesteps.core.SleepScore
 import app.wakesteps.core.SleepStage
 import app.wakesteps.core.StageSpan
 import app.wakesteps.data.wakeDate
+import app.wakesteps.ui.theme.AppColors
 import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import java.time.Duration
@@ -716,66 +720,50 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
                 )
             }
         }
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth().height((lanes.size * LANE_HEIGHT).dp)) {
-            LaneNames(lanes, pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
-            Canvas(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .scrubbable(
-                        night,
-                        // With somewhere to open, the panel takes the tap.
-                        onTap = { if (onOpen == null) { pick(it); selection.releasedAt = System.currentTimeMillis() } },
-                        onScrub = { selection.releasedAt = 0L; pick(it) },
-                        onEnd = { selection.releasedAt = System.currentTimeMillis() },
-                    ),
-            ) {
-                drawNight(night, chart, lanes, 0f, 1f, picked, pickedStage, colors.text, reveal)
-            }
-            Spacer(Modifier.width(LANE_GAP))
-            LaneTimes(lanes, night, pickedStage, Modifier.width(LANE_TIMES).fillMaxHeight())
+        Spacer(Modifier.height(14.dp))
+        val captions = laneCaptions(lanes, night)
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height((lanes.size * LANE_HEIGHT).dp)
+                .scrubbable(
+                    night,
+                    // With somewhere to open, the panel takes the tap.
+                    onTap = { if (onOpen == null) { pick(it); selection.releasedAt = System.currentTimeMillis() } },
+                    onScrub = { selection.releasedAt = 0L; pick(it) },
+                    onEnd = { selection.releasedAt = System.currentTimeMillis() },
+                ),
+        ) {
+            drawNight(night, chart, lanes, 0f, 1f, picked, pickedStage, colors, captions, reveal)
         }
         Spacer(Modifier.height(10.dp))
-        Row(
-            Modifier.fillMaxWidth().padding(start = LANE_LABELS, end = LANE_GAP + LANE_TIMES),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(Format.time(night.start), style = AppType.eyebrow, color = colors.faint)
             Text(Format.time(night.end), style = AppType.eyebrow, color = colors.faint)
         }
     }
 }
 
-private val LANE_LABELS = 66.dp
-/** Each row's time sits at its end, past a gap. */
-private val LANE_TIMES = 50.dp
-private val LANE_GAP = 12.dp
-private const val LANE_HEIGHT = 40
+private const val LANE_HEIGHT = 48
+/** The strip at the top of each row for its name and time; the bars sit below it. */
+private val CAPTION = 15.dp
 
-/** The chart's rows by name, top to bottom; the picked one lit. */
-@Composable
-private fun LaneNames(lanes: List<SleepStage>, picked: SleepStage?, modifier: Modifier) {
-    Column(modifier) {
-        lanes.forEach { lane ->
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                val tone by animateColorAsState(if (lane == picked) stageTextColor(lane) else Palette.faint, label = "lane")
-                Text(stageName(lane).uppercase(), style = AppType.eyebrow.copy(fontSize = 10.sp), color = tone, maxLines = 1)
-            }
-        }
-    }
-}
+/** A row's name and its time, measured to draw small above its bars. */
+private class LaneCaption(val name: TextLayoutResult, val time: TextLayoutResult)
 
-/** Each row's time in [night], at its end, all in one size; the picked one lit. */
+/**
+ * Each row's name and its time in [night], small, with a soft dark halo so they stay clear where
+ * a line between stages runs past.
+ */
 @Composable
-private fun LaneTimes(lanes: List<SleepStage>, night: SleepNight, picked: SleepStage?, modifier: Modifier) {
-    Column(modifier) {
-        lanes.forEach { lane ->
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                val tone by animateColorAsState(if (lane == picked) Palette.text else Palette.muted, label = "laneTime")
-                Text(plainDuration(night.time(lane).toMinutes()), style = AppType.number(13f), color = tone, maxLines = 1)
-            }
-        }
+private fun laneCaptions(lanes: List<SleepStage>, night: SleepNight): List<LaneCaption> {
+    val measurer = rememberTextMeasurer()
+    val halo = Shadow(Color(0xFF070A1C), blurRadius = 12f)
+    val nameStyle = AppType.eyebrow.copy(fontSize = 9.5.sp, shadow = halo)
+    val timeStyle = AppType.number(12.5f).copy(shadow = halo)
+    val names = lanes.map { stageName(it).uppercase() }
+    return lanes.mapIndexed { i, lane ->
+        LaneCaption(measurer.measure(names[i], nameStyle), measurer.measure(plainDuration(night.time(lane).toMinutes()), timeStyle))
     }
 }
 
@@ -795,18 +783,22 @@ private fun DrawScope.drawNight(
     to: Float,
     picked: Instant?,
     pickedStage: SleepStage?,
-    lineColor: Color,
+    colors: AppColors,
+    captions: List<LaneCaption>,
     reveal: Float = 1f,
     ticks: List<Instant> = emptyList(),
 ) {
     val laneHeight = size.height / lanes.size
-    fun laneY(stage: SleepStage) = (lanes.indexOf(stage).takeIf { it >= 0 } ?: lanes.lastIndex) * laneHeight + laneHeight / 2
+    val caption = CAPTION.toPx()
+    fun laneTop(i: Int) = i * laneHeight
+    fun laneY(stage: SleepStage) = laneTop(lanes.indexOf(stage).takeIf { it >= 0 } ?: lanes.lastIndex) + caption + (laneHeight - caption) / 2
     val total = night.inBed.toMillis().coerceAtLeast(1).toFloat()
     val scale = size.width / (to - from)
     fun x(t: Instant) = (Duration.between(night.start, t).toMillis() / total - from) * scale
-    val barHeight = laneHeight * 0.54f
-    for (i in lanes.indices) {
-        val y = i * laneHeight + laneHeight / 2
+    val barHeight = (laneHeight - caption) * 0.68f
+    val lineColor = colors.text
+    for (lane in lanes) {
+        val y = laneY(lane)
         drawLine(Color.White.copy(alpha = 0.04f), Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
     }
     for (t in ticks) {
@@ -833,22 +825,28 @@ private fun DrawScope.drawNight(
                 Offset(left, top), Size(width, barHeight), CornerRadius(minOf(barHeight / 2.6f, width / 2)),
             )
         }
-        // Each stir as a slim mark with a soft glow, on its own row.
-        val markWidth = 3.dp.toPx()
+        // Each stir as a slim tick on its own row (as wide as it lasted, once zoomed in that far),
+        // so even a night of dozens stays a row of fine marks rather than a solid band.
+        val markWidth = 2.dp.toPx()
         for (m in chart.marks) {
             val center = (x(m.start) + x(m.end)) / 2
             if (center < -markWidth || center > size.width + markWidth) continue
-            val color = stageColor(m.stage)
             val width = maxOf(x(m.end) - x(m.start), markWidth)
             val y = laneY(m.stage)
             drawRoundRect(
-                color.copy(alpha = 0.13f),
-                Offset(center - width / 2 - markWidth, y - barHeight * 0.55f),
-                Size(width + markWidth * 2, barHeight * 1.1f),
-                CornerRadius(minOf(width / 2 + markWidth, barHeight * 0.55f)),
+                stageColor(m.stage).copy(alpha = 0.9f),
+                Offset(center - width / 2, y - barHeight * 0.38f), Size(width, barHeight * 0.76f),
+                CornerRadius(minOf(width / 2, barHeight * 0.38f)),
             )
-            drawRoundRect(color, Offset(center - width / 2, y - barHeight * 0.4f), Size(width, barHeight * 0.8f), CornerRadius(minOf(width / 2, barHeight * 0.4f)))
         }
+    }
+    // Each row's name at its start and its time at its end, above its bars; the picked row lit.
+    captions.forEachIndexed { i, c ->
+        val lit = lanes.getOrNull(i) == pickedStage
+        val name = if (lit) stageTextColor(lanes[i]) else colors.faint
+        val time = if (lit) colors.text else colors.muted
+        drawText(c.name, color = name, topLeft = Offset(0f, laneTop(i) + (caption - c.name.size.height) / 2))
+        drawText(c.time, color = time, topLeft = Offset(size.width - c.time.size.width, laneTop(i) + (caption - c.time.size.height) / 2))
     }
     val at = picked?.let(::x)
     if (at != null && at in 0f..size.width) {
@@ -991,10 +989,13 @@ private fun Modifier.zoomable(
         }
     }
 
-/** Times worth marking across [from]..[to]: on the hour, or every half, quarter, 10 or 5 minutes as it narrows. */
-private fun ticks(from: Instant, to: Instant, zone: ZoneId): List<Instant> {
+/**
+ * Times worth marking across [from]..[to], no more than [maxCount]: every few hours, on the hour,
+ * or every half, quarter, 10 or 5 minutes as it narrows.
+ */
+private fun ticks(from: Instant, to: Instant, zone: ZoneId, maxCount: Int): List<Instant> {
     val span = Duration.between(from, to).toMinutes().coerceAtLeast(1)
-    val step = listOf(5L, 10L, 15L, 30L, 60L, 120L).firstOrNull { span / it <= 5 } ?: 180L
+    val step = listOf(5L, 10L, 15L, 30L, 60L, 120L, 180L, 240L).firstOrNull { span / it <= maxCount - 1 } ?: 360L
     val day = from.atZone(zone).truncatedTo(ChronoUnit.DAYS)
     val first = Duration.between(day.toInstant(), from).toMinutes().let { (it + step - 1) / step * step }
     return generateSequence(day.plusMinutes(first).toInstant()) { it.plus(Duration.ofMinutes(step)) }
@@ -1075,8 +1076,6 @@ private fun ZoomableNight(night: SleepNight, view: NightView, modifier: Modifier
     val to = at(view.right)
     val picked = selection.index?.let { night.start.plus(Duration.ofMinutes(it.toLong())) }
     val pickedStage = picked?.let { night.stageAt(it) }
-    val marks = ticks(from, to, zone)
-
     fun pick(across: Float) {
         val m = ((view.left + across * view.width) * minutes).toInt().coerceIn(0, minutes - 1)
         val before = selection.index?.let { night.stageAt(night.start.plus(Duration.ofMinutes(it.toLong()))) }
@@ -1104,32 +1103,33 @@ private fun ZoomableNight(night: SleepNight, view: NightView, modifier: Modifier
             Spacer(Modifier.width(8.dp))
             ZoomButton("+", enabled = !view.atClosest) { view.zoom(scope, 2f) }
         }
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth().height((lanes.size * 56).dp)) {
-            LaneNames(lanes, pickedStage, Modifier.width(LANE_LABELS).fillMaxHeight())
-            Canvas(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .zoomable(
-                        view,
-                        onTap = { pick(it); selection.releasedAt = System.currentTimeMillis() },
-                        onDoubleTap = { if (view.atClosest) view.glideTo(scope, 0f, 1f) else view.zoom(scope, 2.5f, it) },
-                        onScrub = { selection.releasedAt = 0L; pick(it) },
-                        onScrubEnd = { selection.releasedAt = System.currentTimeMillis() },
-                        onPinch = { focus, factor, pan -> view.pinch(focus, factor, pan) },
-                    ),
-            ) {
-                drawNight(night, chart, lanes, view.left, view.right, picked, pickedStage, colors.text, ticks = marks)
-            }
-            Spacer(Modifier.width(LANE_GAP))
-            LaneTimes(lanes, night.within(from, to), pickedStage, Modifier.width(LANE_TIMES).fillMaxHeight())
-        }
-        Spacer(Modifier.height(8.dp))
-        val alongChart = Modifier.padding(start = LANE_LABELS, end = LANE_GAP + LANE_TIMES).fillMaxWidth()
-        TickLabels(marks, from, to, alongChart.height(16.dp))
         Spacer(Modifier.height(16.dp))
-        WholeNight(night, chart, lanes, view, scope, alongChart.height(44.dp))
+        val captions = laneCaptions(lanes, night.within(from, to))
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // Room for a time label every 72dp or so.
+            val marks = ticks(from, to, zone, maxCount = (maxWidth / 72.dp).toInt().coerceAtLeast(2))
+            Column {
+                Canvas(
+                    Modifier
+                        .fillMaxWidth()
+                        .height((lanes.size * 60).dp)
+                        .zoomable(
+                            view,
+                            onTap = { pick(it); selection.releasedAt = System.currentTimeMillis() },
+                            onDoubleTap = { if (view.atClosest) view.glideTo(scope, 0f, 1f) else view.zoom(scope, 2.5f, it) },
+                            onScrub = { selection.releasedAt = 0L; pick(it) },
+                            onScrubEnd = { selection.releasedAt = System.currentTimeMillis() },
+                            onPinch = { focus, factor, pan -> view.pinch(focus, factor, pan) },
+                        ),
+                ) {
+                    drawNight(night, chart, lanes, view.left, view.right, picked, pickedStage, colors, captions, ticks = marks)
+                }
+                Spacer(Modifier.height(8.dp))
+                TickLabels(marks, from, to, Modifier.fillMaxWidth().height(16.dp))
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        WholeNight(night, chart, lanes, view, scope, Modifier.fillMaxWidth().height(44.dp))
     }
 }
 
@@ -1141,13 +1141,16 @@ private fun TickLabels(ticks: List<Instant>, from: Instant, to: Instant, modifie
     val zone = ZoneId.systemDefault()
     Canvas(modifier) {
         val span = Duration.between(from, to).toMillis().coerceAtLeast(1).toFloat()
+        var free = 0f
         for (t in ticks) {
             val local = t.atZone(zone)
             val text = (if (local.minute == 0) HOUR_TICK else MINUTE_TICK).format(local)
             val m = measurer.measure(text, style)
             val x = Duration.between(from, t).toMillis() / span * size.width
             val left = (x - m.size.width / 2f).coerceIn(0f, size.width - m.size.width)
+            if (left < free) continue // never let two run into each other
             drawText(m, topLeft = Offset(left, 0f))
+            free = left + m.size.width + 10.dp.toPx()
         }
     }
 }
