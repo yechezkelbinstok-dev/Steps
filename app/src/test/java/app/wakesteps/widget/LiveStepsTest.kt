@@ -80,6 +80,26 @@ class LiveStepsTest {
     }
 
     @Test
+    fun aFewStepsAroundTheHouseAddNothing() = runBlocking {
+        // The band last synced half an hour ago; then 14 steps to the bathroom, just now.
+        for (s in 0L..14) app.phoneSteps.record(ago(1).plusSeconds(s), 500 + s)
+        app.prefs.saveSnapshot(snapshot(steps = 4321, latest = ago(30)))
+        assertEquals(0L, app.phoneSteps.extraFor(app.prefs.currentSnapshot()))
+        assertTrue(shows("4,321"))
+    }
+
+    @Test
+    fun aRealWalkKicksInAndStaysUntilTheBandSyncs() = runBlocking {
+        // 40 steps over half a minute: clearly walking.
+        for (s in 0L..40) app.phoneSteps.record(ago(1).plusSeconds(s * 30 / 40), 500 + s)
+        app.prefs.saveSnapshot(snapshot(steps = 4321, latest = ago(30)))
+        assertEquals(40L, app.phoneSteps.extraFor(app.prefs.currentSnapshot()))
+        assertTrue(shows("4,361"))
+        // Stopped a while ago: the walk's steps stay up rather than vanishing before the sync.
+        assertEquals(40L, app.phoneSteps.extraFor(app.prefs.currentSnapshot(), now.plus(Duration.ofMinutes(10))))
+    }
+
+    @Test
     fun withoutReadingsItShowsTheTrackerAsIs() = runBlocking {
         app.prefs.saveSnapshot(snapshot(steps = 4321, latest = ago(10)))
         assertTrue(shows("4,321"))

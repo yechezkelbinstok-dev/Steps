@@ -150,6 +150,7 @@ object Diagnostics {
         line("Steps in day window", phone.stepsSince(window.start)?.let { Format.number(it) })
         val snapshot = probe { app.prefs.currentSnapshot() }.getOrNull()
         line("Added on top now", "+" + Format.number(phone.extraFor(snapshot)))
+        line("Walking (phone showing)", if (phone.moving()) "yes" else "no \u2014 band only until a real walk starts")
     }
 
     private suspend fun StringBuilder.syncLog(app: WakeStepsApp) {

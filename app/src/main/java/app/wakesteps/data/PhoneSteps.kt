@@ -14,6 +14,7 @@ import app.wakesteps.core.StepHistory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -84,13 +85,43 @@ class PhoneSteps(private val context: Context) {
     fun readings(): Int = history.size()
     fun newestReading(): StepHistory.Reading? = history.newest()
 
+    /** The tracker data the current walk is counted from; a newer sync starts over. */
+    private var walkAnchor: Instant? = null
+    private var walking = false
+
     /**
      * The steps to add to [snapshot]'s total: what the phone counted since the tracker's newest
      * data, or since waking if the tracker has nothing newer. None once the day has ended.
+     *
+     * The band is trusted over the phone, so a few steps (to the bathroom, say) add nothing: the
+     * phone's count only shows once it's clearly a walk ([MOVING_STEPS] within [MOVING_WINDOW]),
+     * and then keeps showing until the band's next sync takes over.
      */
-    fun extraFor(snapshot: Snapshot?): Long {
-        if (snapshot == null || snapshot.asleep) return 0
+    @Synchronized
+    fun extraFor(snapshot: Snapshot?, now: Instant = Instant.now()): Long {
+        if (snapshot == null || snapshot.asleep) {
+            walking = false
+            return 0
+        }
         val anchor = snapshot.latestDataAt?.let { maxOf(it, snapshot.dayStart) } ?: snapshot.dayStart
-        return stepsSince(anchor) ?: 0
+        // New data from the band: trust it, and wait for the next real walk.
+        if (anchor != walkAnchor) {
+            walkAnchor = anchor
+            walking = false
+        }
+        val extra = stepsSince(anchor) ?: return 0
+        if (extra <= 0) return 0
+        if (!walking && (stepsSince(now.minus(MOVING_WINDOW)) ?: 0) >= MOVING_STEPS) walking = true
+        return if (walking) extra else 0
+    }
+
+    /** Whether the phone's steps are showing right now (for diagnostics). */
+    @Synchronized
+    fun moving(): Boolean = walking
+
+    private companion object {
+        /** Steps within [MOVING_WINDOW] that make it a walk rather than a few steps around the house. */
+        const val MOVING_STEPS = 30L
+        val MOVING_WINDOW: Duration = Duration.ofSeconds(90)
     }
 }

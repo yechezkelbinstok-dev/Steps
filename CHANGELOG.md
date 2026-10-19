@@ -4,25 +4,27 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
-labelled 1.8 and 1.9).
+labelled 1.8 and 1.9; 1.11 includes two labelled 1.11 and 1.12).
 
-## 1.12
+## 1.11
 - Live steps between syncs. Your band only syncs now and then, so the phone's own step counter
   fills the gap: the number shown is the band's total plus the steps the phone counted since the
   band's newest data. When the band's next batch arrives, the count corrects itself to the band's.
   The widget and Today tick up as you walk while the screen is on, and Today's freshness pill
-  shows the part from the phone ("6 min ago · +312"). Nothing is added once the day has ended.
+  shows the part from the phone ("6 min ago · +312"). Nothing is added once the day has ended,
+  and past days are always the band's own numbers.
+- The band comes first: a few steps around the house (to the bathroom, say) add nothing, and the
+  phone's count only kicks in once you're clearly walking (30 steps within a minute and a half).
+  It then stays up until the band's next sync takes over, rather than vanishing when you stop.
 - Android asks once for "physical activity" access, from a card on Today. Say no and the card
   goes away for good.
-- Settings → Diagnostics has a section for the phone's step counter, including what it counted
-  over the same window as the tracker, to compare.
-
-## 1.11
 - Settings → Diagnostics: a troubleshooting report to copy or share. It reads Health Connect and
   Google Health live, side by side (steps, calories and distance, plus the newest step each one
-  has and how far behind now that is), along with the app's state: version, permissions, the
-  day window, what the widget shows, and the recent sync log. Each read gives up after 10
-  seconds, so a source that doesn't answer can't hold up the rest of the report.
+  has and how far behind now that is), along with the phone's step counter and the app's state:
+  version, permissions, the day window, what the widget shows, and the recent sync log. Each read
+  gives up after 10 seconds, so a source that doesn't answer can't hold up the rest.
+- Fixed widget updates sometimes being dropped when two arrived at once, which could leave the
+  widget showing older numbers until the next one.
 
 ## 1.10 (briefly labelled 2.0)
 - A refresh button on the widget, in the top-right corner (at the end of the 4×1 strip; the 2×1

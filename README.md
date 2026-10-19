@@ -68,7 +68,7 @@ widgets under Settings → Display → Lock screen, then swipe over on the lock 
 | Screen off | Refresh every 15 min (the Android minimum) |
 | You open the app | Immediate refresh |
 | You tap the widget's refresh button | Immediate refresh |
-| Between syncs | The phone's step counter fills in the steps since the band's newest data; the band's count takes over when it arrives |
+| Between syncs, once you're walking | The phone's step counter fills in the steps since the band's newest data; the band's count takes over when it arrives (a few steps around the house add nothing) |
 
 The widget is drawn directly through `AppWidgetManager` (`WidgetPusher`), not through Glance's
 `update()`, which queues the redraw as a WorkManager job that Android can delay for minutes
