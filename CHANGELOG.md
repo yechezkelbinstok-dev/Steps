@@ -2,11 +2,11 @@
 
 Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered as below. The
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
-one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 2.0 → 200. Builds that
+one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9).
 
-## 2.0
+## 1.10 (briefly labelled 2.0)
 - A refresh button on the widget, in the top-right corner (at the end of the 4×1 strip; the 2×1
   has no room for it). Tap it and the widget re-reads your steps, calories and distance right
   away, from Google Health when it's connected and Health Connect otherwise, with a spinner until
