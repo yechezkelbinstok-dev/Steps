@@ -4,38 +4,50 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
-labelled 1.8 and 1.9; 1.11 includes five, briefly labelled 1.11 and 1.12).
+labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
 
-## 1.11
-- Sleep, with its own tab (Today · Sleep · History · Settings), under its own night sky:
-  - Last night's sleep score in a big ring, rated the way Google Health rates it (Excellent 90+,
-    Good 80+, Fair 60+, Poor below), with the time asleep and when you went to bed and woke up.
-  - Google Health doesn't share its sleep score with other apps, so the app estimates it from the
-    six things Google says it weighs: duration, time to sound sleep, sound sleep, restlessness,
-    full awakenings and interruptions. Tap "Estimate" under the score to enter the one Google
-    Health gave that night: entered scores show as they are ("Google Health ✓"), and every one
-    you enter teaches the estimates to match Google's. The four you sent (Oct 13, 14, 15 and 18)
-    are already in.
-  - Behind the score: each of the six, with how it went and a bar for how well.
-  - Stages: a ring of the night's makeup beside the time and share of each stage, and how much of
-    the night you were asleep.
-  - Restless moments, as Google counts them: brief stirs (5 minutes or less) count as asleep, in a
-    Restless row of their own, and only longer wake-ups count as full awakenings. Settings →
-    Restless moments → Count as awake counts them as awake time instead, each one a wake-up.
-  - Through the night: the night stage by stage, with brief stirs as small marks that don't break
-    up the sleep around them. Touch or drag along it to read the time and stage, with a tick each
-    time the stage changes. Otherwise it shows the longest stretch of deep sleep.
-  - The last 7 nights as stacked bars with each night's score on top and the week's average,
-    scrubbable like the step charts, then earlier nights in a list (score, rating, times, and the
-    night as a strip), each opening its own page, where its score can be entered too.
-- Today shows last night as a small night-sky card with its score, which opens the Sleep tab, and
-  each day's page ends with the night before it.
-- The night is the one the app starts your day from, your own calls included, with its stages
-  from Google Health when it's connected, otherwise Health Connect.
-- A night your band recorded without stages shows just when you slept, with no score (as in
-  Google Health), rather than a made-up efficiency or wake-up count.
+## 1.12
+- Sleep score. Google Health doesn't share its sleep score with other apps, so the app estimates
+  it from the six things Google says it weighs: duration, time to sound sleep, sound sleep,
+  restlessness, full awakenings and interruptions, and rates it the way Google Health does
+  (Excellent 90+, Good 80+, Fair 60+, Poor below). Tap "Estimate" under the score to enter the one
+  Google Health gave that night: entered scores show as they are ("Google Health ✓"), and every
+  one you enter teaches the estimates to match Google's. The four you sent (Oct 13, 14, 15 and 18)
+  are already in. Like Google, no score for a night without stages.
+- Behind the score: each of the six, with how it went and a bar for how well. It replaces the
+  efficiency, time to fall asleep and wake-up figures.
+- Restless moments now count the way Google counts them: brief stirs (5 minutes or less) count as
+  asleep, in a Restless category of their own, and only longer wake-ups count as full awakenings.
+  Settings → Restless moments → Count as awake counts them as awake time instead, each one a
+  wake-up.
+- The Sleep tab, redesigned under its own night sky: the score as the big ring, then what went
+  into it, the stages (a ring beside the time and share of each, and how much of the night you
+  were asleep), and the night chart, where brief stirs are small marks that don't break up the
+  sleep around them. The last 7 nights show each night's score above its bar and the week's
+  average; earlier nights show their score and rating, and each night's page lets you enter its
+  score too.
+- Today's last-night card is a small night sky with the night's score.
 - A design pass over the whole app: panels softly lit from above, and a faint glow low on the
   page so the bottom of a screen isn't flat black.
+
+## 1.11
+- Sleep, with its own tab (Today · Sleep · History · Settings):
+  - Last night in full: a ring showing what the night was made of (deep, light, REM and awake),
+    the time asleep in the middle, and when you went to bed and woke up.
+  - Efficiency, how long it took to fall asleep, how often you woke up, and how often you were
+    restless (brief wake-ups, from Google Health).
+  - Time in each stage, with its share of the night.
+  - Through the night: the night stage by stage. Touch or drag along it to read the time and
+    stage, with a tick each time the stage changes. Otherwise it shows the longest deep sleep.
+  - The last 7 nights as stacked bars, scrubbable like the step charts, and earlier nights in a
+    list, each opening its own page.
+- Today shows last night as a card that opens the Sleep tab, and each day's page ends with the
+  night before it.
+- The night is the one the app starts your day from, your own calls included, with its stages
+  from Google Health when it's connected, otherwise Health Connect. Fitbit's sleep score isn't
+  available to other apps, so it isn't shown.
+- A night your band recorded without stages shows just when you slept, rather than a made-up
+  efficiency or wake-up count.
 - Live steps between syncs. Your band only syncs now and then, so the phone's own step counter
   fills the gap: the number shown is the band's total plus the steps the phone counted since the
   band's newest data. When the band's next batch arrives, the count corrects itself to the band's.
