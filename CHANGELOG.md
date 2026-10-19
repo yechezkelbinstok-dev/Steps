@@ -4,9 +4,9 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
-labelled 1.8 and 1.9; 1.11 includes two labelled 1.11 and 1.12).
+labelled 1.8 and 1.9; 1.11 includes four, briefly labelled 1.11 and 1.12).
 
-## 1.12
+## 1.11
 - Sleep, with its own tab (Today · Sleep · History · Settings):
   - Last night in full: a ring showing what the night was made of (deep, light, REM and awake),
     the time asleep in the middle, and when you went to bed and woke up.
@@ -24,8 +24,6 @@ labelled 1.8 and 1.9; 1.11 includes two labelled 1.11 and 1.12).
   available to other apps, so it isn't shown.
 - A night your band recorded without stages shows just when you slept, rather than a made-up
   efficiency or wake-up count.
-
-## 1.11
 - Live steps between syncs. Your band only syncs now and then, so the phone's own step counter
   fills the gap: the number shown is the band's total plus the steps the phone counted since the
   band's newest data. When the band's next batch arrives, the count corrects itself to the band's.
