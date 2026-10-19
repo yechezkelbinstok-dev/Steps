@@ -55,7 +55,9 @@ widgets under Settings → Display → Lock screen, then swipe over on the lock 
   calories and sky-blue distance (Vivid); then it turns gold. Pick in Settings → Ring.
 * Past your goal the ring keeps going: the next lap runs over the full ring, with a shadow at
   its tip.
-* Tap it to open the app.
+* A small refresh button in the corner (at the end of the 4×1 strip; the 2×1 has no room for it)
+  re-reads your numbers on the spot, showing a spinner until they're in. Tap anywhere else to
+  open the app.
 
 **How it stays live** (no notification anywhere):
 
@@ -65,6 +67,7 @@ widgets under Settings → Display → Lock screen, then swipe over on the lock 
 | Screen stays on | Checks Health Connect for new data every 15 s, and redraws the moment any arrives |
 | Screen off | Refresh every 15 min (the Android minimum) |
 | You open the app | Immediate refresh |
+| You tap the widget's refresh button | Immediate refresh |
 
 The widget is drawn directly through `AppWidgetManager` (`WidgetPusher`), not through Glance's
 `update()`, which queues the redraw as a WorkManager job that Android can delay for minutes

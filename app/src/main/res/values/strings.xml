@@ -126,6 +126,8 @@
     <string name="widget_label_active_calories">active calories</string>
     <string name="widget_label_distance">distance</string>
     <string name="widget_setup">Open Awake Steps to set up</string>
+    <string name="widget_refresh">Refresh</string>
+    <string name="widget_refreshing">Refreshing</string>
 
     <!-- Sample values for the widget-picker preview. -->
     <string name="preview_steps" translatable="false">8,432</string>

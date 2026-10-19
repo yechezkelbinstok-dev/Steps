@@ -6,6 +6,13 @@ one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 2.0
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9).
 
+## 2.0
+- A refresh button on the widget, in the top-right corner (at the end of the 4×1 strip; the 2×1
+  has no room for it). Tap it and the widget re-reads your steps, calories and distance right
+  away, from Google Health when it's connected and Health Connect otherwise, with a spinner until
+  they're in. It brings in whatever your tracker has synced so far; it can't make the band sync.
+  Tapping anywhere else still opens the app.
+
 ## 1.9
 - Fixed a red "StandaloneCoroutine was cancelled" message on Today. It appeared when two
   refreshes overlapped (for example coming back from Google's sign-in screen); the one that got

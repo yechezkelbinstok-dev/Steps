@@ -23,9 +23,12 @@ import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.CircularProgressIndicator
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -42,6 +45,8 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
 import androidx.glance.text.FontFamily
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -65,7 +70,8 @@ import app.wakesteps.ui.MainActivity
  *  - tower (4×3, the lock-screen size): big ring on top, calories and distance below
  * Everything is sized from the widget's exact dimensions.
  *
- * The widget refreshes itself, so it carries no refresh button; tapping it opens the app.
+ * The widget refreshes itself. A small button (top-right, or at the end of the 4×1 strip; the
+ * 2×1 has no room) refreshes it on the spot; tapping anywhere else opens the app.
  */
 class StepsWidget : GlanceAppWidget() {
 
@@ -79,8 +85,9 @@ class StepsWidget : GlanceAppWidget() {
         provideContent {
             val snapshot by app.prefs.snapshot.collectAsState(initialSnapshot)
             val settings by app.prefs.settings.collectAsState(initialSettings)
+            val refreshing by WidgetRefresh.running.collectAsState()
             CompositionLocalProvider(LocalPalette provides WidgetPalette(context, settings.widgetStyle)) {
-                WidgetBody(snapshot, settings)
+                WidgetBody(snapshot, settings, refreshing)
             }
         }
     }
@@ -92,6 +99,8 @@ private val WIDE_WIDTH = 240.dp
 private val TALL_HEIGHT = 110.dp
 /** At least this tall (4×3, the lock-screen size) stacks the stats under a big ring. */
 private val TOWER_HEIGHT = 240.dp
+/** A 4×1 strip narrower than this has no room for the refresh button. */
+private val WIDE_BUTTON_WIDTH = 300.dp
 
 /**
  * A deep card in a dark tone of the wallpaper colour (Android 12+, teal before that), the same
@@ -126,7 +135,7 @@ private val Display = FontFamily("google-sans")
 private val Body = FontFamily("google-sans-text")
 
 @Composable
-private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings) {
+private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings, refreshing: Boolean) {
     val size = LocalSize.current
     Box(
         modifier = GlanceModifier
@@ -147,13 +156,19 @@ private fun WidgetBody(snapshot: Snapshot?, settings: AppSettings) {
             modifier = GlanceModifier.fillMaxSize(),
         )
         Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Content(snapshot, settings, size)
+            Content(snapshot, settings, size, refreshing)
+        }
+        // The two-row layouts all leave the top-right corner free for it; the strips place it themselves.
+        if (snapshot != null && size.height >= TALL_HEIGHT) {
+            Box(modifier = GlanceModifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.TopEnd) {
+                RefreshButton(refreshing)
+            }
         }
     }
 }
 
 @Composable
-private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize) {
+private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize, refreshing: Boolean) {
     val context = LocalContext.current
     if (snapshot == null) {
         Text(
@@ -163,7 +178,7 @@ private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize) {
         )
         return
     }
-    val m = WidgetModel(context, snapshot, settings, Palette)
+    val m = WidgetModel(context, snapshot, settings, Palette, refreshing)
     val wide = size.width >= WIDE_WIDTH
     val tall = size.height >= TALL_HEIGHT
     when {
@@ -176,7 +191,14 @@ private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize) {
 }
 
 /** Pre-formatted values so the layouts stay purely declarative. */
-private class WidgetModel(context: Context, s: Snapshot, settings: AppSettings, palette: WidgetPalette) {
+private class WidgetModel(
+    context: Context,
+    s: Snapshot,
+    settings: AppSettings,
+    palette: WidgetPalette,
+    /** A tap on the refresh button is being handled. */
+    val refreshing: Boolean,
+) {
     private val pct = (s.totals.steps * 100 / settings.goal.coerceAtLeast(1)).toInt()
     val ringPercent = pct.coerceIn(0, 100)
     val goalReached = pct >= 100
@@ -251,8 +273,10 @@ private fun MediumLayout(m: WidgetModel, size: DpSize) {
 
 @Composable
 private fun WideLayout(m: WidgetModel, size: DpSize) {
+    val button = size.width >= WIDE_BUTTON_WIDTH
     Row(
-        modifier = GlanceModifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 10.dp),
+        // The button's touch area pads its icon, so the row ends closer to the edge to make up for it.
+        modifier = GlanceModifier.fillMaxSize().padding(start = 18.dp, end = if (button) 6.dp else 18.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Ring(m, (size.height - 22.dp).coerceIn(40.dp, 64.dp)) { StepsIcon(m, 22.dp) }
@@ -266,6 +290,10 @@ private fun WideLayout(m: WidgetModel, size: DpSize) {
                 if (i > 0) Spacer(GlanceModifier.height(4.dp))
                 InlineStat(stat)
             }
+        }
+        if (button) {
+            Spacer(GlanceModifier.width(4.dp))
+            RefreshButton(m.refreshing)
         }
     }
 }
@@ -380,6 +408,34 @@ private fun StepsIcon(m: WidgetModel, size: Dp) {
         colorFilter = ColorFilter.tint(if (m.goalReached) Palette.goal else Palette.accent),
         modifier = GlanceModifier.size(size),
     )
+}
+
+/**
+ * Re-reads the numbers on the spot (see [WidgetRefresh]); a spinner while that runs. A quiet
+ * glyph in a finger-sized touch area, so it's easy to hit but doesn't compete with the ring.
+ */
+@Composable
+private fun RefreshButton(refreshing: Boolean) {
+    val label = LocalContext.current.getString(if (refreshing) R.string.widget_refreshing else R.string.widget_refresh)
+    Box(
+        modifier = GlanceModifier
+            .size(40.dp)
+            .cornerRadius(20.dp)
+            .clickable(actionRunCallback<RefreshAction>())
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (refreshing) {
+            CircularProgressIndicator(GlanceModifier.size(16.dp), color = Palette.accent)
+        } else {
+            Image(
+                provider = ImageProvider(R.drawable.ic_refresh),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(Palette.muted),
+                modifier = GlanceModifier.size(16.dp),
+            )
+        }
+    }
 }
 
 /** "🔥 1,284 cal   📍 3.8 mi" */

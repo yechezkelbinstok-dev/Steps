@@ -55,6 +55,17 @@ class WidgetRenderTest {
         renderAll("lap_${it.name.lowercase()}", it, steps = 13400)
     }
 
+    /** Mid-refresh after a tap on the refresh button: a spinner where the button was. */
+    @Test
+    fun renderRefreshing() {
+        WidgetRefresh.running.value = true
+        try {
+            renderAll("refreshing", WidgetStyle.AMETHYST, steps = 8432)
+        } finally {
+            WidgetRefresh.running.value = false
+        }
+    }
+
     private fun renderAll(tag: String, style: WidgetStyle, steps: Long) = runBlocking {
         val app = ApplicationProvider.getApplicationContext<WakeStepsApp>()
         val now = Instant.now()
