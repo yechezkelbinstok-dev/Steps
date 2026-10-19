@@ -2,7 +2,10 @@ package app.wakesteps.data
 
 import android.content.Context
 import android.content.pm.PackageManager
+import app.wakesteps.core.SleepSession
 import app.wakesteps.core.SleepSpan
+import app.wakesteps.core.SleepStage
+import app.wakesteps.core.StageSpan
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
@@ -64,18 +67,45 @@ class GoogleHealth(private val context: Context) {
             it.optJSONObject("distance")?.optString("millimetersSum")?.toDoubleOrNull()?.div(1000.0)
         }
 
-        /** Sleep sessions from a `dataPoints` list, plus the next page token. */
-        fun parseSleeps(json: String): Pair<List<SleepSpan>, String?> {
+        /**
+         * Sleep sessions from a `dataPoints` list, with their stages, brief wake-ups and time to
+         * fall asleep, plus the next page token.
+         */
+        fun parseSleepSessions(json: String): Pair<List<SleepSession>, String?> {
             val root = JSONObject(json)
             val points = root.optJSONArray("dataPoints") ?: JSONArray()
-            val spans = (0 until points.length()).mapNotNull { i ->
-                val interval = points.getJSONObject(i).optJSONObject("sleep")?.optJSONObject("interval") ?: return@mapNotNull null
-                val start = interval.optString("startTime").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                val end = interval.optString("endTime").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                SleepSpan(Instant.parse(start), Instant.parse(end))
+            val sessions = (0 until points.length()).mapNotNull { i ->
+                val sleep = points.getJSONObject(i).optJSONObject("sleep") ?: return@mapNotNull null
+                val interval = sleep.optJSONObject("interval") ?: return@mapNotNull null
+                SleepSession(
+                    start = time(interval, "startTime") ?: return@mapNotNull null,
+                    end = time(interval, "endTime") ?: return@mapNotNull null,
+                    stages = stageSpans(sleep.optJSONArray("stages")),
+                    shortAwakenings = stageSpans(sleep.optJSONArray("shortAwakenings")),
+                    minutesToFallAsleep = sleep.optJSONObject("summary")?.let { number(it, "minutesToFallAsleep") },
+                )
             }
-            return spans to root.optString("nextPageToken").takeIf { it.isNotEmpty() }
+            return sessions to root.optString("nextPageToken").takeIf { it.isNotEmpty() }
         }
+
+        /** Just when each sleep started and ended (what the day logic needs), plus the next page token. */
+        fun parseSleeps(json: String): Pair<List<SleepSpan>, String?> =
+            parseSleepSessions(json).let { (sessions, next) -> sessions.map { SleepSpan(it.start, it.end) } to next }
+
+        private fun time(o: JSONObject, key: String): Instant? = o.optString(key).takeIf { it.isNotEmpty() }?.let(Instant::parse)
+
+        /** Whole-number fields arrive as strings ("462"); plain numbers are taken too. */
+        private fun number(o: JSONObject, key: String): Long? = when (val v = o.opt(key)) {
+            is Number -> v.toLong()
+            is String -> v.toLongOrNull()
+            else -> null
+        }
+
+        private fun stageSpans(array: JSONArray?): List<StageSpan> = (0 until (array?.length() ?: 0)).mapNotNull { i ->
+            val s = array!!.getJSONObject(i)
+            val stage = SleepStage.entries.firstOrNull { it.name == s.optString("type") } ?: return@mapNotNull null
+            StageSpan(time(s, "startTime") ?: return@mapNotNull null, time(s, "endTime") ?: return@mapNotNull null, stage)
+        }.sortedBy { it.start }
 
         /** A readable reason from an API error body: Google's `error.message`, or the status. */
         fun parseError(code: Int, body: String?): String {
@@ -175,8 +205,12 @@ class GoogleHealth(private val context: Context) {
             .maxOrNull()
 
     /** Sleep sessions that started between [from] and [to]. */
-    suspend fun sleeps(token: String, from: Instant, to: Instant): List<SleepSpan> {
-        val out = mutableListOf<SleepSpan>()
+    suspend fun sleeps(token: String, from: Instant, to: Instant): List<SleepSpan> =
+        sleepSessions(token, from, to).map { SleepSpan(it.start, it.end) }.distinct()
+
+    /** Sleep sessions that started between [from] and [to], with their stages. */
+    suspend fun sleepSessions(token: String, from: Instant, to: Instant): List<SleepSession> {
+        val out = mutableListOf<SleepSession>()
         var page: String? = null
         do {
             val filter = "sleep.interval.start_time >= \"$from\" AND sleep.interval.start_time < \"$to\""
@@ -184,11 +218,11 @@ class GoogleHealth(private val context: Context) {
                 append("filter=").append(URLEncoder.encode(filter, "UTF-8"))
                 page?.let { append("&pageToken=").append(URLEncoder.encode(it, "UTF-8")) }
             }
-            val (spans, next) = parseSleeps(call(token, "GET", "$BASE/sleep/dataPoints:reconcile?$query", null))
-            out += spans
+            val (sessions, next) = parseSleepSessions(call(token, "GET", "$BASE/sleep/dataPoints:reconcile?$query", null))
+            out += sessions
             page = next
         } while (page != null)
-        return out.distinct()
+        return out.distinctBy { it.start to it.end }
     }
 
     /** Every rolled-up window of [type] between [from] and [to], all pages. */

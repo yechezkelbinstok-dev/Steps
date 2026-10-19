@@ -6,6 +6,25 @@ one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.1
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes two labelled 1.11 and 1.12).
 
+## 1.12
+- Sleep, with its own tab (Today · Sleep · History · Settings):
+  - Last night in full: a ring showing what the night was made of (deep, light, REM and awake),
+    the time asleep in the middle, and when you went to bed and woke up.
+  - Efficiency, how long it took to fall asleep, how often you woke up, and how often you were
+    restless (brief wake-ups, from Google Health).
+  - Time in each stage, with its share of the night.
+  - Through the night: the night stage by stage. Touch or drag along it to read the time and
+    stage, with a tick each time the stage changes. Otherwise it shows the longest deep sleep.
+  - The last 7 nights as stacked bars, scrubbable like the step charts, and earlier nights in a
+    list, each opening its own page.
+- Today shows last night as a card that opens the Sleep tab, and each day's page ends with the
+  night before it.
+- The night is the one the app starts your day from, your own calls included, with its stages
+  from Google Health when it's connected, otherwise Health Connect. Fitbit's sleep score isn't
+  available to other apps, so it isn't shown.
+- A night your band recorded without stages shows just when you slept, rather than a made-up
+  efficiency or wake-up count.
+
 ## 1.11
 - Live steps between syncs. Your band only syncs now and then, so the phone's own step counter
   fills the gap: the number shown is the band's total plus the steps the phone counted since the

@@ -10,6 +10,7 @@ import app.wakesteps.R
 import app.wakesteps.app
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.Overrides
+import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalendarDay
@@ -55,6 +56,8 @@ data class UiState(
     val history: List<DaySummary> = emptyList(),
     /** Midnight-to-midnight totals, for comparing with the Fitbit / Google app. */
     val calendar: List<CalendarDay> = emptyList(),
+    /** The night each day in [history] began with, newest first (days after an all-nighter have none). */
+    val nights: List<SleepNight> = emptyList(),
     val error: String? = null,
     /** Offer the phone's step counter: it has one, and the user hasn't answered yet. */
     val liveStepsPrompt: Boolean = false,
@@ -124,6 +127,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val history = app.engine.history(s)
                 val calendar = runCatching { app.engine.calendarDays(s) }.getOrDefault(emptyList())
                 _state.update { it.copy(history = history, calendar = calendar, loading = false, error = null) }
+                // Sleep last: the steps are up before its extra read comes back.
+                val nights = app.engine.nights(s, history)
+                _state.update { it.copy(nights = nights) }
             } catch (e: CancellationException) {
                 throw e // a newer reload replaced this one: not an error
             } catch (e: Exception) {

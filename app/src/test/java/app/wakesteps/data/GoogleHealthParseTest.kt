@@ -1,6 +1,8 @@
 package app.wakesteps.data
 
 import app.wakesteps.core.SleepSpan
+import app.wakesteps.core.SleepStage
+import app.wakesteps.core.StageSpan
 import app.wakesteps.widget.RenderTestApp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -70,6 +72,39 @@ class GoogleHealthParseTest {
         )
         assertEquals(listOf(SleepSpan(Instant.parse("2026-03-03T20:57:30Z"), Instant.parse("2026-03-04T04:41:30Z"))), spans)
         assertNull(next)
+    }
+
+    @Test
+    fun sleepWithStagesAndBriefWakeUps() {
+        val (sessions, next) = GoogleHealth.parseSleepSessions(
+            """
+            {"dataPoints": [{
+              "name": "users/1/dataTypes/sleep/dataPoints/9",
+              "sleep": {
+                "interval": {"startTime": "2026-10-18T23:00:00Z", "startUtcOffset": "-14400s",
+                             "endTime": "2026-10-19T07:00:00Z", "endUtcOffset": "-14400s"},
+                "type": "STAGES",
+                "stages": [
+                  {"startTime": "2026-10-19T01:00:00Z", "endTime": "2026-10-19T07:00:00Z", "type": "LIGHT"},
+                  {"startTime": "2026-10-18T23:00:00Z", "endTime": "2026-10-18T23:12:00Z", "type": "AWAKE"},
+                  {"startTime": "2026-10-18T23:12:00Z", "endTime": "2026-10-19T01:00:00Z", "type": "DEEP"},
+                  {"startTime": "2026-10-19T01:00:00Z", "endTime": "2026-10-19T01:00:00Z", "type": "SLEEP_STAGE_TYPE_UNSPECIFIED"}
+                ],
+                "shortAwakenings": [{"startTime": "2026-10-19T03:10:00Z", "endTime": "2026-10-19T03:11:00Z", "type": "AWAKE"}],
+                "metadata": {"stagesStatus": "SUCCEEDED", "processed": true, "mainSleep": true},
+                "summary": {"minutesInSleepPeriod": "480", "minutesToFallAsleep": "12", "minutesAsleep": "468"}
+              }
+            }]}
+            """,
+        )
+        assertNull(next)
+        val s = sessions.single()
+        assertEquals(Instant.parse("2026-10-18T23:00:00Z"), s.start)
+        assertEquals(Instant.parse("2026-10-19T07:00:00Z"), s.end)
+        // In time order, with the unknown stage left out.
+        assertEquals(listOf(SleepStage.AWAKE, SleepStage.DEEP, SleepStage.LIGHT), s.stages.map { it.stage })
+        assertEquals(StageSpan(Instant.parse("2026-10-19T03:10:00Z"), Instant.parse("2026-10-19T03:11:00Z"), SleepStage.AWAKE), s.shortAwakenings.single())
+        assertEquals(12L, s.minutesToFallAsleep)
     }
 
     @Test

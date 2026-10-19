@@ -17,7 +17,12 @@ import app.wakesteps.core.DayWindow
 import app.wakesteps.core.EndReason
 import app.wakesteps.core.NightWindow
 import app.wakesteps.core.Overrides
+import app.wakesteps.core.SleepNight
+import app.wakesteps.core.SleepNights
+import app.wakesteps.core.SleepSession
 import app.wakesteps.core.SleepSpan
+import app.wakesteps.core.SleepStage
+import app.wakesteps.core.StageSpan
 import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.DaySummary
@@ -86,12 +91,51 @@ class ScreenRenderTest {
         }
     }
 
+    /**
+     * A believable night: drifting off, then 90-minute cycles with deep sleep early and REM late,
+     * a wake-up or two, and a few brief restless moments.
+     */
+    private fun night(span: SleepSpan, variant: Int): SleepNight {
+        val stages = mutableListOf<StageSpan>()
+        var t = span.start
+        fun add(minutes: Long, stage: SleepStage) {
+            val end = minOf(t.plus(Duration.ofMinutes(minutes)), span.end)
+            if (end > t) stages += StageSpan(t, end, stage)
+            t = end
+        }
+        add(10L + variant * 4, SleepStage.AWAKE)
+        val cycles = listOf(
+            listOf(20L to SleepStage.LIGHT, 48L to SleepStage.DEEP, 14L to SleepStage.LIGHT, 10L to SleepStage.REM),
+            listOf(24L to SleepStage.LIGHT, 36L to SleepStage.DEEP, 16L to SleepStage.LIGHT, 18L to SleepStage.REM),
+            listOf(30L to SleepStage.LIGHT, 5L to SleepStage.AWAKE, 18L to SleepStage.DEEP, 20L to SleepStage.LIGHT, 24L to SleepStage.REM),
+            listOf(36L to SleepStage.LIGHT, 8L to SleepStage.DEEP, 24L to SleepStage.LIGHT, 30L to SleepStage.REM),
+            listOf(38L to SleepStage.LIGHT, (4L + variant * 3) to SleepStage.AWAKE, 26L to SleepStage.LIGHT, 34L to SleepStage.REM),
+        )
+        for (cycle in cycles) for ((minutes, stage) in cycle) add(minutes, stage)
+        val rest = Duration.between(t, span.end).toMinutes()
+        if (rest > 6) add(rest - 6, SleepStage.LIGHT)
+        add(6, SleepStage.AWAKE)
+        val restless = List(5 + variant * 2) { i ->
+            val at = span.start.plus(Duration.ofMinutes(50L + i * 47))
+            StageSpan(at, at.plusSeconds(70), SleepStage.AWAKE)
+        }
+        return SleepNights.build(span, listOf(SleepSession(span.start, span.end, stages, restless)))
+    }
+
+    /** The night before each day in [history], newest first; none before the all-nighter. */
+    private fun nights(): List<SleepNight> =
+        listOf(7.5, 6.6, 8.1, 7.0, null, 7.8, 6.2, 7.4, 8.4, 6.9).mapIndexedNotNull { i, h ->
+            if (h == null) return@mapIndexedNotNull null
+            val wake = now.minus(hours(8.5)).minus(Duration.ofDays(i.toLong()))
+            night(SleepSpan(wake.minus(hours(h)), wake), i % 3)
+        }
+
     /** Every screen, in the default style. */
     @Test
     fun renderScreens() {
         val settings = AppSettings()
         val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
-        render("today", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom) }
+        render("today", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom, lastNight = nights().first()) }
         render("today_live", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom, liveSteps = 312) }
         render("today_prompt", settings, Tab.TODAY) {
             TodayScreen(state.copy(liveStepsPrompt = true), settings, actions, {}, {}, bottom)
@@ -115,6 +159,25 @@ class ScreenRenderTest {
             val settings = AppSettings(widgetStyle = style)
             render("today_${style.name.lowercase()}", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom) }
         }
+    }
+
+    /** The Sleep tab, a night's own page, and a day's page with its night, tall enough to see whole. */
+    @Test
+    @Config(qualifiers = "w411dp-h2400dp-420dpi")
+    fun renderSleep() {
+        val settings = AppSettings()
+        val nights = nights()
+        val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history(), nights = nights)
+        render("sleep", settings, Tab.SLEEP) { SleepScreen(state, {}, bottom) }
+        render("sleep_touch", settings, Tab.SLEEP) { SleepScreen(state, {}, bottom, chartSelection = 4, chartMinute = 140) }
+        render("night", settings, Tab.SLEEP) { NightDetail(nights[3], {}, bottom) }
+        render("day_night", settings, Tab.HISTORY) {
+            DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom, night = nights[2])
+        }
+        // A night the band recorded without stages.
+        val plainSpan = SleepSpan(now.minus(hours(16.0)), now.minus(hours(8.5)))
+        render("night_plain", settings, Tab.SLEEP) { NightDetail(SleepNights.build(plainSpan, listOf(SleepSession(plainSpan.start, plainSpan.end))), {}, bottom) }
+        render("sleep_empty", settings, Tab.SLEEP) { SleepScreen(state.copy(nights = emptyList()), {}, bottom) }
     }
 
     /** A tall screen, to see a whole day page at once. */

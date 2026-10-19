@@ -4,6 +4,9 @@ import android.content.Context
 import app.wakesteps.core.DayCalculator
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.NightWindow
+import app.wakesteps.core.SleepNight
+import app.wakesteps.core.SleepNights
+import app.wakesteps.core.SleepSession
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CancellationException
@@ -134,6 +137,32 @@ class StepsEngine(
                 )
             }
             .reversed()
+    }
+
+    /**
+     * The night each of [days] began with: the sleep the user woke from, as the day logic decided
+     * (their own calls included), stage by stage, in the same order. Days that began without one
+     * (after an all-nighter) are skipped.
+     */
+    suspend fun nights(settings: AppSettings, days: List<DaySummary>): List<SleepNight> {
+        val spans = days.mapNotNull { it.window.wokeFrom }.distinct()
+        if (spans.isEmpty()) return emptyList()
+        val from = spans.minOf { it.start }
+        val to = spans.maxOf { it.end }
+        val cloud: List<SleepSession> = if (settings.googleHealth) {
+            read(settings, { sleepSessions(it, from.minusSeconds(60), to) }) { emptyList() }
+        } else emptyList()
+        // Google Health has the band's stages; without it (or if it has nothing), Health Connect.
+        val sessions = cloud.ifEmpty {
+            try {
+                health.sleepSessions(from, to, settings.sourcePackage)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        return spans.map { SleepNights.build(it, sessions) }
     }
 
     suspend fun calendarDays(settings: AppSettings, days: Long = 14): List<CalendarDay> {

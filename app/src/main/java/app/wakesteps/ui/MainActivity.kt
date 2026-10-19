@@ -78,12 +78,14 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wakesteps.R
 import app.wakesteps.core.DayWindow
+import app.wakesteps.core.SleepNight
 import app.wakesteps.data.HealthSource
 import app.wakesteps.ui.theme.Palette
 import app.wakesteps.ui.theme.WakeStepsTheme
 
 internal enum class Tab(val label: Int) {
     TODAY(R.string.tab_today),
+    SLEEP(R.string.tab_sleep),
     HISTORY(R.string.tab_history),
     SETTINGS(R.string.tab_settings),
 }
@@ -156,6 +158,9 @@ private fun App(vm: MainViewModel) {
     )
 
     var openDay by remember { mutableStateOf<DaySummary?>(null) }
+    var openNight by remember { mutableStateOf<SleepNight?>(null) }
+    // The night today began with, and the one before each day in History.
+    fun nightBefore(day: DayWindow?): SleepNight? = day?.wokeFrom?.let { span -> state.nights.firstOrNull { it.span == span } }
     // Keep an open day in step with fresh data (e.g. after adjusting it).
     LaunchedEffect(state.history) {
         openDay = openDay?.let { open -> state.history.firstOrNull { it.window.start == open.window.start } ?: open }
@@ -194,7 +199,10 @@ private fun App(vm: MainViewModel) {
                         state, settings, actions,
                         onAdjust = { adjusting = it }, onShowSyncLog = { showSyncLog = true }, bottomPadding = bottom,
                         liveSteps = liveSteps,
+                        lastNight = nightBefore(state.today?.window),
+                        onOpenSleep = { tab = Tab.SLEEP },
                     )
+                    Tab.SLEEP -> SleepScreen(state, onOpenNight = { openNight = it }, bottomPadding = bottom)
                     Tab.HISTORY -> HistoryScreen(state, settings, overrides, onOpenDay = { openDay = it }, bottomPadding = bottom)
                     Tab.SETTINGS -> SettingsScreen(
                         settings, vm::updateSettings, actions, state.access, state.today?.latestDataAt,
@@ -224,8 +232,21 @@ private fun App(vm: MainViewModel) {
                         onAdjust = { adjusting = it },
                         onBack = { openDay = null },
                         bottomPadding = bottom,
+                        night = nightBefore(day.window),
                     )
                 }
+            }
+        }
+        // A night opened from the Sleep tab slides in the same way.
+        AnimatedVisibility(
+            visible = openNight != null,
+            enter = slideInHorizontally(tween(420, easing = Glide)) { it } + fadeIn(tween(250)),
+            exit = slideOutHorizontally(tween(320, easing = Glide)) { it } + fadeOut(tween(200)),
+        ) {
+            val night = remember { mutableStateOf(openNight) }.apply { if (openNight != null) value = openNight }.value
+            Box(Modifier.fillMaxSize()) {
+                Backdrop()
+                if (night != null) NightDetail(night, onBack = { openNight = null }, bottomPadding = bottom)
             }
         }
         // Content fades out under the tab bar instead of running into it.
@@ -236,7 +257,7 @@ private fun App(vm: MainViewModel) {
                 .height(bottom)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.background.copy(alpha = 0.94f)))),
         )
-        TabBar(tab, onSelect = { openDay = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
+        TabBar(tab, onSelect = { openDay = null; openNight = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
         if (showDiagnostics) DiagnosticsSheet(onDone = { showDiagnostics = false })
@@ -285,6 +306,7 @@ internal fun TabBar(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = 
             ) {
                 val icon = when (t) {
                     Tab.TODAY -> painterResource(R.drawable.ic_steps)
+                    Tab.SLEEP -> painterResource(R.drawable.ic_moon)
                     Tab.HISTORY -> painterResource(R.drawable.ic_bars)
                     Tab.SETTINGS -> rememberVectorPainter(Icons.Default.Settings)
                 }

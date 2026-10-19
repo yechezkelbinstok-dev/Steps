@@ -72,6 +72,44 @@ fun rememberChartSelection(initial: Int? = null): ChartSelection {
 }
 
 /**
+ * Picking a point on a chart with a finger: a sideways drag reports where it is as it moves
+ * ([onScrub], as a fraction of the width), while an up-and-down drag is left to scroll the page;
+ * a tap reports where it landed ([onTap]), and [onEnd] follows a drag once the finger lifts.
+ */
+fun Modifier.scrubbable(key: Any?, onTap: (Float) -> Unit, onScrub: (Float) -> Unit, onEnd: () -> Unit): Modifier =
+    pointerInput(key) {
+        fun fraction(x: Float) = (x / size.width).coerceIn(0f, 0.9999f)
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val slop = viewConfiguration.touchSlop
+            var dx = 0f
+            var dy = 0f
+            var scrubbing = false
+            while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) {
+                    if (!scrubbing && abs(dx) < slop && abs(dy) < slop) onTap(fraction(change.position.x))
+                    break
+                }
+                if (change.isConsumed) break // the page took it as a scroll
+                val d = change.positionChange()
+                dx += d.x
+                dy += d.y
+                if (!scrubbing) {
+                    if (abs(dx) > slop && abs(dx) > abs(dy)) scrubbing = true
+                    else if (abs(dy) > slop) break
+                }
+                if (scrubbing) {
+                    change.consume()
+                    onScrub(fraction(change.position.x))
+                }
+            }
+            if (scrubbing) onEnd()
+        }
+    }
+
+/**
  * Rounded bars that grow in when first shown and can be scrubbed: a horizontal drag picks the bar
  * under the finger (vertical drags still scroll the page), a tap picks one, a tap on the picked
  * bar lets go. Each new bar gives a light haptic tick. [line] draws a dashed reference line
@@ -100,44 +138,25 @@ fun InteractiveBars(
         }
     }
 
+    fun pick(fraction: Float) = (fraction * n).toInt().coerceIn(0, n - 1)
     Canvas(
-        modifier.pointerInput(n) {
-            if (n == 0) return@pointerInput
-            fun pick(x: Float) = (x / size.width * n).toInt().coerceIn(0, n - 1)
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                val slop = viewConfiguration.touchSlop
-                var dx = 0f
-                var dy = 0f
-                var scrubbing = false
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    if (!change.pressed) {
-                        if (!scrubbing && abs(dx) < slop && abs(dy) < slop) {
-                            val i = pick(change.position.x)
-                            select(if (i == selection.index) null else i)
-                            selection.releasedAt = System.currentTimeMillis()
-                        }
-                        break
-                    }
-                    if (change.isConsumed) break // the page took it as a scroll
-                    val d = change.positionChange()
-                    dx += d.x
-                    dy += d.y
-                    if (!scrubbing) {
-                        if (abs(dx) > slop && abs(dx) > abs(dy)) scrubbing = true
-                        else if (abs(dy) > slop) break
-                    }
-                    if (scrubbing) {
-                        change.consume()
-                        selection.releasedAt = 0L
-                        select(pick(change.position.x))
-                    }
+        modifier.scrubbable(
+            n,
+            onTap = { f ->
+                if (n > 0) {
+                    val i = pick(f)
+                    select(if (i == selection.index) null else i)
+                    selection.releasedAt = System.currentTimeMillis()
                 }
-                if (scrubbing) selection.releasedAt = System.currentTimeMillis()
-            }
-        },
+            },
+            onScrub = { f ->
+                if (n > 0) {
+                    selection.releasedAt = 0L
+                    select(pick(f))
+                }
+            },
+            onEnd = { selection.releasedAt = System.currentTimeMillis() },
+        ),
     ) {
         if (n == 0) return@Canvas
         val max = maxOf(bars.maxOf { it.value }, line ?: 0L).coerceAtLeast(1L).toFloat() * 1.06f

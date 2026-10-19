@@ -20,7 +20,10 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Length
+import app.wakesteps.core.SleepSession
 import app.wakesteps.core.SleepSpan
+import app.wakesteps.core.SleepStage
+import app.wakesteps.core.StageSpan
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -64,8 +67,12 @@ class HealthSource(private val context: Context) {
     private fun origins(sourcePackage: String?): Set<DataOrigin> =
         sourcePackage?.let { setOf(DataOrigin(it)) } ?: emptySet()
 
-    suspend fun sleeps(from: Instant, to: Instant, sourcePackage: String?): List<SleepSpan> {
-        val out = mutableListOf<SleepSpan>()
+    suspend fun sleeps(from: Instant, to: Instant, sourcePackage: String?): List<SleepSpan> =
+        sleepSessions(from, to, sourcePackage).map { SleepSpan(it.start, it.end) }
+
+    /** Sleep sessions with their stages, where the tracker recorded them. */
+    suspend fun sleepSessions(from: Instant, to: Instant, sourcePackage: String?): List<SleepSession> {
+        val out = mutableListOf<SleepSession>()
         var token: String? = null
         do {
             val resp = client.readRecords(
@@ -76,10 +83,24 @@ class HealthSource(private val context: Context) {
                     pageToken = token,
                 )
             )
-            resp.records.mapTo(out) { SleepSpan(it.startTime, it.endTime) }
+            resp.records.mapTo(out) { r ->
+                val stages = r.stages.mapNotNull { s -> stageOf(s.stage)?.let { StageSpan(s.startTime, s.endTime, it) } }
+                SleepSession(r.startTime, r.endTime, stages.sortedBy { it.start })
+            }
             token = resp.pageToken
         } while (token != null)
         return out
+    }
+
+    private fun stageOf(type: Int): SleepStage? = when (type) {
+        SleepSessionRecord.STAGE_TYPE_AWAKE,
+        SleepSessionRecord.STAGE_TYPE_AWAKE_IN_BED,
+        SleepSessionRecord.STAGE_TYPE_OUT_OF_BED -> SleepStage.AWAKE
+        SleepSessionRecord.STAGE_TYPE_LIGHT -> SleepStage.LIGHT
+        SleepSessionRecord.STAGE_TYPE_DEEP -> SleepStage.DEEP
+        SleepSessionRecord.STAGE_TYPE_REM -> SleepStage.REM
+        SleepSessionRecord.STAGE_TYPE_SLEEPING -> SleepStage.ASLEEP
+        else -> null
     }
 
     /**

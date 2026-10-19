@@ -90,6 +90,14 @@ The live part runs as a background service. Android requires services like this 
 never asks for notification permission, so on Android 13+ that notification is never shown.
 You'll only see Awake Steps listed under "active apps" in quick settings.
 
+## Sleep
+
+The Sleep tab shows each night the app starts a day from (the sleep you woke from, your own
+calls included), stage by stage: a ring of the night's makeup with the time asleep, efficiency,
+time to fall asleep, wake-ups and restless moments, time in each stage, a chart of the night you
+can scrub, and the last 7 nights. Stages come from Google Health when it's connected, otherwise
+from Health Connect. Fitbit's sleep score isn't available to other apps, so it isn't shown.
+
 ## Google Health (optional, faster data)
 
 Health Connect only gets your steps when the Fitbit / Google Health app decides to write them.

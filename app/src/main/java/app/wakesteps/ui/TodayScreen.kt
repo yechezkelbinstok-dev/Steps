@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.Format
+import app.wakesteps.core.SleepNight
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalorieMode
 import app.wakesteps.data.DayTotals
@@ -71,6 +72,9 @@ fun TodayScreen(
     chartSelection: Int? = null,
     /** Steps the phone counted since the tracker's newest data, added on top of its total. */
     liveSteps: Long = 0,
+    /** The night today began with, if there was one. */
+    lastNight: SleepNight? = null,
+    onOpenSleep: () -> Unit = {},
 ) {
     val today = state.today
     Column(
@@ -87,8 +91,9 @@ fun TodayScreen(
         if (today != null) {
             Hero(today.totals.steps + liveSteps, settings.goal, today.window, today.now, onAdjust, Modifier.entrance(1))
             Metrics(today.totals, settings, Modifier.entrance(2))
+            lastNight?.let { LastNightCard(it, stringResource(R.string.sleep_last_night), onOpenSleep, Modifier.entrance(3)) }
             if (today.hourly.isNotEmpty()) {
-                HourlyPanel(today.hourly, settings.goal, ongoing = today.window.isOngoing, Modifier.entrance(3), chartSelection)
+                HourlyPanel(today.hourly, settings.goal, ongoing = today.window.isOngoing, Modifier.entrance(4), chartSelection)
             }
             AddWidgetPrompt()
         }

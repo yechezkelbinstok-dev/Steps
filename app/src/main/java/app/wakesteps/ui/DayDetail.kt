@@ -46,6 +46,7 @@ import app.wakesteps.core.DayWindow
 import app.wakesteps.core.EndReason
 import app.wakesteps.core.Format
 import app.wakesteps.core.Overrides
+import app.wakesteps.core.SleepNight
 import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.DaySummary
@@ -67,6 +68,8 @@ fun DayDetail(
     onAdjust: (DayWindow) -> Unit,
     onBack: () -> Unit,
     bottomPadding: Dp,
+    /** The night this day began with, if there was one. */
+    night: SleepNight? = null,
 ) {
     BackHandler(onBack = onBack)
     val now = remember { Instant.now() }
@@ -105,7 +108,11 @@ fun DayDetail(
             HourlyPanel(buckets, settings.goal, ongoing = w.isOngoing, Modifier.entrance(3))
         }
         TimelinePanel(day, overrides, now, Modifier.entrance(4))
-        PrimaryButton(stringResource(R.string.detail_adjust), { onAdjust(w) }, Modifier.align(Alignment.CenterHorizontally).entrance(5))
+        night?.let {
+            LastNightCard(it, stringResource(R.string.sleep_night_before), onOpen = null, Modifier.entrance(5))
+            if (it.stages.size > 1) NightChart(it, Modifier.entrance(6))
+        }
+        PrimaryButton(stringResource(R.string.detail_adjust), { onAdjust(w) }, Modifier.align(Alignment.CenterHorizontally).entrance(7))
     }
 }
 
