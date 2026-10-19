@@ -3,10 +3,26 @@
 Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered as below. The
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
-get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201, and
-1.13 will be 11300. Builds that
+get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
+1.13 → 11300. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.13
+- The Hebrew date, in Hebrew, beside the date: on Today ("SATURDAY, OCT 17 · ו׳ חשון") and at the
+  top of each day's and night's page. It's the Hebrew date of the day itself.
+- On the Sleep tab and each night's page, the chart through the night and the stages now come
+  right after the score, and what went into the score comes after them, redesigned: one bar made
+  of the six factors, each part as wide as that factor counts and filled as far as it went well,
+  then a tile for each with how it went and a small ring for how well.
+- Fixed: sleep never actually came from Google Health. The app asked for it by when it started,
+  but Google only finds sleep by when it ended, so every sleep read failed (the "Invalid data point
+  filter" error under Settings → Google Health) and the app quietly used Health Connect's instead.
+  Sleep now comes from Google Health when it's connected, for the Sleep tab and for where your
+  days start and end, including the brief wake-ups Google counts as restlessness (which the app
+  would also have dropped, as they come without a stage type).
+- The Sleep tab no longer waits for two weeks of step totals before reading your nights: they load
+  side by side, so the nights show up much sooner.
 
 ## 1.12.1
 - The rest of the sleep scores you sent: Sep 14, 15, 16, 17 and 18, Oct 9, 11 and 12. With the

@@ -11,8 +11,15 @@ enum class SleepRating(val from: Int) {
     }
 }
 
-/** The six things Google's sleep score weighs, in the order its app lists them. */
-enum class ScoreFactor { DURATION, TIME_TO_SOUND_SLEEP, SOUND_SLEEP, RESTLESSNESS, FULL_AWAKENINGS, INTERRUPTIONS }
+/** The six things Google's sleep score weighs, in the order its app lists them, with how much each counts (out of 1). */
+enum class ScoreFactor(val weight: Float) {
+    DURATION(0.40f),
+    TIME_TO_SOUND_SLEEP(0.08f),
+    SOUND_SLEEP(0.20f),
+    RESTLESSNESS(0.12f),
+    FULL_AWAKENINGS(0.10f),
+    INTERRUPTIONS(0.10f),
+}
 
 /** How one factor went: its measure (minutes, or a count) and how well it did, from 0 (poorly) to 1 (as good as it gets). */
 data class ScorePart(val factor: ScoreFactor, val minutes: Long, val count: Int, val quality: Float)
@@ -27,15 +34,6 @@ data class ScorePart(val factor: ScoreFactor, val minutes: Long, val count: Int,
  * Like Google, there's no score for a night without stages.
  */
 object SleepScore {
-
-    private val WEIGHTS = mapOf(
-        ScoreFactor.DURATION to 0.40f,
-        ScoreFactor.TIME_TO_SOUND_SLEEP to 0.08f,
-        ScoreFactor.SOUND_SLEEP to 0.20f,
-        ScoreFactor.RESTLESSNESS to 0.12f,
-        ScoreFactor.FULL_AWAKENINGS to 0.10f,
-        ScoreFactor.INTERRUPTIONS to 0.10f,
-    )
 
     fun parts(night: SleepNight): List<ScorePart>? {
         if (!night.staged) return null
@@ -61,7 +59,7 @@ object SleepScore {
 
     /** The estimate, 0 to 100, before any calibration; null without stages. */
     fun estimate(night: SleepNight): Int? =
-        parts(night)?.sumOf { (WEIGHTS.getValue(it.factor) * it.quality * 100).toDouble() }?.roundToInt()?.coerceIn(0, 100)
+        parts(night)?.sumOf { (it.factor.weight * it.quality * 100).toDouble() }?.roundToInt()?.coerceIn(0, 100)
 
     /** 0 at [from] or below, 1 at [to] or above, straight in between. */
     private fun ramp(value: Long, from: Long, to: Long): Float = ((value - from).toFloat() / (to - from)).coerceIn(0f, 1f)

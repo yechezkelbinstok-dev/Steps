@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -482,44 +483,108 @@ private fun SourceChip(fromGoogle: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Google's six factors, each with how it went and a bar for how well. */
+/** Each factor's colour, shared by its part of the score bar and its tile: the night's own colours. */
+private fun factorColor(factor: ScoreFactor): Color = when (factor) {
+    ScoreFactor.DURATION -> stageColor(SleepStage.LIGHT)
+    ScoreFactor.SOUND_SLEEP -> stageColor(SleepStage.DEEP)
+    ScoreFactor.RESTLESSNESS -> stageColor(SleepStage.RESTLESS)
+    ScoreFactor.FULL_AWAKENINGS -> stageColor(SleepStage.AWAKE)
+    ScoreFactor.INTERRUPTIONS -> Color(0xFFFF7EB3)
+    ScoreFactor.TIME_TO_SOUND_SLEEP -> stageColor(SleepStage.REM)
+}
+
+/**
+ * What went into the score: one bar made of the six factors, each part as wide as that factor
+ * counts and lit as far as it went well, then a tile for each, biggest first, with how it went
+ * and a small ring for how well.
+ */
 @Composable
 private fun ScoreFactors(parts: List<ScorePart>, modifier: Modifier) {
-    val grow by animateOnShow(1f, durationMillis = 1100, delayMillis = 250)
-    val track = Color.White.copy(alpha = 0.06f)
+    val ordered = parts.sortedByDescending { it.factor.weight }
     Panel(modifier.fillMaxWidth()) {
         Eyebrow(stringResource(R.string.sleep_score_factors))
-        parts.forEach { part ->
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(factorName(part.factor), style = MaterialTheme.typography.bodyLarge, color = Palette.text, modifier = Modifier.weight(1f))
-                when (part.factor) {
-                    ScoreFactor.FULL_AWAKENINGS -> Text("${part.count}", style = AppType.number(20f), color = Palette.text)
-                    ScoreFactor.RESTLESSNESS -> Row(verticalAlignment = Alignment.Bottom) {
-                        Text(durationText(part.minutes, 20f), style = AppType.number(20f), color = Palette.text)
-                        Caption("  ·  ${part.count}×", Modifier.padding(bottom = 2.dp))
-                    }
-                    else -> Text(durationText(part.minutes, 20f), style = AppType.number(20f), color = Palette.text)
+        Spacer(Modifier.height(16.dp))
+        ScoreBar(ordered, Modifier.fillMaxWidth().height(12.dp))
+        Spacer(Modifier.height(16.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ordered.chunked(2).forEachIndexed { row, pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    pair.forEachIndexed { i, part -> FactorTile(part, delayMillis = 300 + (row * 2 + i) * 70, modifier = Modifier.weight(1f)) }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            val color = when {
-                part.quality >= 0.75f -> stageColor(SleepStage.REM)
-                part.quality >= 0.45f -> stageColor(SleepStage.LIGHT)
-                else -> stageColor(SleepStage.AWAKE)
+        }
+    }
+}
+
+/** The score as the sum of its parts: each factor's share of the bar, filled as far as it went well. */
+@Composable
+private fun ScoreBar(parts: List<ScorePart>, modifier: Modifier) {
+    val grow by animateOnShow(1f, durationMillis = 1300, delayMillis = 200)
+    Canvas(modifier) {
+        val gap = 4.dp.toPx()
+        val total = parts.sumOf { it.factor.weight.toDouble() }.toFloat()
+        val room = size.width - gap * (parts.size - 1)
+        val radius = CornerRadius(size.height / 2)
+        val stagger = 0.4f / parts.size
+        var x = 0f
+        parts.forEachIndexed { i, part ->
+            val width = room * part.factor.weight / total
+            val color = factorColor(part.factor)
+            drawRoundRect(color.copy(alpha = 0.16f), Offset(x, 0f), Size(width, size.height), radius)
+            val p = ((grow - i * stagger) / (1f - (parts.size - 1) * stagger)).coerceIn(0f, 1f)
+            val lit = width * part.quality * p
+            if (lit > 0.5f) {
+                drawRoundRect(
+                    Brush.horizontalGradient(listOf(color.copy(alpha = 0.7f), color), startX = x, endX = x + lit),
+                    Offset(x, 0f), Size(lit.coerceAtLeast(size.height), size.height), radius,
+                )
             }
-            Canvas(Modifier.fillMaxWidth().height(6.dp)) {
-                val r = CornerRadius(size.height / 2)
-                drawRoundRect(track, cornerRadius = r)
-                val w = size.width * part.quality * grow
-                if (w > 0f) {
-                    drawRoundRect(
-                        Brush.horizontalGradient(listOf(color.copy(alpha = 0.6f), color), endX = w.coerceAtLeast(1f)),
-                        size = Size(w.coerceAtLeast(size.height), size.height),
-                        cornerRadius = r,
-                    )
-                }
+            x += width + gap
+        }
+    }
+}
+
+/** One factor: how it went, big, a small ring for how well, and its name. */
+@Composable
+private fun FactorTile(part: ScorePart, delayMillis: Int, modifier: Modifier) {
+    val color = factorColor(part.factor)
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.10f), Color.White.copy(alpha = 0.02f))))
+            .border(1.dp, Brush.verticalGradient(listOf(color.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))), shape)
+            .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val value = when (part.factor) {
+                ScoreFactor.FULL_AWAKENINGS -> AnnotatedString("${part.count}")
+                else -> durationText(part.minutes, 22f)
             }
+            Text(value, style = AppType.number(22f), color = Palette.text, maxLines = 1, modifier = Modifier.weight(1f))
+            QualityRing(part.quality, color, 28.dp, delayMillis)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (part.factor == ScoreFactor.RESTLESSNESS) "${factorName(part.factor)} · ${part.count}×" else factorName(part.factor),
+            style = MaterialTheme.typography.bodySmall,
+            color = Palette.muted,
+            maxLines = 1,
+        )
+    }
+}
+
+/** A small ring filled as far as [quality] (0 to 1) goes, sweeping round when it first shows. */
+@Composable
+private fun QualityRing(quality: Float, color: Color, size: Dp, delayMillis: Int) {
+    val shown by animateOnShow(quality, durationMillis = 1100, delayMillis = delayMillis)
+    Canvas(Modifier.size(size)) {
+        val stroke = this.size.minDimension * 0.15f
+        val arc = Size(this.size.width - stroke, this.size.height - stroke)
+        val topLeft = Offset(stroke / 2, stroke / 2)
+        drawArc(Color.White.copy(alpha = 0.08f), 0f, 360f, false, topLeft, arc, style = Stroke(stroke))
+        if (shown > 0.005f) {
+            drawArc(color, -90f, 360f * shown, false, topLeft, arc, style = Stroke(stroke, cap = StrokeCap.Round))
         }
     }
 }
@@ -709,8 +774,8 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
 private val LANE_LABELS = 66.dp
 
 /**
- * A night in full, entering in turn from [first]: the score (or the stages) as the hero, what
- * shaped the score, the stages, and the chart through the night.
+ * A night in full, entering in turn from [first]: the score (or the stages) as the hero, the
+ * chart through the night, the stages, and what went into the score.
  */
 @Composable
 private fun NightContent(
@@ -724,9 +789,9 @@ private fun NightContent(
 ) {
     val display = night.counted(restlessAsAwake)
     SleepHero(display, score, onEditScore, Modifier.entrance(first), ringSize)
-    SleepScore.parts(night)?.let { ScoreFactors(it, Modifier.entrance(first + 1)) }
+    if (display.stages.size > 1) NightChart(display, Modifier.entrance(first + 1), chartMinute)
     if (display.staged) StagesPanel(display, Modifier.entrance(first + 2))
-    if (display.stages.size > 1) NightChart(display, Modifier.entrance(first + 3), chartMinute)
+    SleepScore.parts(night)?.let { ScoreFactors(it, Modifier.entrance(first + 3)) }
     if (!display.staged) {
         Text(
             stringResource(R.string.sleep_no_stages),
@@ -975,7 +1040,7 @@ fun SleepScreen(
             }
             if (latest == null) {
                 Text(
-                    stringResource(if (state.loading) R.string.loading else R.string.sleep_none),
+                    stringResource(if (state.nightsLoaded) R.string.sleep_none else R.string.loading),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Palette.muted,
                     textAlign = TextAlign.Center,
@@ -1026,7 +1091,7 @@ fun NightDetail(
                 }
                 Spacer(Modifier.width(14.dp))
                 Column {
-                    Eyebrow(stringResource(R.string.sleep_detail_eyebrow))
+                    DateEyebrow(stringResource(R.string.sleep_detail_eyebrow), night.wakeDate())
                     Text(Format.day(night.end), style = AppType.title.copy(fontSize = AppType.title.fontSize * 0.82f), color = Palette.text)
                 }
             }

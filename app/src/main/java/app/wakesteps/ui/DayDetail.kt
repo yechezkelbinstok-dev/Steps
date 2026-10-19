@@ -55,6 +55,7 @@ import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 
 /**
  * One day in full: its ring, calories and distance, the hour-by-hour chart, a timeline from
@@ -93,7 +94,10 @@ fun DayDetail(
             }
             Spacer(Modifier.width(14.dp))
             Column {
-                Eyebrow(if (w.isOngoing) stringResource(R.string.history_today) else stringResource(R.string.detail_eyebrow))
+                DateEyebrow(
+                    if (w.isOngoing) stringResource(R.string.history_today) else stringResource(R.string.detail_eyebrow),
+                    w.start.atZone(ZoneId.systemDefault()).toLocalDate(),
+                )
                 Text(Format.day(w.start), style = AppType.title.copy(fontSize = AppType.title.fontSize * 0.82f), color = Palette.text)
             }
         }

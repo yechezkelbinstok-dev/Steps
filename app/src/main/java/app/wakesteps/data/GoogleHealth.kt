@@ -26,6 +26,7 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -81,11 +82,22 @@ class GoogleHealth(private val context: Context) {
                     start = time(interval, "startTime") ?: return@mapNotNull null,
                     end = time(interval, "endTime") ?: return@mapNotNull null,
                     stages = stageSpans(sleep.optJSONArray("stages")),
-                    shortAwakenings = stageSpans(sleep.optJSONArray("shortAwakenings")),
+                    // Brief wake-ups are just a start and an end, without a stage type.
+                    shortAwakenings = stageSpans(sleep.optJSONArray("shortAwakenings"), SleepStage.AWAKE),
                     minutesToFallAsleep = sleep.optJSONObject("summary")?.let { number(it, "minutesToFallAsleep") },
                 )
             }
             return sessions to root.optString("nextPageToken").takeIf { it.isNotEmpty() }
+        }
+
+        /**
+         * The filter for sleep that ended from [from] up to [to]. Sleep is the one type Google only
+         * filters by when it ended (asking by its start is refused as an invalid member).
+         */
+        fun sleepFilter(from: Instant, to: Instant): String {
+            val a = from.truncatedTo(ChronoUnit.SECONDS)
+            val b = to.truncatedTo(ChronoUnit.SECONDS)
+            return "sleep.interval.end_time >= \"$a\" AND sleep.interval.end_time < \"$b\""
         }
 
         /** Just when each sleep started and ended (what the day logic needs), plus the next page token. */
@@ -101,9 +113,10 @@ class GoogleHealth(private val context: Context) {
             else -> null
         }
 
-        private fun stageSpans(array: JSONArray?): List<StageSpan> = (0 until (array?.length() ?: 0)).mapNotNull { i ->
+        /** Stage segments, each of its own type, or all of [only] when given. */
+        private fun stageSpans(array: JSONArray?, only: SleepStage? = null): List<StageSpan> = (0 until (array?.length() ?: 0)).mapNotNull { i ->
             val s = array!!.getJSONObject(i)
-            val stage = SleepStage.entries.firstOrNull { it.name == s.optString("type") } ?: return@mapNotNull null
+            val stage = only ?: SleepStage.entries.firstOrNull { it.name == s.optString("type") } ?: return@mapNotNull null
             StageSpan(time(s, "startTime") ?: return@mapNotNull null, time(s, "endTime") ?: return@mapNotNull null, stage)
         }.sortedBy { it.start }
 
@@ -204,18 +217,17 @@ class GoogleHealth(private val context: Context) {
             .mapNotNull { end(it) }
             .maxOrNull()
 
-    /** Sleep sessions that started between [from] and [to]. */
+    /** Sleep sessions that ended between [from] and [to]. */
     suspend fun sleeps(token: String, from: Instant, to: Instant): List<SleepSpan> =
         sleepSessions(token, from, to).map { SleepSpan(it.start, it.end) }.distinct()
 
-    /** Sleep sessions that started between [from] and [to], with their stages. */
+    /** Sleep sessions that ended between [from] and [to], with their stages. */
     suspend fun sleepSessions(token: String, from: Instant, to: Instant): List<SleepSession> {
         val out = mutableListOf<SleepSession>()
         var page: String? = null
         do {
-            val filter = "sleep.interval.start_time >= \"$from\" AND sleep.interval.start_time < \"$to\""
             val query = buildString {
-                append("filter=").append(URLEncoder.encode(filter, "UTF-8"))
+                append("filter=").append(URLEncoder.encode(sleepFilter(from, to), "UTF-8"))
                 page?.let { append("&pageToken=").append(URLEncoder.encode(it, "UTF-8")) }
             }
             val (sessions, next) = parseSleepSessions(call(token, "GET", "$BASE/sleep/dataPoints:reconcile?$query", null))

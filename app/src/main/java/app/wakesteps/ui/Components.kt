@@ -67,11 +67,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.wakesteps.core.Format
+import app.wakesteps.core.HebrewDate
 import app.wakesteps.data.WidgetStyle
 import app.wakesteps.ui.theme.AppColors
 import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
+import java.time.LocalDate
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToLong
@@ -135,6 +138,18 @@ fun Panel(
 @Composable
 fun Eyebrow(text: String, modifier: Modifier = Modifier, color: Color = Palette.muted) {
     Text(text.uppercase(), style = AppType.eyebrow, color = color, modifier = modifier, maxLines = 1)
+}
+
+/** An eyebrow followed by [date]'s Hebrew date, in Hebrew: "MONDAY, OCT 19 · ח׳ חשון". */
+@Composable
+fun DateEyebrow(text: String, date: LocalDate, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Eyebrow(text)
+        Eyebrow("  ·  ")
+        val hebrew = remember(date) { HebrewDate.of(date) }
+        // Hebrew has no capitals, and spacing its letters out would pull the date apart.
+        Text(hebrew, style = AppType.eyebrow.copy(fontSize = 13.sp, letterSpacing = 0.sp), color = Palette.muted, maxLines = 1)
+    }
 }
 
 /** A number that counts up when it first appears and glides to each new value. */

@@ -194,7 +194,7 @@ class ScreenRenderTest {
         val settings = AppSettings()
         val nights = nights()
         val scores = scores(nights)
-        val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history(), nights = nights)
+        val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history(), nights = nights, nightsLoaded = true)
         render("sleep", settings, Tab.SLEEP) { SleepScreen(state, scores, false, {}, {}, bottom) }
         render("sleep_touch", settings, Tab.SLEEP) { SleepScreen(state, scores, false, {}, {}, bottom, chartSelection = 4, chartMinute = 140) }
         render("sleep_restless_awake", settings, Tab.SLEEP) { SleepScreen(state, scores, true, {}, {}, bottom) }

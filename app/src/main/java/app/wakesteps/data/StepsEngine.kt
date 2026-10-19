@@ -119,24 +119,29 @@ class StepsEngine(
         }
     }
 
-    suspend fun history(settings: AppSettings, days: Long = 14): List<DaySummary> {
+    /** The awake days of the last [days] days, newest first: from sleep alone, so it's quick. */
+    suspend fun dayWindows(settings: AppSettings, days: Long = 14): List<DayWindow> {
         val now = Instant.now()
-        val granted = health.grantedPermissions()
         val sleeps = recentSleeps(settings, now, days)
         val overrides = prefs.currentOverrides()
         return DayCalculator.windows(
             sleeps, now.minus(Duration.ofDays(days + 1)), now, ZoneId.systemDefault(), settings.rules(), overrides,
-        )
-            .map { w ->
-                val end = w.endOr(now)
-                DaySummary(
-                    w,
-                    read(settings, { totals(it, w.start, end) }) {
-                        health.totals(w.start, end, settings.sourcePackage, granted, settings.calorieMode)
-                    },
-                )
-            }
-            .reversed()
+        ).reversed()
+    }
+
+    /** Each of [windows] with its totals. */
+    suspend fun history(settings: AppSettings, windows: List<DayWindow>): List<DaySummary> {
+        val now = Instant.now()
+        val granted = health.grantedPermissions()
+        return windows.map { w ->
+            val end = w.endOr(now)
+            DaySummary(
+                w,
+                read(settings, { totals(it, w.start, end) }) {
+                    health.totals(w.start, end, settings.sourcePackage, granted, settings.calorieMode)
+                },
+            )
+        }
     }
 
     /**
@@ -144,8 +149,8 @@ class StepsEngine(
      * (their own calls included), stage by stage, in the same order. Days that began without one
      * (after an all-nighter) are skipped.
      */
-    suspend fun nights(settings: AppSettings, days: List<DaySummary>): List<SleepNight> {
-        val spans = days.mapNotNull { it.window.wokeFrom }.distinct()
+    suspend fun nights(settings: AppSettings, days: List<DayWindow>): List<SleepNight> {
+        val spans = days.mapNotNull { it.wokeFrom }.distinct()
         if (spans.isEmpty()) return emptyList()
         val sessions = sleepSessions(settings, spans.minOf { it.start }, spans.maxOf { it.end })
         return spans.map { SleepNights.build(it, sessions) }
@@ -163,10 +168,14 @@ class StepsEngine(
             main?.let { date to SleepNights.build(SleepSpan(it.start, it.end), sessions) }
         }.toMap()
 
-    /** Google Health has the band's stages; without it (or if it has nothing), Health Connect. */
+    /**
+     * Sleep sessions overlapping [from]..[to]. Google Health has the band's stages; without it (or
+     * if it has nothing), Health Connect.
+     */
     private suspend fun sleepSessions(settings: AppSettings, from: Instant, to: Instant): List<SleepSession> {
         val cloud: List<SleepSession> = if (settings.googleHealth) {
-            read(settings, { sleepSessions(it, from.minusSeconds(60), to) }) { emptyList() }
+            // Google finds sleep by when it ended: anything overlapping ends after [from], and within a day of [to].
+            read(settings, { sleepSessions(it, from, to.plus(Duration.ofDays(1))) }) { emptyList() }.filter { it.start < to }
         } else emptyList()
         return cloud.ifEmpty {
             try {

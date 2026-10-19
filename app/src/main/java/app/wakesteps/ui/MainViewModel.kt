@@ -64,6 +64,8 @@ data class UiState(
     val calendar: List<CalendarDay> = emptyList(),
     /** The night each day in [history] began with, newest first (days after an all-nighter have none). */
     val nights: List<SleepNight> = emptyList(),
+    /** Whether [nights] has been read at least once (until then, the Sleep tab is loading). */
+    val nightsLoaded: Boolean = false,
     val error: String? = null,
     /** Offer the phone's step counter: it has one, and the user hasn't answered yet. */
     val liveStepsPrompt: Boolean = false,
@@ -135,39 +137,71 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(loading = false) }
                 return@launch
             }
-            try {
-                val s = app.prefs.currentSettings()
-                // The system may have killed the live service; we're in the foreground, so restart it.
-                if (s.liveMode) LiveModeService.start(app)
-                val today = app.engine.today(s, includeHourly = true)
-                _state.update { it.copy(today = today) }
-                // We're in the foreground, so this read always works: push it to the widget too.
-                app.engine.refresh(today)
-                val history = app.engine.history(s)
-                val calendar = runCatching { app.engine.calendarDays(s) }.getOrDefault(emptyList())
-                _state.update { it.copy(history = history, calendar = calendar, loading = false, error = null) }
-                // Sleep last: the steps are up before its extra read comes back.
-                app.prefs.seedSleepScores()
-                val nights = app.engine.nights(s, history)
-                _state.update { it.copy(nights = nights) }
-                // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
-                app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
-                // Scores entered for older nights (sent over from Google Health): read those nights once to learn from.
-                if (!olderNightsRead) {
-                    val shown = nights.map { it.wakeDate() }.toSet()
-                    val older = app.prefs.sleepScores.first().values.filter { it.estimate == null && it.date !in shown }.map { it.date }.toSet()
-                    if (older.isNotEmpty()) {
-                        app.prefs.noteEstimates(
-                            app.engine.nightsEndingOn(s, older).mapNotNull { (date, n) -> SleepScore.estimate(n)?.let { date to it } }.toMap()
-                        )
-                    }
-                    olderNightsRead = true
+            val s = showingErrors {
+                app.prefs.currentSettings().also {
+                    // The system may have killed the live service; we're in the foreground, so restart it.
+                    if (it.liveMode) LiveModeService.start(app)
                 }
-            } catch (e: CancellationException) {
-                throw e // a newer reload replaced this one: not an error
-            } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message ?: e.javaClass.simpleName) }
             }
+            if (s == null) {
+                _state.update { it.copy(loading = false) }
+                return@launch
+            }
+            // Today, the days and the nights load side by side, each showing as soon as it's in. The
+            // nights only need the days' sleep, not their steps, so they don't wait for those.
+            val today = launch {
+                showingErrors {
+                    val today = app.engine.today(s, includeHourly = true)
+                    _state.update { it.copy(today = today) }
+                    // We're in the foreground, so this read always works: push it to the widget too.
+                    app.engine.refresh(today)
+                }
+            }
+            val windows = showingErrors { app.engine.dayWindows(s) }
+            launch {
+                if (windows != null) showingErrors { loadNights(s, windows) }
+                _state.update { it.copy(nightsLoaded = true) } // even if that failed: show what there is
+            }
+            if (windows != null) {
+                showingErrors {
+                    val history = app.engine.history(s, windows)
+                    val calendar = runCatching { app.engine.calendarDays(s) }.getOrDefault(emptyList())
+                    _state.update { it.copy(history = history, calendar = calendar) }
+                }
+            }
+            today.join()
+            _state.update { it.copy(loading = false) }
+        }
+    }
+
+    /** Runs [block]; a failure (but not a newer reload replacing this one) shows as the error, and gives null. */
+    private suspend fun <T> showingErrors(block: suspend () -> T): T? =
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(error = e.message ?: e.javaClass.simpleName) }
+            null
+        }
+
+    /** The nights [windows] began with, then the sleep scores learn from them. */
+    private suspend fun loadNights(s: AppSettings, windows: List<DayWindow>) {
+        app.prefs.seedSleepScores()
+        val nights = app.engine.nights(s, windows)
+        _state.update { it.copy(nights = nights, nightsLoaded = true) }
+        // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
+        app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
+        // Scores entered for older nights (sent over from Google Health): read those nights once to learn from.
+        if (!olderNightsRead) {
+            val shown = nights.map { it.wakeDate() }.toSet()
+            val older = app.prefs.sleepScores.first().values.filter { it.estimate == null && it.date !in shown }.map { it.date }.toSet()
+            if (older.isNotEmpty()) {
+                app.prefs.noteEstimates(
+                    app.engine.nightsEndingOn(s, older).mapNotNull { (date, n) -> SleepScore.estimate(n)?.let { date to it } }.toMap()
+                )
+            }
+            olderNightsRead = true
         }
     }
 

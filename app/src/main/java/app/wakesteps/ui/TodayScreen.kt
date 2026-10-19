@@ -104,16 +104,17 @@ fun TodayScreen(
     }
 }
 
-/** Today's date, the title, and how fresh the tracker data is (tap for the sync log). */
+/** Today's date (and Hebrew date), the title, and how fresh the tracker data is (tap for the sync log). */
 @Composable
 private fun Header(now: Instant, latest: Instant?, live: Long, onShowSyncLog: () -> Unit, modifier: Modifier) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f)) {
-            Eyebrow(DateTimeFormatter.ofPattern("EEEE, MMM d").format(now.atZone(ZoneId.systemDefault())))
-            Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.tab_today), style = AppType.title, color = Palette.text)
+    val day = now.atZone(ZoneId.systemDefault())
+    Column(modifier.fillMaxWidth()) {
+        DateEyebrow(DateTimeFormatter.ofPattern("EEEE, MMM d").format(day), day.toLocalDate())
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.tab_today), style = AppType.title, color = Palette.text, modifier = Modifier.weight(1f))
+            if (latest != null) SyncPill(latest, now, live, onShowSyncLog)
         }
-        if (latest != null) SyncPill(latest, now, live, onShowSyncLog)
     }
 }
 
@@ -133,7 +134,6 @@ private fun SyncPill(latest: Instant, now: Instant, live: Long, onClick: () -> U
     val source = remember { MutableInteractionSource() }
     Row(
         Modifier
-            .padding(bottom = 6.dp)
             .pressScale(source)
             .clip(CircleShape)
             .background(Palette.card)

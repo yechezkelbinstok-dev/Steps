@@ -90,7 +90,8 @@ class GoogleHealthParseTest {
                   {"startTime": "2026-10-18T23:12:00Z", "endTime": "2026-10-19T01:00:00Z", "type": "DEEP"},
                   {"startTime": "2026-10-19T01:00:00Z", "endTime": "2026-10-19T01:00:00Z", "type": "SLEEP_STAGE_TYPE_UNSPECIFIED"}
                 ],
-                "shortAwakenings": [{"startTime": "2026-10-19T03:10:00Z", "endTime": "2026-10-19T03:11:00Z", "type": "AWAKE"}],
+                "shortAwakenings": [{"startTime": "2026-10-19T03:10:00Z", "startUtcOffset": "-14400s",
+                                     "endTime": "2026-10-19T03:11:00Z", "endUtcOffset": "-14400s"}],
                 "metadata": {"stagesStatus": "SUCCEEDED", "processed": true, "mainSleep": true},
                 "summary": {"minutesInSleepPeriod": "480", "minutesToFallAsleep": "12", "minutesAsleep": "468"}
               }
@@ -103,8 +104,18 @@ class GoogleHealthParseTest {
         assertEquals(Instant.parse("2026-10-19T07:00:00Z"), s.end)
         // In time order, with the unknown stage left out.
         assertEquals(listOf(SleepStage.AWAKE, SleepStage.DEEP, SleepStage.LIGHT), s.stages.map { it.stage })
+        // Brief wake-ups come without a type.
         assertEquals(StageSpan(Instant.parse("2026-10-19T03:10:00Z"), Instant.parse("2026-10-19T03:11:00Z"), SleepStage.AWAKE), s.shortAwakenings.single())
         assertEquals(12L, s.minutesToFallAsleep)
+    }
+
+    @Test
+    fun sleepIsFilteredByWhenItEnded() {
+        // Google refuses sleep.interval.start_time (INVALID_DATA_POINT_FILTER_DATA_TYPE_MEMBER).
+        assertEquals(
+            "sleep.interval.end_time >= \"2026-10-18T12:00:00Z\" AND sleep.interval.end_time < \"2026-10-19T12:00:00Z\"",
+            GoogleHealth.sleepFilter(Instant.parse("2026-10-18T12:00:00.123456Z"), Instant.parse("2026-10-19T12:00:00Z")),
+        )
     }
 
     @Test
