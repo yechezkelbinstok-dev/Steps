@@ -118,6 +118,7 @@ private fun App(vm: MainViewModel) {
     var adjusting by remember { mutableStateOf<DayWindow?>(null) }
     var showSyncLog by remember { mutableStateOf(false) }
     var showGoogleHealth by remember { mutableStateOf(false) }
+    var showDiagnostics by remember { mutableStateOf(false) }
     val googleError by vm.googleHealthError.collectAsStateWithLifecycle()
     val googleMessage by vm.googleMessage.collectAsStateWithLifecycle()
     val googleBusy by vm.googleBusy.collectAsStateWithLifecycle()
@@ -189,6 +190,7 @@ private fun App(vm: MainViewModel) {
                         settings, vm::updateSettings, actions, state.access, state.today?.latestDataAt,
                         onShowSyncLog = { showSyncLog = true },
                         onOpenGoogleHealth = { showGoogleHealth = true },
+                        onOpenDiagnostics = { showDiagnostics = true },
                         googleError = googleError,
                         bottomPadding = bottom,
                     )
@@ -227,6 +229,7 @@ private fun App(vm: MainViewModel) {
         TabBar(tab, onSelect = { openDay = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
+        if (showDiagnostics) DiagnosticsSheet(onDone = { showDiagnostics = false })
         if (showGoogleHealth) {
             GoogleHealthSheet(
                 connected = settings.googleHealth,

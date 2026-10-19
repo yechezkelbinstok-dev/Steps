@@ -99,7 +99,7 @@ class ScreenRenderTest {
             DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom)
         }
         render("settings", settings, Tab.SETTINGS) {
-            SettingsScreen(settings, {}, actions, state.access, now.minus(Duration.ofMinutes(6)), {}, {}, null, bottom)
+            SettingsScreen(settings, {}, actions, state.access, now.minus(Duration.ofMinutes(6)), {}, {}, {}, null, bottom)
         }
     }
 

@@ -6,6 +6,13 @@ one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.1
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9).
 
+## 1.11
+- Settings → Diagnostics: a troubleshooting report to copy or share. It reads Health Connect and
+  Google Health live, side by side (steps, calories and distance, plus the newest step each one
+  has and how far behind now that is), along with the app's state: version, permissions, the
+  day window, what the widget shows, and the recent sync log. Each read gives up after 10
+  seconds, so a source that doesn't answer can't hold up the rest of the report.
+
 ## 1.10 (briefly labelled 2.0)
 - A refresh button on the widget, in the top-right corner (at the end of the 4×1 strip; the 2×1
   has no room for it). Tap it and the widget re-reads your steps, calories and distance right

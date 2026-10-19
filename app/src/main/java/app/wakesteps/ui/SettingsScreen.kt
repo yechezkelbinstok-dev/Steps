@@ -73,6 +73,7 @@ fun SettingsScreen(
     latestSync: Instant?,
     onShowSyncLog: () -> Unit,
     onOpenGoogleHealth: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
     googleError: String?,
     bottomPadding: Dp,
 ) {
@@ -145,6 +146,8 @@ fun SettingsScreen(
             LinkRow(stringResource(R.string.sync_log_open), onShowSyncLog) {
                 latestSync?.let { Text(Format.ago(it), style = MaterialTheme.typography.labelLarge, color = Palette.muted) }
             }
+            Divider()
+            LinkRow(stringResource(R.string.diag_row), onOpenDiagnostics)
         }
 
         val version = remember {

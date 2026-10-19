@@ -150,8 +150,14 @@ class Prefs(private val context: Context) {
 
     suspend fun currentSettings(): AppSettings = settings.first()
 
+    /** The sync log as it stands now (for diagnostics). */
+    suspend fun syncLogNow(): List<SyncEvent> = syncLog.first()
+
     /** Why the last Google Health read failed, or null if it worked. */
     val googleHealthError: Flow<String?> = context.dataStore.data.map { it[K.googleHealthError] }
+
+    /** The recorded Google Health error as it stands now (for diagnostics). */
+    suspend fun googleHealthErrorNow(): String? = googleHealthError.first()
 
     suspend fun setGoogleHealthError(message: String?) {
         context.dataStore.edit { p -> if (message == null) p.remove(K.googleHealthError) else p[K.googleHealthError] = message }

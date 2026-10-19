@@ -115,6 +115,13 @@
     <string name="set_open_hc">Health Connect</string>
     <string name="app_version">Awake Steps %1$s</string>
     <string name="sync_log_open">Sync log</string>
+    <string name="diag_row">Diagnostics</string>
+    <string name="diag_eyebrow">Troubleshooting</string>
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_intro">A live read from Health Connect and Google Health, side by side, plus the app\'s current state. Copy it and send it over so the data problem can be pinned down.</string>
+    <string name="diag_gathering">Reading from both sources…</string>
+    <string name="diag_copy">Copy</string>
+    <string name="diag_share">Share</string>
     <string name="sync_log_title">Sync log</string>
     <string name="sync_log_summary">New Fitbit data has been arriving about every %1$s, roughly %2$s after the steps happened.</string>
     <string name="sync_log_note">Each line is a moment new step data showed up in Health Connect. While your screen is on this app checks every 15 seconds, so times are accurate to about that; with the screen off it checks every 15 minutes.</string>

@@ -79,7 +79,9 @@ Health Connect's rate limits.
 
 The widget can only be as fresh as the data in Health Connect, and the Fitbit / Google Health
 app decides when to write there. **Settings → Sync log** records each time new data actually
-arrived, and how far behind it was, so you can see Fitbit's real cadence on your phone. To keep
+arrived, and how far behind it was, so you can see Fitbit's real cadence on your phone.
+**Settings → Diagnostics** goes further: it reads Health Connect and Google Health live, side by
+side, with the newest step each one has, and gives you the whole report to copy or share. To keep
 it frequent, turn on all-day sync in the Fitbit app and leave it unrestricted in battery
 settings.
 
