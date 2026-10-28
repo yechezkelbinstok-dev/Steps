@@ -173,7 +173,10 @@ class HealthSource(private val context: Context) {
         )
     }
 
-    /** Steps bucketed by [bucket], starting at [from]. */
+    /**
+     * Steps bucketed by [bucket], starting at [from]: every bucket, those without steps as 0
+     * (Health Connect leaves them out).
+     */
     suspend fun stepsBuckets(
         from: Instant,
         to: Instant,
@@ -181,14 +184,21 @@ class HealthSource(private val context: Context) {
         sourcePackage: String?,
     ): List<Pair<Instant, Long>> {
         if (!to.isAfter(from)) return emptyList()
-        return client.aggregateGroupByDuration(
+        val starts = generateSequence(from) { it.plus(bucket) }.takeWhile { it.isBefore(to) }.toList()
+        val counts = LongArray(starts.size)
+        val groups = client.aggregateGroupByDuration(
             AggregateGroupByDurationRequest(
                 metrics = setOf(StepsRecord.COUNT_TOTAL),
                 timeRangeFilter = TimeRangeFilter.between(from, to),
                 timeRangeSlicer = bucket,
                 dataOriginFilter = origins(sourcePackage),
             )
-        ).map { it.startTime to (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) }
+        )
+        for (group in groups) {
+            val i = Math.round(Duration.between(from, group.startTime).toMillis().toDouble() / bucket.toMillis()).toInt()
+            if (i in counts.indices) counts[i] += group.result[StepsRecord.COUNT_TOTAL] ?: 0L
+        }
+        return starts.mapIndexed { i, t -> t to counts[i] }
     }
 
     /** A bookmark in Health Connect's change log for steps and sleep. */

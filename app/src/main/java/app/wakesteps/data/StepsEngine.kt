@@ -14,6 +14,8 @@ import app.wakesteps.core.SoundSleeps
 import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,6 +24,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 data class TodaySummary(
     val window: DayWindow,
@@ -116,11 +119,31 @@ class StepsEngine(
         return TodaySummary(window, night, totals, hourly, latest, now)
     }
 
-    /** Steps hour by hour across one awake day (up to now if it's still going). */
+    /**
+     * Steps hour by hour across one awake day (up to now if it's still going), on the clock's hours
+     * as the chart labels them: the first from waking to the next o'clock, then each hour from it.
+     */
     suspend fun hourly(window: DayWindow, settings: AppSettings): List<Pair<Instant, Long>> {
         val end = window.endOr(Instant.now())
-        return read(settings, { stepsBuckets(it, window.start, end, Duration.ofHours(1)) }) {
-            health.stepsBuckets(window.start, end, Duration.ofHours(1), settings.sourcePackage)
+        val hour = Duration.ofHours(1)
+        val onTheHour = window.start.atZone(ZoneId.systemDefault()).truncatedTo(ChronoUnit.HOURS).plusHours(1).toInstant()
+        if (!onTheHour.isBefore(end)) {
+            return read(settings, { stepsBuckets(it, window.start, end, hour) }) {
+                health.stepsBuckets(window.start, end, hour, settings.sourcePackage)
+            }
+        }
+        val first = Duration.between(window.start, onTheHour)
+        return read(
+            settings,
+            { token ->
+                coroutineScope {
+                    val rest = async { stepsBuckets(token, onTheHour, end, hour) }
+                    stepsBuckets(token, window.start, onTheHour, first) + rest.await()
+                }
+            },
+        ) {
+            health.stepsBuckets(window.start, onTheHour, first, settings.sourcePackage) +
+                health.stepsBuckets(onTheHour, end, hour, settings.sourcePackage)
         }
     }
 

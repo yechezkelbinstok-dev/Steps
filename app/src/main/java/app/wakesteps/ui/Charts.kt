@@ -48,8 +48,9 @@ import app.wakesteps.core.Format
 import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import kotlinx.coroutines.delay
-import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
 /** One bar: its value, and whether it's past the goal (drawn gold). */
@@ -269,7 +270,10 @@ fun HourlyPanel(
 
     fun range(i: Int): String {
         val start = buckets[i].first
-        return "${Format.hour(start, h24)} – ${Format.hour(start.plus(Duration.ofHours(1)), h24)}"
+        // Hours run on the clock: each ends where the next begins, the last at the next o'clock.
+        val end = buckets.getOrNull(i + 1)?.first
+            ?: start.atZone(ZoneId.systemDefault()).truncatedTo(ChronoUnit.HOURS).plusHours(1).toInstant()
+        return "${Format.hour(start, h24)} – ${Format.hour(end, h24)}"
     }
 
     Panel(modifier.fillMaxWidth(), onClick = onOpen) {

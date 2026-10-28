@@ -92,13 +92,19 @@ You'll only see Awake Steps listed under "active apps" in quick settings.
 
 ## Steps minute by minute
 
-Tap *Hour by hour*, on Today or on any day's page, to open the day's steps up: bars across the
-day that get finer as you zoom in (pinch, double-tap, or − and +) until each is a single minute,
-the steps and time of the bar under your finger, and the whole day below to move around in. Under
-it are the day's **walks**: stretches at 60 steps a minute or more lasting 5 minutes or more
-(pauses of up to 2 minutes don't end one), each with its times, length, pace and steps. Tap one to
-see it in the chart. With Google Health connected the minutes come straight from the band; from
-Health Connect they're only as fine as the records the Fitbit app writes there. The walks are in
+Tap *Hour by hour*, on Today or on any day's page, to open the day's steps up. It starts hour by
+hour across the whole day and gets finer a step at a time as you zoom in (pinch, double-tap, or −
+and +) until it's minute by minute, with 40 minutes or less across. Drag a finger along it to read
+the steps and time of each bar; the whole day sits below to move around in. Hours are the clock's,
+the first running from when you woke to the next o'clock.
+
+A minute is as fine as it goes: the band keeps steps a minute at a time (Google Health stores them
+at one-minute resolution). With Google Health connected the minutes come straight from the band;
+from Health Connect they're only as fine as the records the Fitbit app writes there.
+
+Under the chart are the day's **walks**: stretches at 60 steps a minute or more lasting 5 minutes
+or more (pauses of up to 2 minutes don't end one), each with its times, length, pace and steps.
+Tap one to see it in the chart. The walks are in
 [`Walks.kt`](app/src/main/java/app/wakesteps/core/Walks.kt).
 
 ## Sleep

@@ -4,9 +4,20 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.15.1
+- Steps minute by minute opens hour by hour, the same as the Hour by hour chart you tapped. As you
+  zoom in it gets finer a step at a time (every 30, 20, 15, 10, 5, 3 and 2 minutes), and the bars
+  fade into the finer ones. With 40 minutes or less across it's minute by minute, which is as fine
+  as steps go: the band keeps them a minute at a time.
+- Hour by hour runs on the clock's hours: the first from when you woke to the next o'clock, then
+  8–9, 9–10 and so on. Each hour used to run from the minute you woke (7:12–8:12) while labelled
+  7–8 AM.
+- With steps from Health Connect, an hour without any steps used to be left out of Hour by hour,
+  which moved every later hour one place to the left. It's there now, as nothing.
 
 ## 1.15
 - Steps minute by minute. Tap Hour by hour, on Today or on any day's page, to open the day up:

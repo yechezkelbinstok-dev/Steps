@@ -2,7 +2,9 @@ package app.wakesteps.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,10 +30,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -62,9 +68,28 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.math.abs
+import kotlin.math.ln
 
-/** How many minutes each bar can stand for, finest first: minute by minute once zoomed in far enough. */
+/** How many minutes each bar can stand for, finest first. */
 private val BAR_MINUTES = listOf(1, 2, 3, 5, 10, 15, 20, 30, 60)
+
+/** Minutes across the chart from which it's minute by minute. */
+private const val MINUTE_BARS_WITHIN = 40.0
+
+/**
+ * How many minutes each bar stands for with [visible] minutes of a [day]-minute day in view: an
+ * hour each with the whole day in view, as on Hour by hour, then finer a step at a time as you
+ * zoom in (30, 20, 15, 10, 5, 3, 2) until it's minute by minute, with 40 minutes or less across.
+ * Steps are only kept a minute at a time, so a minute is as fine as it goes.
+ */
+internal fun barMinutes(visible: Double, day: Int): Int {
+    if (day <= MINUTE_BARS_WITHIN) return 1
+    // How far from minute bars (0) to hour bars (1), evenly by zoom.
+    val t = (ln(visible / MINUTE_BARS_WITHIN) / ln(day / MINUTE_BARS_WITHIN)).coerceIn(0.0, 1.0)
+    val ideal = t * ln(60.0)
+    return BAR_MINUTES.minBy { abs(ln(it.toDouble()) - ideal) }
+}
 
 /** Steps in each minute from [start] to [end]; minutes without any are 0. */
 private fun perMinute(start: Instant, end: Instant, steps: List<Pair<Instant, Long>>): LongArray {
@@ -99,10 +124,11 @@ private fun bars(minutes: LongArray, offset: Int, size: Int): List<Pair<Int, Lon
 }
 
 /**
- * One day's steps opened up: bars across the day that become minute by minute as you zoom in
- * (pinch, double-tap, or − and +), the steps and time of the bar under your finger, and the whole
- * day below with the part in view framed (drag along it to move, tap to jump). Bars from the
- * minute you passed your goal are gold. Under it, the day's walks: tap one to see it in the chart.
+ * One day's steps opened up: hour by hour across the whole day, finer as you zoom in (pinch,
+ * double-tap, or − and +) down to minute by minute, the steps and time of the bar under your
+ * finger, and the whole day below with the part in view framed (drag along it to move, tap to
+ * jump). Bars from the minute you passed your goal are gold. Under it, the day's walks: tap one
+ * to see it in the chart.
  */
 @Composable
 fun StepsExplorer(
@@ -204,11 +230,25 @@ private fun ZoomableSteps(
 
     Panel(modifier.fillMaxWidth()) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            // Bars at least 5dp apart: as fine as that allows, minute by minute when zoomed in far enough.
-            val room = (maxWidth / 5.dp).toInt().coerceAtLeast(12)
-            val barMinutes = BAR_MINUTES.firstOrNull { (view.width * n) / it <= room } ?: 60
+            val visible = view.width * n.toDouble()
+            // Never more bars than fit 3dp apart, on however narrow a screen.
+            val barMinutes = barMinutes(visible, n).let { ideal ->
+                BAR_MINUTES.firstOrNull { it >= ideal && visible / it <= maxWidth / 3.dp } ?: 60
+            }
             val all = remember(minutes, barMinutes) { bars(minutes, offset, barMinutes) }
             val top by animateFloatAsState(all.maxOf { it.second }.coerceAtLeast(1L).toFloat(), label = "scale")
+            // When the bars change size, the old ones fade out as the new ones grow in.
+            var shownMinutes by remember { mutableIntStateOf(barMinutes) }
+            var outgoing by remember { mutableStateOf<Pair<Int, List<Pair<Int, Long>>>?>(null) }
+            val swap = remember { Animatable(1f) }
+            LaunchedEffect(barMinutes) {
+                if (barMinutes == shownMinutes) return@LaunchedEffect
+                outgoing = shownMinutes to bars(minutes, offset, shownMinutes)
+                shownMinutes = barMinutes
+                swap.snapTo(0f)
+                swap.animateTo(1f, tween(300))
+                outgoing = null
+            }
             val pickedBar = selection.index?.let { m -> all.lastOrNull { it.first <= m } }
             val marks = ticks(from, to, zone, maxCount = (maxWidth / 64.dp).toInt().coerceAtLeast(2))
 
@@ -282,37 +322,43 @@ private fun ZoomableSteps(
                         val at = x(Duration.between(start, t).toMillis() / 60_000f)
                         drawLine(Color.White.copy(alpha = 0.05f), Offset(at, head), Offset(at, size.height), 1.dp.toPx())
                     }
-                    val pitch = barMinutes * scale
-                    val w = (pitch * 0.7f).coerceIn(1.5.dp.toPx(), 26.dp.toPx())
-                    // Bars at least partly in view.
-                    val shownFrom = view.left * n - barMinutes
-                    val shownTo = view.right * n
-                    clipRect {
-                        for ((barStart, steps) in all) {
+                    // [set]'s bars of [each] minutes, those at least partly in view, at [alpha].
+                    fun drawBars(set: List<Pair<Int, Long>>, each: Int, alpha: Float, picked: Pair<Int, Long>?) {
+                        val pitch = each * scale
+                        val w = (pitch * 0.62f).coerceIn(1.5.dp.toPx(), 26.dp.toPx())
+                        val shownFrom = view.left * n - each
+                        val shownTo = view.right * n
+                        for ((barStart, steps) in set) {
                             if (steps == 0L || barStart < shownFrom || barStart > shownTo) continue
-                            val left = x(barStart.toFloat())
                             val h = (chart * steps / top).coerceAtLeast(2.dp.toPx())
-                            val bx = left + (pitch - w) / 2
-                            val gold = goalMinute != null && barStart + barMinutes > goalMinute
+                            val bx = x(barStart.toFloat()) + (pitch - w) / 2
+                            val gold = goalMinute != null && barStart + each > goalMinute
                             val (hi, lo) = when {
                                 gold -> colors.goalStart to colors.goalEnd
                                 colors.gradient -> colors.accent to colors.accentEnd
                                 else -> colors.accent to colors.accent.copy(alpha = 0.5f)
                             }
-                            val dim = pickedBar != null && pickedBar.first != barStart
-                            if (!dim && pickedBar != null) {
-                                drawRoundRect(hi.copy(alpha = 0.18f), Offset(bx - w * 0.35f, size.height - h - w * 0.35f), Size(w * 1.7f, h + w * 0.35f), CornerRadius(w))
+                            val dim = picked != null && picked.first != barStart
+                            if (!dim && picked != null) {
+                                drawRoundRect(
+                                    hi.copy(alpha = 0.18f * alpha), Offset(bx - w * 0.35f, size.height - h - w * 0.35f),
+                                    Size(w * 1.7f, h + w * 0.35f), CornerRadius(w),
+                                )
                                 drawLine(
-                                    colors.text.copy(alpha = 0.35f), Offset(bx + w / 2, head), Offset(bx + w / 2, size.height - h - 6.dp.toPx()), 1.dp.toPx(),
+                                    colors.text.copy(alpha = 0.35f * alpha), Offset(bx + w / 2, head), Offset(bx + w / 2, size.height - h - 6.dp.toPx()), 1.dp.toPx(),
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())),
                                 )
                             }
                             drawRoundRect(
                                 Brush.verticalGradient(listOf(hi, lo), startY = size.height - h, endY = size.height),
                                 Offset(bx, size.height - h), Size(w, h), CornerRadius(minOf(w / 2, h / 2)),
-                                alpha = if (dim) 0.3f else 1f,
+                                alpha = alpha * if (dim) 0.3f else 1f,
                             )
                         }
+                    }
+                    clipRect {
+                        outgoing?.let { (each, set) -> drawBars(set, each, 1f - swap.value, null) }
+                        drawBars(all, barMinutes, if (outgoing != null) swap.value else 1f, pickedBar)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
