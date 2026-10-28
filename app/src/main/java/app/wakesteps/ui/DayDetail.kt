@@ -73,8 +73,10 @@ fun DayDetail(
     /** The night this day began with, if there was one. */
     night: SleepNight? = null,
     nightScore: NightScore? = null,
-    /** Opens the night to zoom into. */
-    onExploreNight: (SleepNight) -> Unit = {},
+    /** Opens the night before in full. */
+    onOpenNight: (SleepNight) -> Unit = {},
+    /** Opens the day's steps minute by minute. */
+    onExploreSteps: (DayWindow) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val now = remember { Instant.now() }
@@ -113,12 +115,11 @@ fun DayDetail(
                 Caption(stringResource(if (buckets == null) R.string.loading else R.string.hourly_none), color = Palette.faint)
             }
         } else {
-            HourlyPanel(buckets, settings.goal, ongoing = w.isOngoing, Modifier.entrance(3))
+            HourlyPanel(buckets, settings.goal, ongoing = w.isOngoing, Modifier.entrance(3), onOpen = { onExploreSteps(w) })
         }
         TimelinePanel(day, overrides, now, Modifier.entrance(4))
         night?.let {
-            LastNightCard(it, nightScore, settings.restlessAsAwake, stringResource(R.string.sleep_night_before), onOpen = null, Modifier.entrance(5))
-            if (it.stages.size > 1) NightChart(it.counted(settings.restlessAsAwake), Modifier.entrance(6), onOpen = { onExploreNight(it) })
+            LastNightCard(it, nightScore, settings.restlessAsAwake, stringResource(R.string.sleep_night_before), onOpen = { onOpenNight(it) }, Modifier.entrance(5))
         }
         PrimaryButton(stringResource(R.string.detail_adjust), { onAdjust(w) }, Modifier.align(Alignment.CenterHorizontally).entrance(7))
     }

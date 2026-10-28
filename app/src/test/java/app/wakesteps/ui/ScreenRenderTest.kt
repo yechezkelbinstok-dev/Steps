@@ -233,6 +233,46 @@ class ScreenRenderTest {
         }
     }
 
+    /**
+     * A believable day minute by minute, coming to [total] steps: walks at a steady 100 or so a
+     * minute (easing in and out), and a few steps here and there in between.
+     */
+    private fun minuteSteps(day: DayWindow, total: Long): List<Pair<Instant, Long>> {
+        val minutes = Duration.between(day.start, day.endOr(now)).toMinutes().toInt()
+        val random = java.util.Random(7)
+        val walks = listOf(28..45, 212..217, 290..315, 515..522, 610..631, 840..848).filter { it.first < minutes }
+        val steps = LongArray(minutes)
+        for (walk in walks) for (m in walk) if (m < minutes) {
+            val edge = if (m == walk.first || m == walk.last) 0.5 else 1.0
+            steps[m] = ((104 + random.nextGaussian() * 6) * edge).toLong()
+        }
+        val about = (0 until minutes).filter { steps[it] == 0L && random.nextDouble() < 0.16 }
+        val left = (total - steps.sum()).coerceAtLeast(0)
+        val weights = about.map { 0.2 + random.nextDouble() }
+        about.forEachIndexed { i, m -> steps[m] = (left * weights[i] / weights.sum()).toLong() }
+        return steps.mapIndexed { m, v -> day.start.plus(Duration.ofMinutes(m.toLong())) to v }
+    }
+
+    /** A day's steps opened up: the whole day, zoomed in to minute by minute, and today so far. */
+    @Test
+    @Config(qualifiers = "w411dp-h1400dp-420dpi")
+    fun renderStepsExplorer() {
+        val settings = AppSettings()
+        val day = history()[1]
+        val minutes = minuteSteps(day.window, day.totals.steps)
+        render("steps", settings, Tab.HISTORY) { StepsExplorer(day.window, settings.goal, { minutes }, {}, bottom, now = now) }
+        render("steps_zoomed", settings, Tab.HISTORY) {
+            StepsExplorer(day.window, settings.goal, { minutes }, {}, bottom, initialView = 0.285f..0.345f, initialMinute = 300, now = now)
+        }
+        render("steps_middle", settings, Tab.HISTORY) {
+            StepsExplorer(day.window, settings.goal, { minutes }, {}, bottom, initialView = 0.25f..0.45f, now = now)
+        }
+        val today = today(6432).window
+        val todayMinutes = minuteSteps(today, 6432)
+        render("steps_today", settings, Tab.TODAY) { StepsExplorer(today, settings.goal, { todayMinutes }, {}, bottom, now = now) }
+        render("steps_empty", settings, Tab.TODAY) { StepsExplorer(today, settings.goal, { emptyList() }, {}, bottom, now = now) }
+    }
+
     /** A tall screen, to see a whole day page at once. */
     @Test
     @Config(qualifiers = "w411dp-h1500dp-420dpi")

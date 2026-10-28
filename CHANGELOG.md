@@ -4,9 +4,24 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.15
+- Steps minute by minute. Tap Hour by hour, on Today or on any day's page, to open the day up:
+  bars across the day get finer as you zoom in (pinch, double-tap, or − and +) until each one is
+  a single minute, down to ten minutes across. Drag a finger along to read each bar's steps and
+  time; the whole day sits below with the part in view framed (drag along it to move, tap to
+  jump). Bars from the minute you passed your goal are gold.
+- Under it, the day's walks: every stretch at walking pace (60 steps a minute or more) lasting
+  five minutes or more, with its times, how long, its pace and its steps, and Goal on the walk
+  where you passed it. Pauses of up to two minutes (a crossing, a door) don't end a walk. Tap a
+  walk to see it in the chart.
+- On a day's page the night before is just its card now. Tap it for that night's own page (score,
+  stages and all) instead of a second copy of the night chart underneath.
+- The night chart's panel is called Sleep stages (it was Through the night). Opened up, the panel
+  under it with the time in each stage is called Breakdown.
 
 ## 1.14.1
 - Restlessness and interruptions are counted the way Google counts them: a stretch of being awake

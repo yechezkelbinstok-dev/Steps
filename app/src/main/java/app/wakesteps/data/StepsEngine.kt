@@ -134,6 +134,14 @@ class StepsEngine(
         ).reversed()
     }
 
+    /** Steps minute by minute across one awake day (up to now if it's still going). */
+    suspend fun minuteSteps(window: DayWindow, settings: AppSettings): List<Pair<Instant, Long>> {
+        val end = window.endOr(Instant.now())
+        return read(settings, { stepsBuckets(it, window.start, end, Duration.ofMinutes(1)) }) {
+            health.stepsBuckets(window.start, end, Duration.ofMinutes(1), settings.sourcePackage)
+        }
+    }
+
     /** Each of [windows] with its totals. */
     suspend fun history(settings: AppSettings, windows: List<DayWindow>): List<DaySummary> {
         val now = Instant.now()

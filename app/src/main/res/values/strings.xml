@@ -15,6 +15,18 @@
     <string name="hourly_peak">busiest · %1$s</string>
     <string name="hourly_goal_at">Goal at %1$s</string>
     <string name="hourly_none">No steps recorded.</string>
+    <string name="steps_eyebrow">Steps</string>
+    <string name="steps_minute_by_minute">Minute by minute</string>
+    <string name="walks_title">Walks</string>
+    <string name="walks_total">%1$s in all</string>
+    <plurals name="walks_none">
+        <item quantity="one">No walks of %1$d minute or more.</item>
+        <item quantity="other">No walks of %1$d minutes or more.</item>
+    </plurals>
+    <string name="walk_pace">%1$s steps a minute</string>
+    <string name="walk_goal">Goal</string>
+    <string name="steps_unavailable">Couldn\'t read this day\'s steps minute by minute.</string>
+    <string name="steps_every">Every %1$d min</string>
 
     <string name="hc_missing_title">Health Connect needed</string>
     <string name="hc_missing_body">This app reads your Fitbit steps and sleep through Health Connect. Install or update it, then turn on Health Connect sync in the Fitbit app.</string>
@@ -124,8 +136,8 @@
     <string name="sleep_last_night">Last night</string>
     <string name="sleep_eyebrow">Your nights</string>
     <string name="sleep_asleep">asleep</string>
-    <string name="sleep_stages">Stages</string>
-    <string name="sleep_through_night">Through the night</string>
+    <string name="sleep_stages">Breakdown</string>
+    <string name="sleep_through_night">Sleep stages</string>
     <string name="sleep_week">Last 7 nights</string>
     <string name="sleep_longest_deep">longest deep sleep, from %1$s</string>
     <string name="sleep_longest">longest stretch, from %1$s</string>

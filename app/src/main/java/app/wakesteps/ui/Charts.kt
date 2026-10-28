@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -123,6 +127,8 @@ fun InteractiveBars(
     barFraction: Float = 0.58f,
     line: Long? = null,
     lineLabel: String? = null,
+    /** False when a tap opens something else (the panel takes it); a drag still picks. */
+    tapToPick: Boolean = true,
 ) {
     val colors = Palette
     val haptics = LocalHapticFeedback.current
@@ -143,7 +149,7 @@ fun InteractiveBars(
         modifier.scrubbable(
             n,
             onTap = { f ->
-                if (n > 0) {
+                if (n > 0 && tapToPick) {
                     val i = pick(f)
                     select(if (i == selection.index) null else i)
                     selection.releasedAt = System.currentTimeMillis()
@@ -245,6 +251,8 @@ fun HourlyPanel(
     ongoing: Boolean,
     modifier: Modifier = Modifier,
     initialSelection: Int? = null,
+    /** Opens the day minute by minute. */
+    onOpen: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val h24 = android.text.format.DateFormat.is24HourFormat(context)
@@ -264,11 +272,15 @@ fun HourlyPanel(
         return "${Format.hour(start, h24)} – ${Format.hour(start.plus(Duration.ofHours(1)), h24)}"
     }
 
-    Panel(modifier.fillMaxWidth()) {
+    Panel(modifier.fillMaxWidth(), onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Eyebrow(stringResource(R.string.hourly_title), Modifier.weight(1f))
             goalHour?.let {
                 Eyebrow(stringResource(R.string.hourly_goal_at, Format.hour(buckets[it].first, h24)), color = Palette.goal)
+            }
+            if (onOpen != null) {
+                Spacer(Modifier.width(2.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Palette.faint, modifier = Modifier.size(20.dp))
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -284,7 +296,7 @@ fun HourlyPanel(
             }
         }
         Spacer(Modifier.height(18.dp))
-        InteractiveBars(bars, selection, Modifier.fillMaxWidth().height(150.dp))
+        InteractiveBars(bars, selection, Modifier.fillMaxWidth().height(150.dp), tapToPick = onOpen == null)
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             val labels = listOfNotNull(

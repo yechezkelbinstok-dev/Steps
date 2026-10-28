@@ -170,6 +170,8 @@ private fun App(vm: MainViewModel) {
     var openNight by remember { mutableStateOf<SleepNight?>(null) }
     // A night opened up to zoom into, from any night's chart.
     var exploring by remember { mutableStateOf<SleepNight?>(null) }
+    // A day's steps opened up minute by minute, from its hour-by-hour chart.
+    var exploringSteps by remember { mutableStateOf<DayWindow?>(null) }
     // The night today began with, and the one before each day in History.
     fun nightBefore(day: DayWindow?): SleepNight? = day?.wokeFrom?.let { span -> state.nights.firstOrNull { it.span == span } }
     // Keep an open day in step with fresh data (e.g. after adjusting it).
@@ -213,6 +215,7 @@ private fun App(vm: MainViewModel) {
                         lastNight = nightBefore(state.today?.window),
                         lastNightScore = nightBefore(state.today?.window)?.let { scores[it.wakeDate()] },
                         onOpenSleep = { tab = Tab.SLEEP },
+                        onExploreSteps = { exploringSteps = it },
                     )
                     Tab.SLEEP -> SleepScreen(
                         state, scores, settings.restlessAsAwake,
@@ -250,7 +253,8 @@ private fun App(vm: MainViewModel) {
                         bottomPadding = bottom,
                         night = nightBefore(day.window),
                         nightScore = nightBefore(day.window)?.let { scores[it.wakeDate()] },
-                        onExploreNight = { exploring = it },
+                        onOpenNight = { openNight = it },
+                        onExploreSteps = { exploringSteps = it },
                     )
                 }
             }
@@ -285,6 +289,20 @@ private fun App(vm: MainViewModel) {
                 if (night != null) NightExplorer(night, settings.restlessAsAwake, onBack = { exploring = null }, bottomPadding = bottom)
             }
         }
+        // A day's steps opened up grow out of its chart the same way.
+        AnimatedVisibility(
+            visible = exploringSteps != null,
+            enter = fadeIn(tween(260)) + scaleIn(tween(420, easing = Glide), initialScale = 0.92f),
+            exit = fadeOut(tween(200)) + scaleOut(tween(260, easing = Glide), targetScale = 0.96f),
+        ) {
+            val window = remember { mutableStateOf(exploringSteps) }.apply { if (exploringSteps != null) value = exploringSteps }.value
+            Box(Modifier.fillMaxSize()) {
+                Backdrop()
+                if (window != null) {
+                    StepsExplorer(window, settings.goal, loadMinutes = vm::minuteSteps, onBack = { exploringSteps = null }, bottomPadding = bottom)
+                }
+            }
+        }
         // Content fades out under the tab bar instead of running into it.
         Box(
             Modifier
@@ -293,7 +311,7 @@ private fun App(vm: MainViewModel) {
                 .height(bottom)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.background.copy(alpha = 0.94f)))),
         )
-        TabBar(tab, onSelect = { openDay = null; openNight = null; exploring = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
+        TabBar(tab, onSelect = { openDay = null; openNight = null; exploring = null; exploringSteps = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
         if (showDiagnostics) DiagnosticsSheet(onDone = { showDiagnostics = false })

@@ -77,6 +77,8 @@ fun TodayScreen(
     lastNight: SleepNight? = null,
     lastNightScore: NightScore? = null,
     onOpenSleep: () -> Unit = {},
+    /** Opens a day's steps minute by minute. */
+    onExploreSteps: (DayWindow) -> Unit = {},
 ) {
     val today = state.today
     Column(
@@ -97,7 +99,10 @@ fun TodayScreen(
                 LastNightCard(it, lastNightScore, settings.restlessAsAwake, stringResource(R.string.sleep_last_night), onOpenSleep, Modifier.entrance(3))
             }
             if (today.hourly.isNotEmpty()) {
-                HourlyPanel(today.hourly, settings.goal, ongoing = today.window.isOngoing, Modifier.entrance(4), chartSelection)
+                HourlyPanel(
+                    today.hourly, settings.goal, ongoing = today.window.isOngoing, Modifier.entrance(4), chartSelection,
+                    onOpen = { onExploreSteps(today.window) },
+                )
             }
             AddWidgetPrompt()
         }

@@ -90,6 +90,17 @@ The live part runs as a background service. Android requires services like this 
 never asks for notification permission, so on Android 13+ that notification is never shown.
 You'll only see Awake Steps listed under "active apps" in quick settings.
 
+## Steps minute by minute
+
+Tap *Hour by hour*, on Today or on any day's page, to open the day's steps up: bars across the
+day that get finer as you zoom in (pinch, double-tap, or − and +) until each is a single minute,
+the steps and time of the bar under your finger, and the whole day below to move around in. Under
+it are the day's **walks**: stretches at 60 steps a minute or more lasting 5 minutes or more
+(pauses of up to 2 minutes don't end one), each with its times, length, pace and steps. Tap one to
+see it in the chart. With Google Health connected the minutes come straight from the band; from
+Health Connect they're only as fine as the records the Fitbit app writes there. The walks are in
+[`Walks.kt`](app/src/main/java/app/wakesteps/core/Walks.kt).
+
 ## Sleep
 
 The Sleep tab shows each night the app starts a day from (the sleep you woke from, your own

@@ -388,6 +388,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** A day's steps minute by minute, for zooming into. */
+    suspend fun minuteSteps(window: DayWindow): List<Pair<Instant, Long>> = app.engine.minuteSteps(window, settings.value)
+
     /** Hour-by-hour steps for a day opened from History. */
     suspend fun hourly(window: DayWindow): List<Pair<Instant, Long>> = app.engine.hourly(window, settings.value)
 
