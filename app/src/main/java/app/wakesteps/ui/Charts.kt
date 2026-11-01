@@ -323,6 +323,10 @@ fun HourlyPanel(
 // ---------------------------------------------------------------- week
 
 /** One day in the week chart. */
+/**
+ * One day in the week chart. [partial] days (today, still going, and motzei Shabbos) show but are
+ * left out of the average and the goal count; [rest] (Shabbos, Yom Tov) shows as candles.
+ */
 class WeekDay(val initial: String, val title: String, val steps: Long, val partial: Boolean, val rest: Boolean = false)
 
 /**
@@ -332,7 +336,7 @@ class WeekDay(val initial: String, val title: String, val steps: Long, val parti
 @Composable
 fun WeekPanel(days: List<WeekDay>, goal: Int, modifier: Modifier = Modifier, initialSelection: Int? = null) {
     val selection = rememberChartSelection(initialSelection)
-    // Today (still going) and Shabbos and Yom Tov are left out.
+    // Today (still going), motzei Shabbos, and Shabbos and Yom Tov are left out.
     val done = days.filterNot { it.partial || it.rest }.ifEmpty { days.filterNot { it.rest } }
     val average = if (done.isEmpty()) 0L else done.sumOf { it.steps } / done.size
     val met = done.count { it.steps >= goal }

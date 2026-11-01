@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -76,6 +77,21 @@ fun CandlesBadge(size: Dp, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Image(painterResource(R.drawable.ic_candles), contentDescription = null, modifier = Modifier.size(size * 0.56f))
+    }
+}
+
+/** Footprints in a soft round badge: a day's steps without a goal to measure them against (motzei Shabbos). */
+@Composable
+fun StepsBadge(size: Dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, glassEdge(), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painterResource(R.drawable.ic_steps), contentDescription = null, tint = Palette.accent, modifier = Modifier.size(size * 0.44f))
     }
 }
 

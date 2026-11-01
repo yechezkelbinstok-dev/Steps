@@ -4,19 +4,10 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.16.1 → 11601. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
-labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
-
-## 1.16.1
-- Nothing in the app is made to be seen during Shabbos or Yom Tov: Today and the widget don't
-  change for it (no greeting, no Shabbos screen). If the app is opened then, Today just shows
-  Friday's day, ended at shkiah.
-- Motzei Shabbos (and motzei Yom Tov) is a day of its own, from nightfall until you go to sleep,
-  like any other: its own row in History, with its ring, the goal and the averages, instead of
-  being folded into the Shabbos row. Today says "Motzei Shabbos, since 6:12 PM", and the widget
-  switches to it as soon as the phone lets the app run after Shabbos ends. On the day's page it
-  starts at "Tzeis".
+labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below;
+1.16 includes one briefly labelled 1.16.1).
 
 ## 1.16
 - Shabbos and Yom Tov are blocked out, from shkiah the evening before to nightfall after, as
@@ -25,12 +16,14 @@ labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not
   Torah, Pesach and Shavuos, two days each outside Israel; a Yom Tov next to Shabbos makes one
   block.
 - Friday's day ends at shkiah, instead of running on through the night as an all-nighter (with
-  the band off, no sleep was tracked). Whatever's left of Saturday after nightfall belongs to
-  Shabbos in History: its row shows the steps after Shabbos, and opens them.
-- Shabbos shows as Shabbos: on Today (candles, Good Shabbos, the parsha and when it ends), as a
-  row in History and among the nights in Sleep, as candles in the week's charts, and on the
-  widget. On Friday, Today says when it begins. Shabbos and Yom Tov are left out of the goal
-  count and the step and sleep averages.
+  the band off, no sleep was tracked).
+- Shabbos shows as Shabbos in History and among the nights in Sleep (with the parsha), and as
+  candles in the week charts, and is left out of the goal count and the step and sleep averages.
+  On Friday, Today says when it begins. Nothing is made to be seen during Shabbos itself.
+- Motzei Shabbos (and motzei Yom Tov), from nightfall until you go to sleep, is a day of its own:
+  its own row in History, with its steps but no goal ring, and like Shabbos it's left out of the
+  goal count and the averages. Today says "Motzei Shabbos, since 6:12 PM", and the widget switches
+  to it as soon as the phone lets the app run after Shabbos ends.
 - Times are worked out where you are: roughly, from the phone's location, checked when you open
   the app and, with location allowed all the time, on the day each Shabbos and Yom Tov begins (in
   the morning and again an hour and a half before). Until the phone has said, Cincinnati. Each

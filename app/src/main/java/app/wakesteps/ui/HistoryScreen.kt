@@ -56,6 +56,8 @@ private class HistoryRow(
     val onClick: (() -> Unit)?,
     /** Shabbos or Yom Tov: left out of goals and averages. */
     val rest: RestBlock? = null,
+    /** Motzei Shabbos or Yom Tov: a day of its own, but left out of goals and averages too. */
+    val motzei: Boolean = false,
 )
 
 @Composable
@@ -106,7 +108,7 @@ fun HistoryScreen(
                         initial = DateTimeFormatter.ofPattern("EEEEE").format(it.date),
                         title = it.title,
                         steps = it.totals.steps,
-                        partial = it.partial,
+                        partial = it.partial || it.motzei,
                         rest = it.rest != null,
                     )
                 }
@@ -155,6 +157,7 @@ private fun awakeRows(state: UiState, overrides: Overrides, onOpenDay: (DaySumma
                     partial = w.isOngoing,
                     date = w.start.atZone(zone).toLocalDate(),
                     onClick = { onOpenDay(day) },
+                    motzei = w.startReason == StartReason.AFTER_REST,
                 )
             }
         }
@@ -198,7 +201,8 @@ private fun calendarRows(state: UiState): List<HistoryRow> {
 private fun DayRow(row: HistoryRow, settings: AppSettings, modifier: Modifier) {
     Panel(modifier.fillMaxWidth(), onClick = row.onClick, padding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            StepsRing(RingProgress.of(row.totals.steps, settings.goal), 46.dp, strokeFraction = 0.15f, glow = false)
+            // Motzei Shabbos isn't held to the goal, so no ring.
+            if (row.motzei) StepsBadge(46.dp) else StepsRing(RingProgress.of(row.totals.steps, settings.goal), 46.dp, strokeFraction = 0.15f, glow = false)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(row.title, style = MaterialTheme.typography.titleMedium, color = Palette.text, maxLines = 1)

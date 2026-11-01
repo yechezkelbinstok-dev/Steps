@@ -117,7 +117,8 @@ the [KosherJava Zmanim](https://kosherjava.com/) library; the logic is in
 [`RestDays.kt`](app/src/main/java/app/wakesteps/core/RestDays.kt).
 
 * **Days stop at shkiah.** A day running into Shabbos ends then. Motzei Shabbos, from nightfall
-  until you go to sleep, is a day of its own like any other. Days and nights inside are left out.
+  until you go to sleep, is a day of its own, but like Shabbos it's left out of the goal count and
+  the averages. Days and nights inside are left out.
 * **Shabbos shows as Shabbos** in History and Sleep (with the parsha) and in the week charts
   (candles where a bar would be), and is left out of the goal count and the averages. On Friday,
   Today says when it begins. Nothing is made to be seen during Shabbos itself.
