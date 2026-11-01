@@ -15,8 +15,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,6 +43,7 @@ import app.wakesteps.ui.theme.Palette
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -56,8 +60,8 @@ private class HistoryRow(
     val onClick: (() -> Unit)?,
     /** Shabbos or Yom Tov: left out of goals and averages. */
     val rest: RestBlock? = null,
-    /** Motzei Shabbos or Yom Tov: a day of its own, but left out of goals and averages too. */
-    val motzei: Boolean = false,
+    /** With [rest]: motzei Shabbos (the evening after it), shown and opened from it. */
+    val motzei: DaySummary? = null,
 )
 
 @Composable
@@ -68,8 +72,14 @@ fun HistoryScreen(
     onOpenDay: (DaySummary) -> Unit,
     bottomPadding: Dp,
     chartSelection: Int? = null,
+    /** Months read for the calendar, and the way to read one. */
+    months: Map<YearMonth, MonthData> = emptyMap(),
+    onLoadMonth: (YearMonth) -> Unit = {},
+    initialMonth: YearMonth = YearMonth.now(),
 ) {
     var mode by rememberSaveable { mutableIntStateOf(0) }
+    var month by rememberSaveable { mutableStateOf(initialMonth) }
+    LaunchedEffect(month, state.access) { onLoadMonth(month) }
     val rows = if (mode == 0) awakeRows(state, overrides, onOpenDay) else calendarRows(state)
     LazyColumn(
         Modifier.statusBarsPadding(),
@@ -91,6 +101,10 @@ fun HistoryScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp).entrance(1),
             )
         }
+        item {
+            val cells = monthCells(month, mode, state, months[month])
+            MonthPanel(month, cells, settings.goal, onMonth = { month = it }, onOpenDay = onOpenDay, Modifier.entrance(2))
+        }
         if (rows.isEmpty()) {
             item {
                 Text(
@@ -108,7 +122,7 @@ fun HistoryScreen(
                         initial = DateTimeFormatter.ofPattern("EEEEE").format(it.date),
                         title = it.title,
                         steps = it.totals.steps,
-                        partial = it.partial || it.motzei,
+                        partial = it.partial,
                         rest = it.rest != null,
                     )
                 }
@@ -118,7 +132,7 @@ fun HistoryScreen(
             itemsIndexed(rows, key = { _, it -> it.key }) { i, row ->
                 val rest = row.rest
                 if (rest != null && mode == 0) {
-                    RestRow(rest, Modifier.entrance(3 + minOf(i, 5)))
+                    RestRow(rest, Modifier.entrance(3 + minOf(i, 5)), motzei = row.motzei, onOpen = row.onClick)
                 } else {
                     DayRow(row, settings, Modifier.entrance(3 + minOf(i, 5)))
                 }
@@ -138,11 +152,12 @@ private fun awakeRows(state: UiState, overrides: Overrides, onOpenDay: (DaySumma
                 title = entry.block.title,
                 detail = restTimes(entry.block),
                 tags = null,
-                totals = DayTotals(0, null, null),
+                totals = entry.motzei?.totals ?: DayTotals(0, null, null),
                 partial = false,
                 date = entry.block.days.last().date,
-                onClick = null,
+                onClick = entry.motzei?.let { motzei -> { onOpenDay(motzei) } },
                 rest = entry.block,
+                motzei = entry.motzei,
             )
             is DayEntry.Day -> {
                 val day = entry.day
@@ -157,9 +172,30 @@ private fun awakeRows(state: UiState, overrides: Overrides, onOpenDay: (DaySumma
                     partial = w.isOngoing,
                     date = w.start.atZone(zone).toLocalDate(),
                     onClick = { onOpenDay(day) },
-                    motzei = w.startReason == StartReason.AFTER_REST,
                 )
             }
+        }
+    }
+}
+
+/**
+ * [month]'s days for its calendar, whichever way days are counted: the last two weeks as History
+ * has them (fresh), older ones from the month's own read.
+ */
+@Composable
+private fun monthCells(month: YearMonth, mode: Int, state: UiState, loaded: MonthData?): List<MonthCell> {
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now()
+    val blocks = (state.restBlocks + loaded?.rest.orEmpty()).distinctBy { it.start }
+    return remember(month, mode, state.history, state.calendar, blocks, loaded) {
+        if (mode == 0) {
+            val fresh = state.history.filter { YearMonth.from(it.window.start.atZone(zone)) == month }
+            val older = loaded?.days.orEmpty().filter { old -> fresh.none { it.window.start == old.window.start } }
+            awakeMonthCells(month, fresh + older, blocks, today, zone)
+        } else {
+            val fresh = state.calendar.filter { YearMonth.from(it.date) == month }
+            val older = loaded?.calendar.orEmpty().filter { old -> fresh.none { it.date == old.date } }
+            calendarMonthCells(month, fresh + older, blocks, today)
         }
     }
 }
@@ -201,8 +237,7 @@ private fun calendarRows(state: UiState): List<HistoryRow> {
 private fun DayRow(row: HistoryRow, settings: AppSettings, modifier: Modifier) {
     Panel(modifier.fillMaxWidth(), onClick = row.onClick, padding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Motzei Shabbos isn't held to the goal, so no ring.
-            if (row.motzei) StepsBadge(46.dp) else StepsRing(RingProgress.of(row.totals.steps, settings.goal), 46.dp, strokeFraction = 0.15f, glow = false)
+            StepsRing(RingProgress.of(row.totals.steps, settings.goal), 46.dp, strokeFraction = 0.15f, glow = false)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(row.title, style = MaterialTheme.typography.titleMedium, color = Palette.text, maxLines = 1)

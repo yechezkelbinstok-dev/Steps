@@ -180,7 +180,9 @@ class ScreenRenderTest {
         }
         render("goal", settings, Tab.TODAY) { TodayScreen(state.copy(today = today(13400)), settings, actions, {}, {}, bottom) }
         render("scrub", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom, chartSelection = 7) }
-        render("history", settings, Tab.HISTORY) { HistoryScreen(state, settings, Overrides.NONE, {}, bottom, chartSelection = 3) }
+        render("history", settings, Tab.HISTORY) {
+            HistoryScreen(state, settings, Overrides.NONE, {}, bottom, chartSelection = 3, initialMonth = java.time.YearMonth.of(2026, 10))
+        }
         render("day", settings, Tab.HISTORY) {
             DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom)
         }
@@ -335,7 +337,9 @@ class ScreenRenderTest {
             )
         }
         render("today_friday", settings, Tab.TODAY) { TodayScreen(state.copy(today = friday), settings, actions, {}, {}, bottom) }
-        render("history_shabbos", settings, Tab.HISTORY) { HistoryScreen(state, settings, Overrides.NONE, {}, bottom) }
+        render("history_shabbos", settings, Tab.HISTORY) {
+            HistoryScreen(state, settings, Overrides.NONE, {}, bottom, initialMonth = java.time.YearMonth.of(2026, 10))
+        }
         // Settings works from the real date: the coming Shabbos, timed for Cincinnati.
         val saturday = LocalDate.now().with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.SATURDAY))
         render("settings_shabbos", settings, Tab.SETTINGS) {

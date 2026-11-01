@@ -4,10 +4,19 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below;
 1.16 includes one briefly labelled 1.16.1).
+
+## 1.18
+- A month at a glance, at the top of History: a ring for each day filling toward your goal (gold
+  once you made it), candles for Shabbos and Yom Tov, and the month's steps a day and days at goal
+  above it. Arrows or a swipe go back a month at a time, up to a year; tap a day to open it. It
+  follows the toggle above it: your days, or midnight to midnight.
+- Shabbos and motzei Shabbos are one entry again in History and the week's chart: the Shabbos
+  row shows the steps from motzei Shabbos and opens them, and still isn't counted toward the goal
+  or the averages.
 
 ## 1.17
 - Updates from inside the app: when there's a new version, Today shows it at the top with what's

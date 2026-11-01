@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 
 sealed interface Access {
     data object Checking : Access
@@ -82,6 +83,9 @@ data class UiState(
 
 /** How much the app may know where the user is, for Shabbos times. */
 enum class LocationAccess { NONE, WHILE_OPEN, ALWAYS }
+
+/** A month's days for its calendar: the awake days that began in it, and its midnight-to-midnight days. */
+data class MonthData(val days: List<DaySummary>, val calendar: List<CalendarDay>, val rest: List<RestBlock>)
 
 /** Where updating the app stands. */
 sealed interface UpdateState {
@@ -123,6 +127,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Locator.allowedInBackground(app) -> LocationAccess.ALWAYS
         Locator.allowed(app) -> LocationAccess.WHILE_OPEN
         else -> LocationAccess.NONE
+    }
+
+    private val _months = MutableStateFlow<Map<YearMonth, MonthData>>(emptyMap())
+
+    /** Months read for the calendar so far. */
+    val months: StateFlow<Map<YearMonth, MonthData>> = _months.asStateFlow()
+    private val monthJobs = mutableMapOf<YearMonth, Job>()
+
+    /**
+     * Reads [month]'s days for the calendar, once: the latest two weeks come fresh from History
+     * anyway, and older days don't change. If it fails, it's tried again next time it's shown.
+     */
+    fun loadMonth(month: YearMonth) {
+        if (month in _months.value || monthJobs[month]?.isActive == true) return
+        if (_state.value.access !is Access.Ready) return
+        monthJobs[month] = viewModelScope.launch {
+            try {
+                val s = settings.value
+                val days = app.engine.monthDays(s, month)
+                val calendar = app.engine.calendarMonth(s, month)
+                val rest = app.engine.restBlocks(month.atDay(1), month.atEndOfMonth())
+                _months.update { it + (month to MonthData(days, calendar, rest)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Not kept, so it's read again when the month is next shown.
+            }
+        }
     }
 
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Unknown)

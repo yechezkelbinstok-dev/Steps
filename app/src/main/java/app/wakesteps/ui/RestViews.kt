@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +37,7 @@ import app.wakesteps.core.PlaceFix
 import app.wakesteps.core.RestBlock
 import app.wakesteps.core.SleepNight
 import app.wakesteps.data.DaySummary
+import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import java.time.DayOfWeek
 import java.time.Instant
@@ -77,21 +77,6 @@ fun CandlesBadge(size: Dp, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Image(painterResource(R.drawable.ic_candles), contentDescription = null, modifier = Modifier.size(size * 0.56f))
-    }
-}
-
-/** Footprints in a soft round badge: a day's steps without a goal to measure them against (motzei Shabbos). */
-@Composable
-fun StepsBadge(size: Dp, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, glassEdge(), CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(painterResource(R.drawable.ic_steps), contentDescription = null, tint = Palette.accent, modifier = Modifier.size(size * 0.44f))
     }
 }
 
@@ -142,16 +127,26 @@ fun RestSoonNote(block: RestBlock, now: Instant, modifier: Modifier = Modifier) 
     }
 }
 
-/** Shabbos or Yom Tov in a list of days or nights: its name and its times. */
+/**
+ * Shabbos or Yom Tov in a list of days or nights: its name and its times, and in History, motzei
+ * Shabbos with it (its steps, opening its page), not as a day of its own.
+ */
 @Composable
-fun RestRow(block: RestBlock, modifier: Modifier = Modifier) {
-    Panel(modifier.fillMaxWidth(), padding = PaddingValues(16.dp), fill = RestFill) {
+fun RestRow(block: RestBlock, modifier: Modifier = Modifier, motzei: DaySummary? = null, onOpen: (() -> Unit)? = null) {
+    Panel(modifier.fillMaxWidth(), onClick = onOpen, padding = PaddingValues(16.dp), fill = RestFill) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CandlesBadge(46.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(block.title, style = MaterialTheme.typography.titleMedium, color = Palette.text, maxLines = 1)
                 Caption(restTimes(block), style = MaterialTheme.typography.bodySmall)
+            }
+            if (motzei != null && motzei.totals.steps > 0) {
+                Spacer(Modifier.width(12.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(Format.number(motzei.totals.steps), style = AppType.number(24f), color = Palette.text)
+                    Caption(motzei(motzei.window.start), color = Palette.faint, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }
@@ -227,18 +222,22 @@ fun RestPanel(
 /** The days in History with each Shabbos and Yom Tov in its place. */
 sealed interface DayEntry {
     class Day(val day: DaySummary) : DayEntry
-    class Rest(val block: RestBlock) : DayEntry
+    /** [motzei] is the evening after it (motzei Shabbos), if the app counted it. */
+    class Rest(val block: RestBlock, val motzei: DaySummary?) : DayEntry
 }
 
 /**
  * [history] (newest first) with each Shabbos and Yom Tov from [blocks] that's begun put in among
- * the days. Motzei Shabbos is a day of its own, like any other.
+ * the days, motzei Shabbos folded into it: one entry, left out of goals and averages.
  */
 fun withRest(history: List<DaySummary>, blocks: List<RestBlock>, now: Instant): List<DayEntry> {
     if (history.isEmpty()) return emptyList()
     val oldest = history.last().window.start
-    val entries = history.map { it.window.start to DayEntry.Day(it) } +
-        blocks.filter { it.start <= now && it.end > oldest }.map { it.start to DayEntry.Rest(it) }
+    val shown = blocks.filter { it.start <= now && it.end > oldest }
+    val motzei = shown.associateWith { b -> history.firstOrNull { it.window.start == b.end } }
+    val folded = motzei.values.filterNotNull().toSet()
+    val entries = history.filter { it !in folded }.map { it.window.start to DayEntry.Day(it) } +
+        shown.map { it.start to DayEntry.Rest(it, motzei[it]) }
     return entries.sortedByDescending { it.first }.map { it.second }
 }
 

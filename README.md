@@ -40,6 +40,13 @@ only lets you set your daily goal.
 The logic is in [`DayCalculator.kt`](app/src/main/java/app/wakesteps/core/DayCalculator.kt) and
 covered by unit tests.
 
+## History
+
+History has a month calendar at the top: a ring for each day, filling toward your goal and gold
+once you made it, and candles for Shabbos and Yom Tov. Go back a month at a time (arrows or a
+swipe, up to a year) and tap a day to open it. Under it are the last 7 days and the days
+themselves, counted your way (wake to sleep) or midnight to midnight.
+
 ## The widget
 
 Works on the **home screen** and the **lock screen**. On Android 16+ Pixels, turn on lock screen
@@ -126,8 +133,8 @@ the [KosherJava Zmanim](https://kosherjava.com/) library; the logic is in
 [`RestDays.kt`](app/src/main/java/app/wakesteps/core/RestDays.kt).
 
 * **Days stop at shkiah.** A day running into Shabbos ends then. Motzei Shabbos, from nightfall
-  until you go to sleep, is a day of its own, but like Shabbos it's left out of the goal count and
-  the averages. Days and nights inside are left out.
+  until you go to sleep, goes with Shabbos: its steps show on the Shabbos entry, and like Shabbos
+  it's left out of the goal count and the averages. Days and nights inside are left out.
 * **Shabbos shows as Shabbos** in History and Sleep (with the parsha) and in the week charts
   (candles where a bar would be), and is left out of the goal count and the averages. On Friday,
   Today says when it begins. Nothing is made to be seen during Shabbos itself.

@@ -19,6 +19,9 @@ import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -27,6 +30,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
@@ -102,10 +106,13 @@ class StepsEngine(
      * Recent sleep: enough history to learn when the user's night is. With Google Health on, its
      * sleep is added to Health Connect's; overlapping copies of the same night merge into one.
      */
-    private suspend fun recentSleeps(settings: AppSettings, now: Instant, days: Long): List<SleepSpan> {
-        val from = now.minus(Duration.ofDays(maxOf(days, LEARN_DAYS) + 1))
-        val local = health.sleeps(from, now, settings.sourcePackage)
-        val cloud = if (settings.googleHealth) read(settings, { sleeps(it, from, now) }, { emptyList() }) else emptyList()
+    private suspend fun recentSleeps(settings: AppSettings, now: Instant, days: Long): List<SleepSpan> =
+        sleepsBetween(settings, now.minus(Duration.ofDays(maxOf(days, LEARN_DAYS) + 1)), now)
+
+    /** Sleep from [from] to [to]: Health Connect's, and Google Health's with it when it's on. */
+    private suspend fun sleepsBetween(settings: AppSettings, from: Instant, to: Instant): List<SleepSpan> {
+        val local = health.sleeps(from, to, settings.sourcePackage)
+        val cloud = if (settings.googleHealth) read(settings, { sleeps(it, from, to) }, { emptyList() }) else emptyList()
         return (local + cloud).sortedBy { it.start }
     }
 
@@ -197,18 +204,53 @@ class StepsEngine(
     }
 
     /** Each of [windows] with its totals. */
-    suspend fun history(settings: AppSettings, windows: List<DayWindow>): List<DaySummary> {
+    suspend fun history(settings: AppSettings, windows: List<DayWindow>): List<DaySummary> = coroutineScope {
         val now = Instant.now()
         val granted = health.grantedPermissions()
-        return windows.map { w ->
-            val end = w.endOr(now)
-            DaySummary(
-                w,
-                read(settings, { totals(it, w.start, end) }) {
-                    health.totals(w.start, end, settings.sourcePackage, granted, settings.calorieMode)
-                },
-            )
-        }
+        // A few at a time rather than one after another: a month is 30 reads.
+        val gate = Semaphore(4)
+        windows.map { w ->
+            async {
+                gate.withPermit {
+                    val end = w.endOr(now)
+                    DaySummary(
+                        w,
+                        read(settings, { totals(it, w.start, end) }) {
+                            health.totals(w.start, end, settings.sourcePackage, granted, settings.calorieMode)
+                        },
+                    )
+                }
+            }
+        }.awaitAll()
+    }
+
+    /**
+     * The awake days that began in [month] (up to now, this month), with Shabbos and Yom Tov cut
+     * out, oldest first, each with its totals: for the month's calendar.
+     */
+    suspend fun monthDays(settings: AppSettings, month: YearMonth): List<DaySummary> {
+        val now = Instant.now()
+        val zone = ZoneId.systemDefault()
+        val first = month.atDay(1)
+        val start = first.atStartOfDay(zone).toInstant()
+        if (!start.isBefore(now)) return emptyList()
+        // A couple of days either side: the day before the 1st can run into it, and the month's last day ends after it.
+        val until = minOf(month.plusMonths(1).atDay(1).plusDays(2).atStartOfDay(zone).toInstant(), now)
+        val sleeps = sleepsBetween(settings, start.minus(Duration.ofDays(LEARN_DAYS + 2)), until)
+        val windows = DayCalculator.windows(sleeps, start.minus(Duration.ofDays(2)), until, zone, settings.rules(), prefs.currentOverrides())
+        val blocks = restBlocks(first.minusDays(3), month.atEndOfMonth().plusDays(2))
+        val inMonth = RestDays.clip(windows, blocks, until).filter { YearMonth.from(it.start.atZone(zone)) == month }
+        return history(settings, inMonth)
+    }
+
+    /** [month]'s plain midnight-to-midnight days, up to today. */
+    suspend fun calendarMonth(settings: AppSettings, month: YearMonth): List<CalendarDay> {
+        val now = LocalDateTime.now()
+        if (month.atDay(1).isAfter(now.toLocalDate())) return emptyList()
+        val last = minOf(month.plusMonths(1).atDay(1).atStartOfDay(), now)
+        return health.calendarDays(month.atDay(1), last, settings.sourcePackage, health.grantedPermissions(), settings.calorieMode)
+            .map { (date, totals) -> CalendarDay(date, totals) }
+            .filter { YearMonth.from(it.date) == month }
     }
 
     /**
