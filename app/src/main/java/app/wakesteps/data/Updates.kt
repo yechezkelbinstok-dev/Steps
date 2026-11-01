@@ -83,13 +83,19 @@ object Updates {
                 file.outputStream().use { output ->
                     val buffer = ByteArray(64 * 1024)
                     var done = 0L
+                    var shown = -1
                     while (true) {
                         ensureActive()
                         val n = input.read(buffer)
                         if (n < 0) break
                         output.write(buffer, 0, n)
                         done += n
-                        if (total > 0) progress((done.toFloat() / total).coerceAtMost(1f))
+                        // Once a percent, not for every read.
+                        val percent = if (total > 0) (done * 100 / total).toInt().coerceAtMost(100) else -1
+                        if (percent != shown) {
+                            shown = percent
+                            progress(maxOf(percent, 0) / 100f)
+                        }
                     }
                 }
             }
@@ -111,7 +117,7 @@ object Updates {
      * ([ACTION_INSTALL_STATUS]): asking the user to confirm (always the first time), or the result.
      * Once the app has installed itself, Android 12 and later let it update without asking.
      */
-    fun install(context: Context, apk: File) {
+    suspend fun install(context: Context, apk: File) = withContext(Dispatchers.IO) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
