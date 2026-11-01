@@ -307,7 +307,7 @@ class ScreenRenderTest {
         }
     }
 
-    /** Shabbos on Today, in History and Sleep, in Settings, and Friday before it begins. */
+    /** Friday before Shabbos, motzei Shabbos, Shabbos in History, and Settings. */
     @Test
     @Config(qualifiers = "w411dp-h1400dp-420dpi")
     fun renderShabbos() {
@@ -318,7 +318,14 @@ class ScreenRenderTest {
             access = Access.Ready(true, true, false), today = today, history = shabbosHistory(),
             nights = nights().drop(1), nightsLoaded = true, restBlocks = blocks,
         )
-        render("today_shabbos", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom) }
+        // Motzei Shabbos: a day of its own, from when Shabbos ended.
+        val motzei = today(1240).copy(
+            window = DayWindow(shabbos.end, null, StartReason.AFTER_REST, null),
+            now = shabbos.end.plus(hours(2.0)),
+            hourly = emptyList(),
+            restBlocks = blocks,
+        )
+        render("today_motzei", settings, Tab.TODAY) { TodayScreen(state.copy(today = motzei), settings, actions, {}, {}, bottom) }
         // Friday afternoon, Shabbos at 6:31 PM.
         val friday = today(6432).let { t ->
             t.copy(

@@ -50,7 +50,6 @@ import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.text.FontFamily
 import androidx.glance.text.Text
-import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import app.wakesteps.R
@@ -61,7 +60,6 @@ import app.wakesteps.data.CalorieMode
 import app.wakesteps.data.Snapshot
 import app.wakesteps.data.WidgetStyle
 import app.wakesteps.ui.MainActivity
-import java.time.Instant
 
 /**
  * Home-screen and lock-screen widget. The goal ring carries the progress; inside it sits the
@@ -184,11 +182,6 @@ private fun Content(snapshot: Snapshot?, settings: AppSettings, size: DpSize, re
         )
         return
     }
-    val restEnd = snapshot.restEnd
-    if (snapshot.restTitle != null && restEnd != null && restEnd.isAfter(Instant.now())) {
-        RestLayout(snapshot.restTitle, restEnd, size)
-        return
-    }
     val m = WidgetModel(context, snapshot, settings, Palette, refreshing, extra)
     val wide = size.width >= WIDE_WIDTH
     val tall = size.height >= TALL_HEIGHT
@@ -255,40 +248,6 @@ private class Stat(
 )
 
 // ---------------------------------------------------------------- layouts
-
-/** Shabbos or Yom Tov: candles, its name, and when it ends, instead of steps. */
-@Composable
-private fun RestLayout(title: String, end: Instant, size: DpSize) {
-    val context = LocalContext.current
-    val until = context.getString(R.string.rest_until, Format.time(end))
-    if (size.height < TALL_HEIGHT) {
-        Row(
-            modifier = GlanceModifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(ImageProvider(R.drawable.ic_candles), contentDescription = null, modifier = GlanceModifier.size(30.dp))
-            Spacer(GlanceModifier.width(12.dp))
-            Column(modifier = GlanceModifier.defaultWeight()) {
-                // Narrow: just the first name ("Shabbos"), not the parsha.
-                Text(if (size.width < WIDE_WIDTH) title.substringBefore(" · ") else title, style = number(20.sp), maxLines = 1)
-                Text(until, style = label(12.sp), maxLines = 1)
-            }
-        }
-        return
-    }
-    Column(
-        modifier = GlanceModifier.fillMaxSize().padding(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(ImageProvider(R.drawable.ic_candles), contentDescription = null, modifier = GlanceModifier.size(44.dp))
-        Spacer(GlanceModifier.height(10.dp))
-        // Narrow: the name and the parsha a line each.
-        Text(if (size.width < WIDE_WIDTH) title.replace(" · ", "\n") else title, style = number(22.sp).copy(textAlign = TextAlign.Center), maxLines = 2)
-        Spacer(GlanceModifier.height(4.dp))
-        Text(until, style = label(13.sp), maxLines = 1)
-    }
-}
 
 @Composable
 private fun CompactLayout(m: WidgetModel, size: DpSize) {

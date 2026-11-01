@@ -56,8 +56,6 @@ private class HistoryRow(
     val onClick: (() -> Unit)?,
     /** Shabbos or Yom Tov: left out of goals and averages. */
     val rest: RestBlock? = null,
-    /** The evening after [rest], once it ended. */
-    val after: DaySummary? = null,
 )
 
 @Composable
@@ -118,7 +116,7 @@ fun HistoryScreen(
             itemsIndexed(rows, key = { _, it -> it.key }) { i, row ->
                 val rest = row.rest
                 if (rest != null && mode == 0) {
-                    RestRow(rest, row.after, row.onClick, Modifier.entrance(3 + minOf(i, 5)))
+                    RestRow(rest, Modifier.entrance(3 + minOf(i, 5)))
                 } else {
                     DayRow(row, settings, Modifier.entrance(3 + minOf(i, 5)))
                 }
@@ -138,12 +136,11 @@ private fun awakeRows(state: UiState, overrides: Overrides, onOpenDay: (DaySumma
                 title = entry.block.title,
                 detail = restTimes(entry.block),
                 tags = null,
-                totals = entry.after?.totals ?: DayTotals(0, null, null),
+                totals = DayTotals(0, null, null),
                 partial = false,
                 date = entry.block.days.last().date,
-                onClick = entry.after?.let { after -> { onOpenDay(after) } },
+                onClick = null,
                 rest = entry.block,
-                after = entry.after,
             )
             is DayEntry.Day -> {
                 val day = entry.day
@@ -169,6 +166,7 @@ private fun awakeRows(state: UiState, overrides: Overrides, onOpenDay: (DaySumma
 fun dayTags(day: DaySummary, overrides: Overrides, now: Instant): String? {
     val w = day.window
     return buildList {
+        if (w.startReason == StartReason.AFTER_REST) add(motzei(w.start))
         if (overrides.touches(w, now)) add(stringResource(R.string.tag_edited))
         if (w.startReason == StartReason.FALLBACK) add(stringResource(R.string.tag_fallback_start))
         if (w.endReason == EndReason.FALLBACK) add(stringResource(R.string.tag_no_sleep))

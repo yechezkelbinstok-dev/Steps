@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.DayWindow
-import app.wakesteps.core.RestBlock
+import app.wakesteps.core.StartReason
 import app.wakesteps.core.Format
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.SleepNight
@@ -93,15 +93,8 @@ fun TodayScreen(
         Header(today?.now ?: Instant.now(), today?.latestDataAt, liveSteps, onShowSyncLog, Modifier.entrance(0))
         AccessPrompts(state.access, state.liveStepsPrompt, actions)
         state.error?.let { ErrorNote(it) }
-        val rest = today?.rest
-        if (today != null && rest != null) {
-            // Shabbos or Yom Tov: nothing to count.
-            RestHero(rest, today.now, Modifier.entrance(1))
-        } else if (today != null) {
-            Hero(
-                today.totals.steps + liveSteps, settings.goal, today.window, today.now, onAdjust, Modifier.entrance(1),
-                restBefore = today.restBefore,
-            )
+        if (today != null) {
+            Hero(today.totals.steps + liveSteps, settings.goal, today.window, today.now, onAdjust, Modifier.entrance(1))
             today.restSoon?.let { RestSoonNote(it, today.now, Modifier.align(Alignment.CenterHorizontally).entrance(1)) }
             Metrics(today.totals, settings, Modifier.entrance(2))
             lastNight?.let {
@@ -227,8 +220,6 @@ fun Hero(
     onAdjust: ((DayWindow) -> Unit)?,
     modifier: Modifier = Modifier,
     ringSize: Dp = 276.dp,
-    /** The Shabbos or Yom Tov the day began after, if it did. */
-    restBefore: RestBlock? = null,
 ) {
     val ratio = RingProgress.of(steps, goal)
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -247,17 +238,17 @@ fun Hero(
         }
         if (onAdjust != null) {
             Spacer(Modifier.height(18.dp))
-            DayChip(window, now, restBefore, onClick = { onAdjust(window) })
+            DayChip(window, now, onClick = { onAdjust(window) })
         }
     }
 }
 
 /** Which stretch of time is being counted; tap to adjust it. */
 @Composable
-private fun DayChip(w: DayWindow, now: Instant, restBefore: RestBlock?, onClick: () -> Unit) {
+private fun DayChip(w: DayWindow, now: Instant, onClick: () -> Unit) {
     val text = when {
         !w.isOngoing -> stringResource(R.string.today_ended, Format.time(w.endOr(now)))
-        restBefore != null -> stringResource(R.string.today_since_rest, restKind(restBefore), Format.time(w.start))
+        w.startReason == StartReason.AFTER_REST -> stringResource(R.string.today_since_rest, motzei(w.start), Format.time(w.start))
         else -> since(w.start, now)
     }
     val source = remember { MutableInteractionSource() }

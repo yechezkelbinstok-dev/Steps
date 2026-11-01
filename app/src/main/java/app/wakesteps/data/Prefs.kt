@@ -100,9 +100,6 @@ data class Snapshot(
     /** End time of the newest step record, i.e. how fresh the tracker's sync is. */
     val latestDataAt: Instant?,
     val error: String?,
-    /** The Shabbos or Yom Tov going on ("Shabbos · Noach"), and when it ends; null on other days. */
-    val restTitle: String? = null,
-    val restEnd: Instant? = null,
 )
 
 /** A night's sound sleep as worked out from heart rate; [settled] once all its heart rate has surely arrived. */
@@ -233,8 +230,6 @@ class Prefs(private val context: Context) {
         val snapUpdated = longPreferencesKey("snap_updated")
         val snapLatest = longPreferencesKey("snap_latest")
         val snapError = stringPreferencesKey("snap_error")
-        val snapRestTitle = stringPreferencesKey("snap_rest_title")
-        val snapRestEnd = longPreferencesKey("snap_rest_end")
 
         /** Entries: "S|<epochSec>|1" main sleep, "S|<epochSec>|0" nap, "R|<epochSec>" skipped reset,
          *  "M|<epochSec>" manual day start. */
@@ -495,8 +490,6 @@ class Prefs(private val context: Context) {
             p[K.snapUpdated] = s.updatedAt.toEpochMilli()
             p.putOrRemove(K.snapLatest, s.latestDataAt?.toEpochMilli())
             p.putOrRemove(K.snapError, s.error)
-            p.putOrRemove(K.snapRestTitle, s.restTitle)
-            p.putOrRemove(K.snapRestEnd, s.restEnd?.toEpochMilli())
         }
     }
 
@@ -533,8 +526,6 @@ class Prefs(private val context: Context) {
             updatedAt = Instant.ofEpochMilli(this[K.snapUpdated] ?: start),
             latestDataAt = this[K.snapLatest]?.let(Instant::ofEpochMilli),
             error = this[K.snapError],
-            restTitle = this[K.snapRestTitle],
-            restEnd = this[K.snapRestEnd]?.let(Instant::ofEpochMilli),
         )
     }
 

@@ -116,12 +116,11 @@ Kippur, Sukkos, Shemini Atzeres, Simchas Torah, Pesach and Shavuos, two days eac
 the [KosherJava Zmanim](https://kosherjava.com/) library; the logic is in
 [`RestDays.kt`](app/src/main/java/app/wakesteps/core/RestDays.kt).
 
-* **Days stop at shkiah.** A day running into Shabbos ends then, and what's left after nightfall
-  (until you go to sleep) is the evening after it: in History it's part of the Shabbos row, and
-  it isn't held to the goal. Days and nights inside are left out.
-* **Shabbos shows as Shabbos** on Today (with the parsha and when it ends), in History and Sleep,
-  in the week charts (candles where a bar would be) and on the widget, and is left out of the
-  goal count and the averages.
+* **Days stop at shkiah.** A day running into Shabbos ends then. Motzei Shabbos, from nightfall
+  until you go to sleep, is a day of its own like any other. Days and nights inside are left out.
+* **Shabbos shows as Shabbos** in History and Sleep (with the parsha) and in the week charts
+  (candles where a bar would be), and is left out of the goal count and the averages. On Friday,
+  Today says when it begins. Nothing is made to be seen during Shabbos itself.
 * **Where you are** sets the times. The app asks the phone roughly where it is when it's opened
   (at most every 3 hours), and with location allowed all the time, also on the day each Shabbos
   or Yom Tov begins: in the morning and an hour and a half before. It keeps where you were each

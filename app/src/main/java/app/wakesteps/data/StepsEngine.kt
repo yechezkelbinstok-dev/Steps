@@ -14,7 +14,7 @@ import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.GoogleFigures
 import app.wakesteps.core.SoundRules
 import app.wakesteps.core.SoundSleeps
-import app.wakesteps.core.StartReason
+import app.wakesteps.sync.RefreshWorker
 import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -41,15 +41,8 @@ data class TodaySummary(
     /** Shabbos and Yom Tov from a few days back to two days ahead. */
     val restBlocks: List<RestBlock> = emptyList(),
 ) {
-    /** The Shabbos or Yom Tov going on now, if one is. */
-    val rest: RestBlock? get() = restBlocks.firstOrNull { now in it }
-
-    /** The next one, if it begins within a day. */
+    /** The next Shabbos or Yom Tov, if it begins within a day. */
     val restSoon: RestBlock? get() = restBlocks.firstOrNull { it.start > now && Duration.between(now, it.start) <= Duration.ofDays(1) }
-
-    /** The one today began after, when it began as one ended. */
-    val restBefore: RestBlock? get() =
-        if (window.startReason == StartReason.AFTER_REST) restBlocks.lastOrNull { it.end == window.start } else null
 }
 
 data class DaySummary(val window: DayWindow, val totals: DayTotals)
@@ -360,6 +353,8 @@ class StepsEngine(
                 val delta = if (previous != null && previous.dayStart == t.window.start) t.totals.steps - previous.totals.steps else 0
                 prefs.logSync(SyncEvent(seenAt = t.now, dataUpTo = newest, stepsDelta = delta))
             }
+            // Motzei Shabbos: show the new day as soon as the phone lets the app run, not up to 15 minutes later.
+            t.restBlocks.firstOrNull { it.end > t.now }?.let { RefreshWorker.refreshAt(context, it.end.plusSeconds(60), t.now) }
             Snapshot(
                 totals = t.totals,
                 dayStart = t.window.start,
@@ -368,8 +363,6 @@ class StepsEngine(
                 updatedAt = t.now,
                 latestDataAt = t.latestDataAt,
                 error = null,
-                restTitle = t.rest?.title,
-                restEnd = t.rest?.end,
             ).also { prefs.saveSnapshot(it) }
         } catch (e: CancellationException) {
             throw e // e.g. the screen went off mid-refresh: not an error to show

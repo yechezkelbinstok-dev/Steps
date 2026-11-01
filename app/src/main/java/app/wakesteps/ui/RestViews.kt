@@ -29,7 +29,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
@@ -38,8 +37,8 @@ import app.wakesteps.core.PlaceFix
 import app.wakesteps.core.RestBlock
 import app.wakesteps.core.SleepNight
 import app.wakesteps.data.DaySummary
-import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -49,29 +48,20 @@ private val RestFill = Brush.verticalGradient(listOf(Color(0xF0241B3A), Color(0x
 
 private val CandleGlow = Color(0xFFFFC861)
 
-/** "Shabbos" or "Yom Tov": what to call [block] in a sentence ("after Shabbos"). */
+/**
+ * "Motzei Shabbos" for a day that began at [start] as Shabbos ended (on a Saturday night, Yom Tov
+ * or not), else "Motzei Yom Tov".
+ */
 @Composable
-fun restKind(block: RestBlock): String = stringResource(if (block.justShabbos) R.string.rest_shabbos else R.string.rest_yom_tov)
-
-/** Its names without the parsha: "Shabbos", "Rosh Hashanah · Shabbos". */
-private fun RestBlock.names(): String = days.map { it.name }.distinct().joinToString(" · ")
+fun motzei(start: Instant): String = stringResource(
+    if (start.atZone(ZoneId.systemDefault()).dayOfWeek == DayOfWeek.SATURDAY) R.string.rest_motzei_shabbos else R.string.rest_motzei_yom_tov
+)
 
 /** "Fri 5:31 PM – Sat 6:12 PM". */
 fun restTimes(block: RestBlock): String {
     val day = DateTimeFormatter.ofPattern("EEE")
     val zone = ZoneId.systemDefault()
     return "${day.format(block.start.atZone(zone))} ${Format.time(block.start)} – ${day.format(block.end.atZone(zone))} ${Format.time(block.end)}"
-}
-
-/** "Until 6:12 PM" when it ends today, else "Until Sat, 6:12 PM". */
-@Composable
-private fun until(block: RestBlock, now: Instant): String {
-    val zone = ZoneId.systemDefault()
-    return if (block.end.atZone(zone).toLocalDate() == now.atZone(zone).toLocalDate()) {
-        stringResource(R.string.rest_until, Format.time(block.end))
-    } else {
-        stringResource(R.string.rest_until_day, DateTimeFormatter.ofPattern("EEE").format(block.end.atZone(zone)), Format.time(block.end))
-    }
 }
 
 /** Two lit candles in a soft round badge. */
@@ -120,37 +110,6 @@ fun DrawScope.drawCandles(x: Float, baseline: Float, height: Float, wax: Color, 
     }
 }
 
-/** Today during Shabbos or Yom Tov: candles, a greeting, its name and parsha, and when it ends. */
-@Composable
-fun RestHero(block: RestBlock, now: Instant, modifier: Modifier = Modifier) {
-    Panel(
-        modifier.fillMaxWidth(),
-        fill = RestFill,
-        padding = PaddingValues(horizontal = 24.dp, vertical = 36.dp),
-        decoration = {
-            drawCircle(
-                Brush.radialGradient(listOf(CandleGlow.copy(alpha = 0.20f), Color.Transparent), Offset(size.width / 2, size.height * 0.2f), size.width * 0.55f),
-                size.width * 0.55f,
-                Offset(size.width / 2, size.height * 0.2f),
-            )
-        },
-    ) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Image(painterResource(R.drawable.ic_candles), contentDescription = null, modifier = Modifier.size(64.dp))
-            Spacer(Modifier.height(18.dp))
-            Eyebrow(stringResource(if (block.justShabbos) R.string.rest_good_shabbos else R.string.rest_good_yom_tov), color = CandleGlow)
-            Spacer(Modifier.height(8.dp))
-            Text(block.names(), style = AppType.title, color = Palette.text, textAlign = TextAlign.Center)
-            block.days.singleOrNull()?.parsha?.let {
-                Spacer(Modifier.height(2.dp))
-                Text(it, style = MaterialTheme.typography.titleMedium, color = Palette.muted, textAlign = TextAlign.Center)
-            }
-            Spacer(Modifier.height(14.dp))
-            Caption(until(block, now), color = Palette.text)
-        }
-    }
-}
-
 /** On the day it begins: "Shabbos at 5:31 PM" (or "tomorrow at"), quietly, under the ring. */
 @Composable
 fun RestSoonNote(block: RestBlock, now: Instant, modifier: Modifier = Modifier) {
@@ -167,28 +126,16 @@ fun RestSoonNote(block: RestBlock, now: Instant, modifier: Modifier = Modifier) 
     }
 }
 
-/**
- * Shabbos or Yom Tov in a list of days or nights: its name and times, and with [after] (the rest
- * of the evening once it ended), the steps then; opens that evening.
- */
+/** Shabbos or Yom Tov in a list of days or nights: its name and its times. */
 @Composable
-fun RestRow(block: RestBlock, after: DaySummary?, onClick: (() -> Unit)?, modifier: Modifier = Modifier, showSteps: Boolean = true) {
-    Panel(modifier.fillMaxWidth(), onClick = onClick, padding = PaddingValues(16.dp), fill = RestFill) {
+fun RestRow(block: RestBlock, modifier: Modifier = Modifier) {
+    Panel(modifier.fillMaxWidth(), padding = PaddingValues(16.dp), fill = RestFill) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CandlesBadge(46.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(block.title, style = MaterialTheme.typography.titleMedium, color = Palette.text, maxLines = 1)
                 Caption(restTimes(block), style = MaterialTheme.typography.bodySmall)
-            }
-            Spacer(Modifier.width(12.dp))
-            if (!showSteps) {
-                Caption(stringResource(R.string.rest_not_tracked), color = Palette.faint, style = MaterialTheme.typography.bodySmall)
-            } else if (after != null && after.totals.steps > 0) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(Format.number(after.totals.steps), style = AppType.number(24f), color = Palette.text)
-                    Caption(stringResource(R.string.rest_after, restKind(block)), color = Palette.faint, style = MaterialTheme.typography.bodySmall)
-                }
             }
         }
     }
@@ -264,22 +211,18 @@ fun RestPanel(
 /** The days in History with each Shabbos and Yom Tov in its place. */
 sealed interface DayEntry {
     class Day(val day: DaySummary) : DayEntry
-    /** [after] is the rest of the evening once it ended, if the app counted it. */
-    class Rest(val block: RestBlock, val after: DaySummary?) : DayEntry
+    class Rest(val block: RestBlock) : DayEntry
 }
 
 /**
  * [history] (newest first) with each Shabbos and Yom Tov from [blocks] that's begun put in among
- * the days, the evening after each folded into it.
+ * the days. Motzei Shabbos is a day of its own, like any other.
  */
 fun withRest(history: List<DaySummary>, blocks: List<RestBlock>, now: Instant): List<DayEntry> {
     if (history.isEmpty()) return emptyList()
     val oldest = history.last().window.start
-    val shown = blocks.filter { it.start <= now && it.end > oldest }
-    val after = shown.associateWith { b -> history.firstOrNull { it.window.start == b.end } }
-    val folded = after.values.filterNotNull().toSet()
-    val entries = history.filter { it !in folded }.map { it.window.start to DayEntry.Day(it) } +
-        shown.map { it.start to DayEntry.Rest(it, after[it]) }
+    val entries = history.map { it.window.start to DayEntry.Day(it) } +
+        blocks.filter { it.start <= now && it.end > oldest }.map { it.start to DayEntry.Rest(it) }
     return entries.sortedByDescending { it.first }.map { it.second }
 }
 

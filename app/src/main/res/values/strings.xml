@@ -9,18 +9,12 @@
     <string name="today_since">Since %1$s</string>
     <string name="today_since_yesterday">Since yesterday, %1$s</string>
     <string name="today_since_day">Since %1$s, %2$s</string>
-    <string name="today_since_rest">After %1$s, since %2$s</string>
+    <string name="today_since_rest">%1$s, since %2$s</string>
 
-    <string name="rest_shabbos">Shabbos</string>
-    <string name="rest_yom_tov">Yom Tov</string>
-    <string name="rest_good_shabbos">Good Shabbos</string>
-    <string name="rest_good_yom_tov">Good Yom Tov</string>
-    <string name="rest_until">Until %1$s</string>
-    <string name="rest_until_day">Until %1$s, %2$s</string>
+    <string name="rest_motzei_shabbos">Motzei Shabbos</string>
+    <string name="rest_motzei_yom_tov">Motzei Yom Tov</string>
     <string name="rest_soon">%1$s at %2$s</string>
     <string name="rest_soon_tomorrow">%1$s tomorrow at %2$s</string>
-    <string name="rest_after">after %1$s</string>
-    <string name="rest_not_tracked">Not tracked</string>
     <string name="set_rest">Shabbos &amp; Yom Tov</string>
     <string name="rest_next">Next</string>
     <string name="rest_now">Now</string>
@@ -85,7 +79,7 @@
     <string name="detail_started">Started</string>
     <string name="detail_slept">Slept</string>
     <string name="detail_ended">Ended</string>
-    <string name="detail_havdalah">Havdalah</string>
+    <string name="detail_tzeis">Tzeis</string>
     <string name="detail_shkiah">Shkiah</string>
     <string name="detail_adjust">Adjust this day</string>
     <string name="back">Back</string>

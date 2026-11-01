@@ -1323,7 +1323,7 @@ fun SleepScreen(
                     if (night != null) {
                         NightRow(night.counted(restlessAsAwake), scores[night.wakeDate()], onClick = { onOpenNight(night) }, Modifier.entrance(7 + minOf(i, 5)))
                     } else if (slot.rest != null) {
-                        RestRow(slot.rest, after = null, onClick = null, Modifier.entrance(7 + minOf(i, 5)), showSteps = false)
+                        RestRow(slot.rest, Modifier.entrance(7 + minOf(i, 5)))
                     }
                 }
             }
