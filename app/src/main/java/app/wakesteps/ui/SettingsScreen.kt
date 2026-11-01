@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.Format
+import app.wakesteps.core.PlaceFix
+import app.wakesteps.core.RestBlock
 import app.wakesteps.data.AppSettings
 import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
@@ -76,6 +78,10 @@ fun SettingsScreen(
     onOpenDiagnostics: () -> Unit,
     googleError: String?,
     bottomPadding: Dp,
+    /** Shabbos and Yom Tov to a week ahead, oldest first. */
+    restBlocks: List<RestBlock> = emptyList(),
+    places: List<PlaceFix> = emptyList(),
+    locationAccess: LocationAccess = LocationAccess.NONE,
 ) {
     val context = LocalContext.current
     Column(
@@ -131,7 +137,18 @@ fun SettingsScreen(
             )
         }
 
-        Panel(Modifier.fillMaxWidth().entrance(4), padding = PaddingValues(vertical = 6.dp)) {
+        val now = remember { Instant.now() }
+        RestPanel(
+            next = restBlocks.firstOrNull { it.end > now },
+            now = now,
+            place = places.firstOrNull(),
+            access = locationAccess,
+            onAllow = actions.requestLocation,
+            onAllowAlways = actions.requestLocationAlways,
+            modifier = Modifier.entrance(4),
+        )
+
+        Panel(Modifier.fillMaxWidth().entrance(5), padding = PaddingValues(vertical = 6.dp)) {
             val connected = access is Access.Ready
             LinkRow(stringResource(R.string.set_open_hc), actions.openHealthConnect) {
                 StatusDot(if (connected) Palette.accent else Palette.error)

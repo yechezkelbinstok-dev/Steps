@@ -11,6 +11,8 @@ import app.wakesteps.app
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.Overrides
+import app.wakesteps.core.PlaceFix
+import app.wakesteps.core.RestBlock
 import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepScore
 import app.wakesteps.core.SleepSpan
@@ -20,6 +22,7 @@ import app.wakesteps.data.CalendarDay
 import app.wakesteps.data.DaySummary
 import app.wakesteps.data.GoogleHealth
 import app.wakesteps.data.HealthSource
+import app.wakesteps.data.Locator
 import app.wakesteps.data.NightScores
 import app.wakesteps.data.SyncEvent
 import app.wakesteps.data.TodaySummary
@@ -41,6 +44,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 
@@ -70,7 +74,12 @@ data class UiState(
     val error: String? = null,
     /** Offer the phone's step counter: it has one, and the user hasn't answered yet. */
     val liveStepsPrompt: Boolean = false,
+    /** Shabbos and Yom Tov from before the oldest day shown to a week ahead, oldest first. */
+    val restBlocks: List<RestBlock> = emptyList(),
 )
+
+/** How much the app may know where the user is, for Shabbos times. */
+enum class LocationAccess { NONE, WHILE_OPEN, ALWAYS }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application.app
@@ -87,6 +96,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val syncLog: StateFlow<List<SyncEvent>> =
         app.prefs.syncLog.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Where the phone has found the user, newest first (for Shabbos times). */
+    val places: StateFlow<List<PlaceFix>> =
+        app.prefs.places.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _locationAccess = MutableStateFlow(locationAccess())
+    val locationAccess: StateFlow<LocationAccess> = _locationAccess.asStateFlow()
+
+    private fun locationAccess() = when {
+        Locator.allowedInBackground(app) -> LocationAccess.ALWAYS
+        Locator.allowed(app) -> LocationAccess.WHILE_OPEN
+        else -> LocationAccess.NONE
+    }
+
+    /** After the user answered a location request (or came back from settings): look now if allowed. */
+    fun locationAnswered() {
+        _locationAccess.value = locationAccess()
+        checkPlace(force = true)
+    }
+
+    /**
+     * Asks the phone where the user is, at most every few hours (or now, with [force]); if they've
+     * gone somewhere new, Shabbos times and the days are worked out again.
+     */
+    private fun checkPlace(force: Boolean = false) {
+        _locationAccess.value = locationAccess()
+        if (!Locator.allowed(app)) return
+        viewModelScope.launch {
+            val last = app.prefs.lastPlaceCheck()
+            if (!force && last != null && Duration.between(last, Instant.now()) < Duration.ofHours(3)) return@launch
+            val before = app.prefs.currentPlaces().firstOrNull()
+            if (runCatching { app.engine.notePlace() }.getOrDefault(false) && app.prefs.currentPlaces().firstOrNull() != before) reload()
+        }
+    }
 
     /** Each loaded night's sleep score (entered, or estimated), by the morning it ended. */
     val scores: StateFlow<Map<LocalDate, NightScore>> =
@@ -147,6 +190,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (s == null) {
                 _state.update { it.copy(loading = false) }
                 return@launch
+            }
+            checkPlace()
+            launch {
+                showingErrors {
+                    val date = LocalDate.now()
+                    _state.update { it.copy(restBlocks = app.engine.restBlocks(date.minusDays(17), date.plusDays(8))) }
+                }
             }
             // Today, the days and the nights load side by side, each showing as soon as it's in. The
             // nights only need the days' sleep, not their steps, so they don't wait for those.

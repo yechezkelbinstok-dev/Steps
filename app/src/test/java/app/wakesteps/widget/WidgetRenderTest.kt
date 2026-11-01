@@ -66,7 +66,11 @@ class WidgetRenderTest {
         }
     }
 
-    private fun renderAll(tag: String, style: WidgetStyle, steps: Long) = runBlocking {
+    /** During Shabbos: candles, its name and when it ends, at every size. */
+    @Test
+    fun renderShabbos() = renderAll("shabbos", WidgetStyle.SOFT, steps = 8432, rest = "Shabbos · Vayera")
+
+    private fun renderAll(tag: String, style: WidgetStyle, steps: Long, rest: String? = null) = runBlocking {
         val app = ApplicationProvider.getApplicationContext<WakeStepsApp>()
         val now = Instant.now()
         app.prefs.update { it.copy(widgetStyle = style) }
@@ -79,6 +83,8 @@ class WidgetRenderTest {
                 updatedAt = now,
                 latestDataAt = now.minus(Duration.ofMinutes(3)),
                 error = null,
+                restTitle = rest,
+                restEnd = rest?.let { now.plus(Duration.ofHours(5)) },
             )
         )
         val out = File("build/widget-renders").apply { mkdirs() }

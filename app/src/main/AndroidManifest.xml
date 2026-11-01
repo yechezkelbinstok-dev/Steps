@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The phone's step counter, to fill in steps between tracker syncs. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Roughly where the user is, for Shabbos and Yom Tov times; all the time for the check before Shabbos. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />

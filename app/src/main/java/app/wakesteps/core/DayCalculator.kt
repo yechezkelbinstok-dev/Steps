@@ -99,8 +99,11 @@ data class Overrides(
     }
 }
 
-enum class StartReason { WOKE_UP, FALLBACK, MANUAL }
-enum class EndReason { WENT_TO_SLEEP, FALLBACK, MANUAL }
+/** How a day began; [AFTER_REST] is when Shabbos or Yom Tov ended (see [RestDays]). */
+enum class StartReason { WOKE_UP, FALLBACK, MANUAL, AFTER_REST }
+
+/** How a day ended; [REST] is when Shabbos or Yom Tov began. */
+enum class EndReason { WENT_TO_SLEEP, FALLBACK, MANUAL, REST }
 
 /** One awake day. [end] is null while the day is still in progress. */
 data class DayWindow(

@@ -2,6 +2,7 @@ package app.wakesteps.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -54,7 +56,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
 /** One bar: its value, and whether it's past the goal (drawn gold). */
-class BarSpec(val value: Long, val gold: Boolean = false)
+class BarSpec(val value: Long, val gold: Boolean = false, val rest: Boolean = false)
 
 /**
  * Selection shared by a chart and its readout: tap a bar, or drag across the bars, to pick one.
@@ -188,6 +190,11 @@ fun InteractiveBars(
             val x = i * slot + (slot - w) / 2
             val dim = chosen != null && chosen != i
             val alpha = if (dim) 0.28f else 1f
+            if (bar.rest) {
+                // Shabbos or Yom Tov: candles instead of a bar.
+                drawCandles(i * slot + slot / 2, size.height, minOf(26.dp.toPx(), size.height * 0.3f), colors.text, alpha * p)
+                return@forEachIndexed
+            }
             if (bar.value == 0L) {
                 drawCircle(colors.faint.copy(alpha = 0.4f * alpha), dot / 2.2f, Offset(x + w / 2, size.height - dot / 2))
                 return@forEachIndexed
@@ -316,7 +323,7 @@ fun HourlyPanel(
 // ---------------------------------------------------------------- week
 
 /** One day in the week chart. */
-class WeekDay(val initial: String, val title: String, val steps: Long, val partial: Boolean)
+class WeekDay(val initial: String, val title: String, val steps: Long, val partial: Boolean, val rest: Boolean = false)
 
 /**
  * The last seven days against a dashed goal line, days that made it in gold. The readout shows
@@ -325,7 +332,8 @@ class WeekDay(val initial: String, val title: String, val steps: Long, val parti
 @Composable
 fun WeekPanel(days: List<WeekDay>, goal: Int, modifier: Modifier = Modifier, initialSelection: Int? = null) {
     val selection = rememberChartSelection(initialSelection)
-    val done = days.filterNot { it.partial }.ifEmpty { days }
+    // Today (still going) and Shabbos and Yom Tov are left out.
+    val done = days.filterNot { it.partial || it.rest }.ifEmpty { days.filterNot { it.rest } }
     val average = if (done.isEmpty()) 0L else done.sumOf { it.steps } / done.size
     val met = done.count { it.steps >= goal }
     val picked = selection.index?.let { days.getOrNull(it) }
@@ -337,7 +345,9 @@ fun WeekPanel(days: List<WeekDay>, goal: Int, modifier: Modifier = Modifier, ini
         }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            if (picked != null) {
+            if (picked?.rest == true) {
+                Image(painterResource(R.drawable.ic_candles), contentDescription = null, modifier = Modifier.size(34.dp).padding(bottom = 4.dp))
+            } else if (picked != null) {
                 Text(Format.number(picked.steps), style = AppType.number(34f), color = Palette.text)
             } else {
                 CountUp(average.toDouble(), 34f)
@@ -351,7 +361,7 @@ fun WeekPanel(days: List<WeekDay>, goal: Int, modifier: Modifier = Modifier, ini
         }
         Spacer(Modifier.height(18.dp))
         InteractiveBars(
-            days.map { BarSpec(it.steps, gold = it.steps >= goal) },
+            days.map { BarSpec(it.steps, gold = it.steps >= goal, rest = it.rest) },
             selection,
             Modifier.fillMaxWidth().height(130.dp),
             barFraction = 0.44f,

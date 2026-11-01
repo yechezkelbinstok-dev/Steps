@@ -4,9 +4,31 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below).
+
+## 1.16
+- Shabbos and Yom Tov are blocked out, from shkiah the evening before to nightfall after, as
+  Chabad.org times them (the sun 8.5° below the horizon; for Cincinnati this week, 5:31 PM Friday
+  to 6:12 PM Saturday). Yom Tov is Rosh Hashanah, Yom Kippur, Sukkos, Shemini Atzeres, Simchas
+  Torah, Pesach and Shavuos, two days each outside Israel; a Yom Tov next to Shabbos makes one
+  block.
+- Friday's day ends at shkiah, instead of running on through the night as an all-nighter (with
+  the band off, no sleep was tracked). Whatever's left of Saturday after nightfall belongs to
+  Shabbos in History: its row shows the steps after Shabbos, and opens them.
+- Shabbos shows as Shabbos: on Today (candles, Good Shabbos, the parsha and when it ends), as a
+  row in History and among the nights in Sleep, as candles in the week's charts, and on the
+  widget. On Friday, Today says when it begins. Shabbos and Yom Tov are left out of the goal
+  count and the step and sleep averages.
+- Times are worked out where you are: roughly, from the phone's location, checked when you open
+  the app and, with location allowed all the time, on the day each Shabbos and Yom Tov begins (in
+  the morning and again an hour and a half before). Until the phone has said, Cincinnati. Each
+  Shabbos keeps the place you were that week. Settings → Shabbos & Yom Tov shows the next one, the
+  place, and the permission.
+- Google Health's figures for Oct 21 to Nov 1 (from the Coach) are added: their scores to the ones
+  the estimates learn from, and their sound sleep to what the app's is tuned to, now from 23
+  nights.
 
 ## 1.15.1
 - Steps minute by minute opens hour by hour, the same as the Hour by hour chart you tapped. As you

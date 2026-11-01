@@ -107,6 +107,27 @@ or more (pauses of up to 2 minutes don't end one), each with its times, length, 
 Tap one to see it in the chart. The walks are in
 [`Walks.kt`](app/src/main/java/app/wakesteps/core/Walks.kt).
 
+## Shabbos and Yom Tov
+
+Shabbos and Yom Tov are blocked out, from shkiah (sunset) the evening before to nightfall after,
+when the sun is 8.5° below the horizon: the times Chabad.org gives. Yom Tov is Rosh Hashanah, Yom
+Kippur, Sukkos, Shemini Atzeres, Simchas Torah, Pesach and Shavuos, two days each outside Israel
+(one inside), and a Yom Tov next to Shabbos makes one block. The calendar and the times come from
+the [KosherJava Zmanim](https://kosherjava.com/) library; the logic is in
+[`RestDays.kt`](app/src/main/java/app/wakesteps/core/RestDays.kt).
+
+* **Days stop at shkiah.** A day running into Shabbos ends then, and what's left after nightfall
+  (until you go to sleep) is the evening after it: in History it's part of the Shabbos row, and
+  it isn't held to the goal. Days and nights inside are left out.
+* **Shabbos shows as Shabbos** on Today (with the parsha and when it ends), in History and Sleep,
+  in the week charts (candles where a bar would be) and on the widget, and is left out of the
+  goal count and the averages.
+* **Where you are** sets the times. The app asks the phone roughly where it is when it's opened
+  (at most every 3 hours), and with location allowed all the time, also on the day each Shabbos
+  or Yom Tov begins: in the morning and an hour and a half before. It keeps where you were each
+  week, so a past Shabbos keeps its own times. Until it knows, Cincinnati. See Settings → Shabbos
+  & Yom Tov.
+
 ## Sleep
 
 The Sleep tab shows each night the app starts a day from (the sleep you woke from, your own

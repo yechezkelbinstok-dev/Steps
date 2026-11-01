@@ -189,6 +189,7 @@ private fun TimelinePanel(day: DaySummary, overrides: Overrides, now: Instant, m
                             StartReason.WOKE_UP -> R.string.detail_woke
                             StartReason.FALLBACK -> R.string.detail_new_day
                             StartReason.MANUAL -> R.string.detail_started
+                            StartReason.AFTER_REST -> R.string.detail_havdalah
                         }
                     ),
                     color = Palette.faint,
@@ -202,6 +203,7 @@ private fun TimelinePanel(day: DaySummary, overrides: Overrides, now: Instant, m
                             w.isOngoing -> R.string.now_label
                             w.endReason == EndReason.FALLBACK -> R.string.detail_new_day
                             w.endReason == EndReason.MANUAL -> R.string.detail_ended
+                            w.endReason == EndReason.REST -> R.string.detail_shkiah
                             else -> R.string.detail_slept
                         }
                     ),

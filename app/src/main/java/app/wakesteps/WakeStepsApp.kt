@@ -8,6 +8,7 @@ import app.wakesteps.data.PhoneSteps
 import app.wakesteps.data.Prefs
 import app.wakesteps.data.StepsEngine
 import app.wakesteps.sync.LiveModeService
+import app.wakesteps.sync.PlaceWorker
 import app.wakesteps.sync.RefreshWorker
 
 open class WakeStepsApp : Application() {
@@ -21,6 +22,7 @@ open class WakeStepsApp : Application() {
         super.onCreate()
         LiveModeService.createChannel(this)
         RefreshWorker.schedulePeriodic(this)
+        PlaceWorker.scheduleDaily(this)
     }
 }
 

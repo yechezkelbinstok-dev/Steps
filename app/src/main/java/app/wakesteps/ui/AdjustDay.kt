@@ -108,6 +108,7 @@ fun AdjustDaySheet(day: DayWindow, overrides: Overrides, vm: MainViewModel, onDo
                         Text(stringResource(R.string.adjust_manual, Format.time(day.start)))
                         SoftButton(stringResource(R.string.adjust_remove_start), onClick = { act { vm.setManualStart(day.start, present = false) } })
                     }
+                    StartReason.AFTER_REST -> Text(stringResource(R.string.adjust_after_rest, Format.time(day.start)))
                 }
             }
 

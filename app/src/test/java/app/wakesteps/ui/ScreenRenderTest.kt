@@ -22,6 +22,10 @@ import app.wakesteps.core.SleepScore
 import app.wakesteps.core.EndReason
 import app.wakesteps.core.NightWindow
 import app.wakesteps.core.Overrides
+import app.wakesteps.core.Place
+import app.wakesteps.core.PlaceFix
+import app.wakesteps.core.RestBlock
+import app.wakesteps.core.RestDay
 import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepNights
 import app.wakesteps.core.SleepSession
@@ -271,6 +275,83 @@ class ScreenRenderTest {
         val todayMinutes = minuteSteps(today, 6432)
         render("steps_today", settings, Tab.TODAY) { StepsExplorer(today, settings.goal, { todayMinutes }, {}, bottom, now = now) }
         render("steps_empty", settings, Tab.TODAY) { StepsExplorer(today, settings.goal, { emptyList() }, {}, bottom, now = now) }
+    }
+
+    /** Last Shabbos (now, Saturday afternoon) and the one before, with Vayera's and Lech Lecha's names. */
+    private val shabbos = RestBlock(
+        Instant.parse("2026-10-16T22:31:00Z"), Instant.parse("2026-10-17T23:13:00Z"),
+        listOf(RestDay(LocalDate.of(2026, 10, 17), "Shabbos", "Vayera")),
+    )
+    private val shabbosBefore = RestBlock(
+        Instant.parse("2026-10-09T22:41:00Z"), Instant.parse("2026-10-10T23:22:00Z"),
+        listOf(RestDay(LocalDate.of(2026, 10, 10), "Shabbos", "Lech Lecha")),
+    )
+
+    /**
+     * The days as the app counts them around Shabbos: Friday ends at shkiah, the evening after the
+     * Shabbos before is all that's left of that Saturday, and today (Shabbos) has no day going.
+     */
+    private fun shabbosHistory(): List<DaySummary> = history().drop(1).map { day ->
+        val w = day.window
+        when {
+            w.end != null && w.end!! > shabbos.start && w.start < shabbos.start ->
+                day.copy(window = w.copy(end = shabbos.start, endReason = EndReason.REST))
+            w.end != null && w.end!! > shabbosBefore.start && w.start < shabbosBefore.start ->
+                day.copy(window = w.copy(end = shabbosBefore.start, endReason = EndReason.REST))
+            w.start > shabbosBefore.start && w.start < shabbosBefore.end ->
+                DaySummary(
+                    DayWindow(shabbosBefore.end, shabbosBefore.end.plus(hours(3.5)), StartReason.AFTER_REST, EndReason.WENT_TO_SLEEP),
+                    DayTotals(1240, calories = 310.0, distanceMeters = 967.0),
+                )
+            else -> day
+        }
+    }
+
+    /** Shabbos on Today, in History and Sleep, in Settings, and Friday before it begins. */
+    @Test
+    @Config(qualifiers = "w411dp-h1400dp-420dpi")
+    fun renderShabbos() {
+        val settings = AppSettings()
+        val blocks = listOf(shabbosBefore, shabbos)
+        val today = today(0).copy(restBlocks = blocks)
+        val state = UiState(
+            access = Access.Ready(true, true, false), today = today, history = shabbosHistory(),
+            nights = nights().drop(1), nightsLoaded = true, restBlocks = blocks,
+        )
+        render("today_shabbos", settings, Tab.TODAY) { TodayScreen(state, settings, actions, {}, {}, bottom) }
+        // Friday afternoon, Shabbos at 6:31 PM.
+        val friday = today(6432).let { t ->
+            t.copy(
+                window = t.window.copy(start = t.window.start.minus(Duration.ofDays(1))),
+                now = now.minus(Duration.ofDays(1)),
+                restBlocks = blocks,
+            )
+        }
+        render("today_friday", settings, Tab.TODAY) { TodayScreen(state.copy(today = friday), settings, actions, {}, {}, bottom) }
+        render("history_shabbos", settings, Tab.HISTORY) { HistoryScreen(state, settings, Overrides.NONE, {}, bottom) }
+        // Settings works from the real date: the coming Shabbos, timed for Cincinnati.
+        val saturday = LocalDate.now().with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.SATURDAY))
+        render("settings_shabbos", settings, Tab.SETTINGS) {
+            SettingsScreen(
+                settings, {}, actions, state.access, now.minus(Duration.ofMinutes(6)), {}, {}, {}, null, bottom,
+                restBlocks = app.wakesteps.core.RestDays.blocks(saturday, saturday) { Place.CINCINNATI },
+                places = listOf(PlaceFix(Instant.now().minus(Duration.ofHours(30)), Place.CINCINNATI)),
+                locationAccess = LocationAccess.WHILE_OPEN,
+            )
+        }
+    }
+
+    /** The Sleep tab with Shabbos among the nights, tall enough to see the week and the list. */
+    @Test
+    @Config(qualifiers = "w411dp-h2900dp-420dpi")
+    fun renderShabbosSleep() {
+        val blocks = listOf(shabbosBefore, shabbos)
+        val nights = nights().drop(1)
+        val state = UiState(
+            access = Access.Ready(true, true, false), today = today(0).copy(restBlocks = blocks), history = shabbosHistory(),
+            nights = nights, nightsLoaded = true, restBlocks = blocks,
+        )
+        render("sleep_shabbos", AppSettings(), Tab.SLEEP) { SleepScreen(state, scores(nights), false, {}, {}, {}, bottom) }
     }
 
     /** A tall screen, to see a whole day page at once. */

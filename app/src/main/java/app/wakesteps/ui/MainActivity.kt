@@ -154,6 +154,16 @@ private fun App(vm: MainViewModel) {
     val activityLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         vm.liveStepsAnswered(it)
     }
+    val alwaysLocationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        vm.locationAnswered()
+    }
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        vm.locationAnswered()
+        // Straight on to "all the time", for the check before Shabbos.
+        if (granted && Build.VERSION.SDK_INT >= 29) alwaysLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+    }
+    val locationAccess by vm.locationAccess.collectAsStateWithLifecycle()
+    val places by vm.places.collectAsStateWithLifecycle()
 
     val activity = LocalActivity.current as MainActivity
     val actions = Actions(
@@ -163,6 +173,10 @@ private fun App(vm: MainViewModel) {
         requestBackground = { permissionLauncher.launch(vm.backgroundPermission()) },
         requestLiveSteps = {
             if (Build.VERSION.SDK_INT >= 29) activityLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        },
+        requestLocation = { locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+        requestLocationAlways = {
+            if (Build.VERSION.SDK_INT >= 29) alwaysLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         },
     )
 
@@ -230,6 +244,9 @@ private fun App(vm: MainViewModel) {
                         onOpenDiagnostics = { showDiagnostics = true },
                         googleError = googleError,
                         bottomPadding = bottom,
+                        restBlocks = state.restBlocks,
+                        places = places,
+                        locationAccess = locationAccess,
                     )
                 }
             }
@@ -393,4 +410,8 @@ class Actions(
     val requestBackground: () -> Unit,
     /** Asks for the phone's step counter ("physical activity"). */
     val requestLiveSteps: () -> Unit = {},
+    /** Asks to know roughly where the phone is, for Shabbos times (then all the time). */
+    val requestLocation: () -> Unit = {},
+    /** Asks for location all the time, for the check before Shabbos. */
+    val requestLocationAlways: () -> Unit = {},
 )

@@ -12,6 +12,8 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.wakesteps.core.DayRules
 import app.wakesteps.core.Overrides
+import app.wakesteps.core.Place
+import app.wakesteps.core.PlaceFix
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.StartReason
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 
 private val Context.dataStore by preferencesDataStore(name = "wakesteps")
 
@@ -97,6 +100,9 @@ data class Snapshot(
     /** End time of the newest step record, i.e. how fresh the tracker's sync is. */
     val latestDataAt: Instant?,
     val error: String?,
+    /** The Shabbos or Yom Tov going on ("Shabbos · Noach"), and when it ends; null on other days. */
+    val restTitle: String? = null,
+    val restEnd: Instant? = null,
 )
 
 /** A night's sound sleep as worked out from heart rate; [settled] once all its heart rate has surely arrived. */
@@ -125,6 +131,17 @@ private val SEED_SCORES = mapOf(
     LocalDate.of(2026, 9, 14) to 77,
     // The third, from Google Health's Coach.
     LocalDate.of(2026, 10, 19) to 72,
+    // The fourth, from the Coach on Nov 1.
+    LocalDate.of(2026, 11, 1) to 78,
+    LocalDate.of(2026, 10, 30) to 56,
+    LocalDate.of(2026, 10, 29) to 84,
+    LocalDate.of(2026, 10, 28) to 83,
+    LocalDate.of(2026, 10, 27) to 70,
+    LocalDate.of(2026, 10, 26) to 81,
+    LocalDate.of(2026, 10, 25) to 74,
+    LocalDate.of(2026, 10, 23) to 86,
+    LocalDate.of(2026, 10, 22) to 82,
+    LocalDate.of(2026, 10, 21) to 83,
 )
 
 /** The first batch, which 1.12 marked as added with a single flag. */
@@ -153,6 +170,50 @@ data class SyncEvent(val seenAt: Instant, val dataUpTo: Instant, val stepsDelta:
 
 private const val SYNC_LOG_SIZE = 60
 
+/** Places kept, for working out where each Shabbos was. */
+private const val PLACES_KEPT = 40
+
+/** A place found this close to the last one is the same place. */
+private const val SAME_PLACE_KM = 15.0
+
+/** Kilometres between two places, as the crow flies. */
+internal fun distanceKm(a: Place, b: Place): Double {
+    val la1 = Math.toRadians(a.latitude)
+    val la2 = Math.toRadians(b.latitude)
+    val dLa = la2 - la1
+    val dLo = Math.toRadians(b.longitude - a.longitude)
+    val h = Math.sin(dLa / 2).let { it * it } + Math.cos(la1) * Math.cos(la2) * Math.sin(dLo / 2).let { it * it }
+    return 2 * 6371.0 * Math.asin(Math.sqrt(h).coerceAtMost(1.0))
+}
+
+/**
+ * [fixes] (newest first) with [fix] noted: a new place goes first, but the same place as the
+ * newest (within 15 km) doesn't, so each entry says where the user got to and when; the same
+ * place can fill in a name the newest lacked.
+ */
+internal fun withPlace(fixes: List<PlaceFix>, fix: PlaceFix): List<PlaceFix> {
+    val newest = fixes.firstOrNull()
+    if (newest != null && distanceKm(newest.place, fix.place) < SAME_PLACE_KM) {
+        if (newest.place.name != null || fix.place.name == null) return fixes
+        return listOf(newest.copy(place = newest.place.copy(name = fix.place.name))) + fixes.drop(1)
+    }
+    return (listOf(fix) + fixes).take(PLACES_KEPT)
+}
+
+private fun parsePlaces(text: String): List<PlaceFix> = text.lineSequence().mapNotNull { line ->
+    val f = line.split('|')
+    val at = f.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
+    val lat = f.getOrNull(1)?.toDoubleOrNull() ?: return@mapNotNull null
+    val lon = f.getOrNull(2)?.toDoubleOrNull() ?: return@mapNotNull null
+    val zone = f.getOrNull(3)?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: return@mapNotNull null
+    PlaceFix(Instant.ofEpochSecond(at), Place(lat, lon, zone, f.getOrNull(4)?.takeIf { it.isNotBlank() }))
+}.toList()
+
+private fun formatPlaces(fixes: List<PlaceFix>): String = fixes.joinToString("\n") { (at, p) ->
+    val name = p.name.orEmpty().replace('|', ' ').replace('\n', ' ')
+    "${at.epochSecond}|${p.latitude}|${p.longitude}|${p.zone.id}|$name"
+}
+
 class Prefs(private val context: Context) {
     private object K {
         val goal = intPreferencesKey("goal")
@@ -172,6 +233,8 @@ class Prefs(private val context: Context) {
         val snapUpdated = longPreferencesKey("snap_updated")
         val snapLatest = longPreferencesKey("snap_latest")
         val snapError = stringPreferencesKey("snap_error")
+        val snapRestTitle = stringPreferencesKey("snap_rest_title")
+        val snapRestEnd = longPreferencesKey("snap_rest_end")
 
         /** Entries: "S|<epochSec>|1" main sleep, "S|<epochSec>|0" nap, "R|<epochSec>" skipped reset,
          *  "M|<epochSec>" manual day start. */
@@ -195,6 +258,11 @@ class Prefs(private val context: Context) {
 
         /** The sound-sleep rules learnt from Google's figures: "<offset>|<steady>|<stretch>|<1 if capped>|<which nights>". */
         val soundRules = stringPreferencesKey("sound_rules")
+
+        /** Where the phone found the user, newest first: newline-separated "<epochSec>|<lat>|<lon>|<zone>|<name>". */
+        val places = stringPreferencesKey("places")
+        /** When the phone was last asked where the user is (epoch seconds). */
+        val placeCheckedAt = longPreferencesKey("place_checked_at")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -265,6 +333,24 @@ class Prefs(private val context: Context) {
             val (entries, dates) = withSeedScores(parseScores(p[K.sleepScores]), added, p[K.scoresSeeded] == true) ?: return@edit
             p[K.sleepScores] = formatScores(entries)
             p[K.seededScoreDates] = dates.sorted().joinToString(",")
+        }
+    }
+
+    /** Where the phone has found the user over time, newest first: for timing each Shabbos. */
+    val places: Flow<List<PlaceFix>> = context.dataStore.data.map { parsePlaces(it[K.places].orEmpty()) }
+
+    /** When the phone was last asked where the user is. */
+    val placeCheckedAt: Flow<Instant?> = context.dataStore.data.map { p -> p[K.placeCheckedAt]?.let(Instant::ofEpochSecond) }
+
+    suspend fun currentPlaces(): List<PlaceFix> = places.first()
+
+    suspend fun lastPlaceCheck(): Instant? = placeCheckedAt.first()
+
+    /** Notes where the phone found the user ([withPlace]), and that it looked. */
+    suspend fun notePlace(fix: PlaceFix) {
+        context.dataStore.edit { p ->
+            p[K.places] = formatPlaces(withPlace(parsePlaces(p[K.places].orEmpty()), fix))
+            p[K.placeCheckedAt] = fix.at.epochSecond
         }
     }
 
@@ -409,6 +495,8 @@ class Prefs(private val context: Context) {
             p[K.snapUpdated] = s.updatedAt.toEpochMilli()
             p.putOrRemove(K.snapLatest, s.latestDataAt?.toEpochMilli())
             p.putOrRemove(K.snapError, s.error)
+            p.putOrRemove(K.snapRestTitle, s.restTitle)
+            p.putOrRemove(K.snapRestEnd, s.restEnd?.toEpochMilli())
         }
     }
 
@@ -445,6 +533,8 @@ class Prefs(private val context: Context) {
             updatedAt = Instant.ofEpochMilli(this[K.snapUpdated] ?: start),
             latestDataAt = this[K.snapLatest]?.let(Instant::ofEpochMilli),
             error = this[K.snapError],
+            restTitle = this[K.snapRestTitle],
+            restEnd = this[K.snapRestEnd]?.let(Instant::ofEpochMilli),
         )
     }
 

@@ -30,6 +30,7 @@ import app.wakesteps.R
 import app.wakesteps.core.EndReason
 import app.wakesteps.core.Format
 import app.wakesteps.core.Overrides
+import app.wakesteps.core.RestBlock
 import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.DaySummary
@@ -53,6 +54,10 @@ private class HistoryRow(
     val partial: Boolean,
     val date: LocalDate,
     val onClick: (() -> Unit)?,
+    /** Shabbos or Yom Tov: left out of goals and averages. */
+    val rest: RestBlock? = null,
+    /** The evening after [rest], once it ended. */
+    val after: DaySummary? = null,
 )
 
 @Composable
@@ -104,13 +109,19 @@ fun HistoryScreen(
                         title = it.title,
                         steps = it.totals.steps,
                         partial = it.partial,
+                        rest = it.rest != null,
                     )
                 }
                 WeekPanel(week, settings.goal, Modifier.entrance(2), chartSelection)
             }
             item { Eyebrow(stringResource(R.string.history_days), Modifier.padding(start = 4.dp, top = 12.dp)) }
             itemsIndexed(rows, key = { _, it -> it.key }) { i, row ->
-                DayRow(row, settings, Modifier.entrance(3 + minOf(i, 5)))
+                val rest = row.rest
+                if (rest != null && mode == 0) {
+                    RestRow(rest, row.after, row.onClick, Modifier.entrance(3 + minOf(i, 5)))
+                } else {
+                    DayRow(row, settings, Modifier.entrance(3 + minOf(i, 5)))
+                }
             }
         }
     }
@@ -119,19 +130,37 @@ fun HistoryScreen(
 @Composable
 private fun awakeRows(state: UiState, overrides: Overrides, onOpenDay: (DaySummary) -> Unit): List<HistoryRow> {
     val now = Instant.now()
-    return state.history.map { day ->
-        val w = day.window
-        val end = if (w.isOngoing) stringResource(R.string.now) else Format.time(w.endOr(now))
-        HistoryRow(
-            key = w.start.toEpochMilli(),
-            title = if (w.isOngoing) stringResource(R.string.history_today) else Format.day(w.start),
-            detail = "${Format.time(w.start)} – $end  ·  ${Format.duration(Duration.between(w.start, w.endOr(now)))}",
-            tags = dayTags(day, overrides, now),
-            totals = day.totals,
-            partial = w.isOngoing,
-            date = w.start.atZone(ZoneId.systemDefault()).toLocalDate(),
-            onClick = { onOpenDay(day) },
-        )
+    val zone = ZoneId.systemDefault()
+    return withRest(state.history, state.restBlocks, now).map { entry ->
+        when (entry) {
+            is DayEntry.Rest -> HistoryRow(
+                key = -entry.block.start.toEpochMilli(),
+                title = entry.block.title,
+                detail = restTimes(entry.block),
+                tags = null,
+                totals = entry.after?.totals ?: DayTotals(0, null, null),
+                partial = false,
+                date = entry.block.days.last().date,
+                onClick = entry.after?.let { after -> { onOpenDay(after) } },
+                rest = entry.block,
+                after = entry.after,
+            )
+            is DayEntry.Day -> {
+                val day = entry.day
+                val w = day.window
+                val end = if (w.isOngoing) stringResource(R.string.now) else Format.time(w.endOr(now))
+                HistoryRow(
+                    key = w.start.toEpochMilli(),
+                    title = if (w.isOngoing) stringResource(R.string.history_today) else Format.day(w.start),
+                    detail = "${Format.time(w.start)} – $end  ·  ${Format.duration(Duration.between(w.start, w.endOr(now)))}",
+                    tags = dayTags(day, overrides, now),
+                    totals = day.totals,
+                    partial = w.isOngoing,
+                    date = w.start.atZone(zone).toLocalDate(),
+                    onClick = { onOpenDay(day) },
+                )
+            }
+        }
     }
 }
 
@@ -152,15 +181,17 @@ private fun calendarRows(state: UiState): List<HistoryRow> {
     val today = LocalDate.now()
     val fmt = DateTimeFormatter.ofPattern("EEE, MMM d")
     return state.calendar.map { day ->
+        val rest = state.restBlocks.firstOrNull { b -> b.days.any { it.date == day.date } }
         HistoryRow(
             key = day.date.toEpochDay(),
             title = if (day.date == today) stringResource(R.string.history_today_so_far) else day.date.format(fmt),
             detail = null,
-            tags = null,
+            tags = rest?.days?.firstOrNull { it.date == day.date }?.name,
             totals = day.totals,
             partial = day.date == today,
             date = day.date,
             onClick = null,
+            rest = rest,
         )
     }
 }

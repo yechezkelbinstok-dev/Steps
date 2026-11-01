@@ -83,6 +83,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -103,6 +104,7 @@ import app.wakesteps.core.GoogleFigures
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.ScoreFactor
 import app.wakesteps.core.ScorePart
+import app.wakesteps.core.RestBlock
 import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepNights
 import app.wakesteps.core.SleepRating
@@ -1057,11 +1059,13 @@ private fun NightContent(
  * touching.
  */
 @Composable
-private fun NightsPanel(nights: List<SleepNight>, scores: List<NightScore?>, modifier: Modifier, initialSelection: Int?) {
+private fun NightsPanel(nights: List<SleepNight?>, scores: List<NightScore?>, modifier: Modifier, initialSelection: Int?, rests: List<RestBlock?> = nights.map { null }) {
     val selection = rememberChartSelection(initialSelection)
-    val average = nights.map { it.asleep.toMinutes() }.average().roundToLong()
+    // Shabbos and Yom Tov (no night tracked) are left out.
+    val average = nights.filterNotNull().map { it.asleep.toMinutes() }.average().roundToLong()
     val known = scores.filterNotNull()
     val picked = selection.index?.let { nights.getOrNull(it) }
+    val pickedRest = selection.index?.let { rests.getOrNull(it) }
     val zone = ZoneId.systemDefault()
     Panel(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1073,16 +1077,18 @@ private fun NightsPanel(nights: List<SleepNight>, scores: List<NightScore?>, mod
         }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            if (picked != null) {
+            if (pickedRest != null) {
+                Image(painterResource(R.drawable.ic_candles), contentDescription = null, modifier = Modifier.size(34.dp).padding(bottom = 4.dp))
+            } else if (picked != null) {
                 Text(durationText(picked.asleep.toMinutes(), 34f), style = AppType.number(34f), color = Palette.text)
             } else {
                 DurationNumber(average, 34f)
             }
             Spacer(Modifier.width(10.dp))
             Caption(
-                picked?.let { Format.day(it.end) } ?: stringResource(R.string.sleep_average),
+                pickedRest?.title ?: picked?.let { Format.day(it.end) } ?: stringResource(R.string.sleep_average),
                 Modifier.padding(bottom = 6.dp),
-                color = if (picked != null) Palette.text else Palette.muted,
+                color = if (picked != null || pickedRest != null) Palette.text else Palette.muted,
             )
         }
         Spacer(Modifier.height(18.dp))
@@ -1091,8 +1097,9 @@ private fun NightsPanel(nights: List<SleepNight>, scores: List<NightScore?>, mod
         Row(Modifier.fillMaxWidth()) {
             nights.forEachIndexed { i, night ->
                 val color by animateColorAsState(if (selection.index == i) Palette.text else Palette.faint, label = "nightInitial")
+                val morning = night?.end?.atZone(zone)?.toLocalDate() ?: rests.getOrNull(i)?.days?.first()?.date
                 Text(
-                    DateTimeFormatter.ofPattern("EEEEE").format(night.end.atZone(zone)),
+                    morning?.let { DateTimeFormatter.ofPattern("EEEEE").format(it) }.orEmpty(),
                     style = MaterialTheme.typography.labelMedium,
                     color = color,
                     textAlign = TextAlign.Center,
@@ -1105,7 +1112,7 @@ private fun NightsPanel(nights: List<SleepNight>, scores: List<NightScore?>, mod
 
 /** One stacked bar per night with its score on top, growing in left to right, scrubbable like the other charts. */
 @Composable
-private fun StackedNights(nights: List<SleepNight>, scores: List<NightScore?>, selection: ChartSelection, modifier: Modifier) {
+private fun StackedNights(nights: List<SleepNight?>, scores: List<NightScore?>, selection: ChartSelection, modifier: Modifier) {
     val haptics = LocalHapticFeedback.current
     val grow by animateOnShow(1f, durationMillis = 1000, delayMillis = 150)
     val colors = Palette
@@ -1143,7 +1150,7 @@ private fun StackedNights(nights: List<SleepNight>, scores: List<NightScore?>, s
         if (n == 0) return@Canvas
         // Room above the tallest bar for its score.
         val headroom = 22.dp.toPx()
-        val max = nights.maxOf { it.inBed.toMinutes() }.coerceAtLeast(1).toFloat()
+        val max = (nights.filterNotNull().maxOfOrNull { it.inBed.toMinutes() } ?: 1L).coerceAtLeast(1).toFloat()
         val chart = size.height - headroom
         val slot = size.width / n
         val w = (slot * 0.44f).coerceIn(3.dp.toPx(), 26.dp.toPx())
@@ -1155,6 +1162,12 @@ private fun StackedNights(nights: List<SleepNight>, scores: List<NightScore?>, s
         nights.forEachIndexed { i, night ->
             val stagger = 0.45f / n
             val p = ((grow - i * stagger) / (1f - (n - 1) * stagger)).coerceIn(0f, 1f)
+            if (night == null) {
+                // Shabbos or Yom Tov: candles instead of a night.
+                val dim = selection.index != null && selection.index != i
+                drawCandles(i * slot + slot / 2, size.height, minOf(28.dp.toPx(), chart * 0.3f), colors.text, p * if (dim) 0.28f else 1f)
+                return@forEachIndexed
+            }
             val full = chart * night.inBed.toMinutes() / max * p
             if (full <= 0f) return@forEachIndexed
             val x = i * slot + (slot - w) / 2
@@ -1296,15 +1309,22 @@ fun SleepScreen(
                 return@Column
             }
             NightContent(latest, scores[latest.wakeDate()], restlessAsAwake, { onEditScore(latest) }, onExplore, 268.dp, first = 1, chartMinute)
-            if (nights.size > 1) {
-                val week = nights.take(7).reversed()
+            // The nights with each Shabbos and Yom Tov in its place, when the band was off.
+            val slots = withRestNights(nights, state.restBlocks, state.today?.now ?: Instant.now())
+            if (slots.size > 1) {
+                val week = slots.take(7).reversed()
                 NightsPanel(
-                    week.map { it.counted(restlessAsAwake) }, week.map { scores[it.wakeDate()] },
-                    Modifier.entrance(6), chartSelection,
+                    week.map { it.night?.counted(restlessAsAwake) }, week.map { slot -> slot.night?.let { scores[it.wakeDate()] } },
+                    Modifier.entrance(6), chartSelection, rests = week.map { it.rest },
                 )
                 Eyebrow(stringResource(R.string.sleep_earlier), Modifier.padding(start = 4.dp, top = 4.dp))
-                nights.drop(1).forEachIndexed { i, night ->
-                    NightRow(night.counted(restlessAsAwake), scores[night.wakeDate()], onClick = { onOpenNight(night) }, Modifier.entrance(7 + minOf(i, 5)))
+                slots.filter { it.night != latest }.forEachIndexed { i, slot ->
+                    val night = slot.night
+                    if (night != null) {
+                        NightRow(night.counted(restlessAsAwake), scores[night.wakeDate()], onClick = { onOpenNight(night) }, Modifier.entrance(7 + minOf(i, 5)))
+                    } else if (slot.rest != null) {
+                        RestRow(slot.rest, after = null, onClick = null, Modifier.entrance(7 + minOf(i, 5)), showSteps = false)
+                    }
                 }
             }
         }

@@ -4,6 +4,9 @@ import android.content.Context
 import app.wakesteps.core.DayCalculator
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.NightWindow
+import app.wakesteps.core.PlaceFix
+import app.wakesteps.core.RestBlock
+import app.wakesteps.core.RestDays
 import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepNights
 import app.wakesteps.core.SleepSession
@@ -11,6 +14,7 @@ import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.GoogleFigures
 import app.wakesteps.core.SoundRules
 import app.wakesteps.core.SoundSleeps
+import app.wakesteps.core.StartReason
 import app.wakesteps.widget.WidgetPusher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +38,19 @@ data class TodaySummary(
     val hourly: List<Pair<Instant, Long>>,
     val latestDataAt: Instant?,
     val now: Instant,
-)
+    /** Shabbos and Yom Tov from a few days back to two days ahead. */
+    val restBlocks: List<RestBlock> = emptyList(),
+) {
+    /** The Shabbos or Yom Tov going on now, if one is. */
+    val rest: RestBlock? get() = restBlocks.firstOrNull { now in it }
+
+    /** The next one, if it begins within a day. */
+    val restSoon: RestBlock? get() = restBlocks.firstOrNull { it.start > now && Duration.between(now, it.start) <= Duration.ofDays(1) }
+
+    /** The one today began after, when it began as one ended. */
+    val restBefore: RestBlock? get() =
+        if (window.startReason == StartReason.AFTER_REST) restBlocks.lastOrNull { it.end == window.start } else null
+}
 
 data class DaySummary(val window: DayWindow, val totals: DayTotals)
 
@@ -106,7 +122,11 @@ class StepsEngine(
         val zone = ZoneId.systemDefault()
         val sleeps = recentSleeps(settings, now, days = 3)
         val overrides = prefs.currentOverrides()
-        val window = DayCalculator.current(sleeps, now.minus(Duration.ofDays(3)), now, zone, settings.rules(), overrides)
+        val date = now.atZone(zone).toLocalDate()
+        val blocks = restBlocks(date.minusDays(4), date.plusDays(2))
+        val from = now.minus(Duration.ofDays(3))
+        val window = RestDays.clip(DayCalculator.windows(sleeps, from, now, zone, settings.rules(), overrides), blocks, now).lastOrNull()
+            ?: DayCalculator.current(sleeps, from, now, zone, settings.rules(), overrides)
         val night = DayCalculator.nightWindow(sleeps, zone, settings.rules())
         val end = window.endOr(now)
         val totals = read(settings, { totals(it, window.start, end) }) {
@@ -116,7 +136,20 @@ class StepsEngine(
         val latest = read(settings, { latestStepTime(it, now.minus(Duration.ofHours(6)), now) }) {
             runCatching { health.latestStepTime(now.minus(Duration.ofDays(2)), now, settings.sourcePackage) }.getOrNull()
         }
-        return TodaySummary(window, night, totals, hourly, latest, now)
+        return TodaySummary(window, night, totals, hourly, latest, now, blocks)
+    }
+
+    /** Shabbos and Yom Tov with a day from [from] to [to], each timed where the user was the day before it. */
+    suspend fun restBlocks(from: LocalDate, to: LocalDate): List<RestBlock> {
+        val fixes = prefs.currentPlaces()
+        return RestDays.blocks(from, to) { RestDays.placeOn(fixes, it) }
+    }
+
+    /** Asks the phone where the user is and notes it, for Shabbos times; false if it couldn't tell. */
+    suspend fun notePlace(): Boolean {
+        val place = Locator.locate(context) ?: return false
+        prefs.notePlace(PlaceFix(Instant.now(), place))
+        return true
     }
 
     /**
@@ -147,14 +180,19 @@ class StepsEngine(
         }
     }
 
-    /** The awake days of the last [days] days, newest first: from sleep alone, so it's quick. */
+    /**
+     * The awake days of the last [days] days, newest first, with Shabbos and Yom Tov cut out
+     * ([RestDays.clip]): from sleep alone, so it's quick.
+     */
     suspend fun dayWindows(settings: AppSettings, days: Long = 14): List<DayWindow> {
         val now = Instant.now()
+        val zone = ZoneId.systemDefault()
         val sleeps = recentSleeps(settings, now, days)
         val overrides = prefs.currentOverrides()
-        return DayCalculator.windows(
-            sleeps, now.minus(Duration.ofDays(days + 1)), now, ZoneId.systemDefault(), settings.rules(), overrides,
-        ).reversed()
+        val from = now.minus(Duration.ofDays(days + 1))
+        val windows = DayCalculator.windows(sleeps, from, now, zone, settings.rules(), overrides)
+        val blocks = restBlocks(from.atZone(zone).toLocalDate().minusDays(1), now.atZone(zone).toLocalDate())
+        return RestDays.clip(windows, blocks, now).reversed()
     }
 
     /** Steps minute by minute across one awake day (up to now if it's still going). */
@@ -330,6 +368,8 @@ class StepsEngine(
                 updatedAt = t.now,
                 latestDataAt = t.latestDataAt,
                 error = null,
+                restTitle = t.rest?.title,
+                restEnd = t.rest?.end,
             ).also { prefs.saveSnapshot(it) }
         } catch (e: CancellationException) {
             throw e // e.g. the screen went off mid-refresh: not an error to show
