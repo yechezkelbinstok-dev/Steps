@@ -19,6 +19,8 @@
     <!-- Roughly where the user is, for Shabbos and Yom Tov times; all the time for the check before Shabbos. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- To install its own updates, downloaded from the app's GitHub releases. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />

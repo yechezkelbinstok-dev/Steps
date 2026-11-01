@@ -1368,6 +1368,76 @@ fun NightDetail(
     }
 }
 
+/** A nap on its day's page: when, how long asleep, and its stages as a strip; opens the nap. */
+@Composable
+fun NapCard(nap: SleepNight, restlessAsAwake: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val display = nap.counted(restlessAsAwake)
+    Panel(modifier.fillMaxWidth(), onClick = onOpen, padding = PaddingValues(16.dp), fill = NightCardFill) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Eyebrow(stringResource(R.string.nap_eyebrow))
+                Spacer(Modifier.height(4.dp))
+                Caption(times(display), color = Palette.text)
+            }
+            Text(durationText(display.asleep.toMinutes(), 24f), style = AppType.number(24f), color = Palette.text)
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Palette.faint, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.height(14.dp))
+        NightStrip(display, Modifier.fillMaxWidth().height(6.dp))
+    }
+}
+
+/**
+ * A nap opened from its day: how long asleep and when, and its stages like a night's, zoomable.
+ * No score: Google doesn't score naps.
+ */
+@Composable
+fun NapDetail(nap: SleepNight, restlessAsAwake: Boolean, onExplore: (SleepNight) -> Unit, onBack: () -> Unit, bottomPadding: Dp) {
+    BackHandler(onBack = onBack)
+    val display = nap.counted(restlessAsAwake)
+    Box(Modifier.fillMaxSize()) {
+        NightSky()
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = bottomPadding),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.entrance(0)) {
+                RoundIconButton(onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Palette.text, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    DateEyebrow(stringResource(R.string.nap_eyebrow), nap.start.atZone(ZoneId.systemDefault()).toLocalDate())
+                    Text(Format.day(nap.start), style = AppType.title.copy(fontSize = AppType.title.fontSize * 0.82f), color = Palette.text)
+                }
+            }
+            Column(Modifier.fillMaxWidth().entrance(1), horizontalAlignment = Alignment.CenterHorizontally) {
+                DurationNumber(display.asleep.toMinutes(), 52f, delayMillis = 150)
+                Spacer(Modifier.height(6.dp))
+                Caption(stringResource(R.string.sleep_asleep_times, times(display)))
+            }
+            if (display.stages.size > 1) {
+                NightChart(display, Modifier.entrance(2), onOpen = { onExplore(nap) })
+                StagesPanel(display, Modifier.entrance(3))
+            }
+            if (!display.staged) {
+                Text(
+                    stringResource(R.string.nap_no_stages),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Palette.faint,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).entrance(4),
+                )
+            }
+        }
+    }
+}
+
 /**
  * Entering the score Google Health gave a night: a ruler that starts on the score shown now, to
  * nudge to Google's number; or back to the estimate.

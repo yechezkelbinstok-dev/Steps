@@ -223,6 +223,13 @@ class StepsEngine(
         return spans.map { SleepNights.build(it, sessions) }
     }
 
+    /** The naps of [window], each with its stages (or just when it slept, if the band didn't stage it). */
+    suspend fun naps(settings: AppSettings, window: DayWindow): List<SleepNight> {
+        if (window.naps.isEmpty()) return emptyList()
+        val sessions = sleepSessions(settings, window.naps.minOf { it.start }, window.naps.maxOf { it.end })
+        return window.naps.map { SleepNights.build(it, sessions) }
+    }
+
     /**
      * The main sleep (the longest) that ended on each of [dates], for learning from scores entered
      * for nights older than the ones shown. One read per date; a date with no sleep is left out.

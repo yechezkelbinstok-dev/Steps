@@ -82,6 +82,7 @@ import app.wakesteps.R
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.SleepNight
 import app.wakesteps.data.HealthSource
+import app.wakesteps.data.Updates
 import app.wakesteps.data.wakeDate
 import app.wakesteps.ui.theme.Palette
 import app.wakesteps.ui.theme.WakeStepsTheme
@@ -103,6 +104,22 @@ class MainActivity : ComponentActivity() {
             val settings by vm.settings.collectAsStateWithLifecycle()
             WakeStepsTheme(settings.widgetStyle) { App(vm) }
         }
+        installStatus(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        installStatus(intent)
+    }
+
+    /** Android's answer while installing an update: show its confirmation if it asks for one. */
+    private fun installStatus(intent: Intent?) {
+        if (intent?.action != Updates.ACTION_INSTALL_STATUS) return
+        vm.installStatus(intent)?.let { confirm -> runCatching { startActivity(confirm) } }
+    }
+
+    fun allowInstalls() {
+        startActivity(Updates.allowInstallsIntent(this))
     }
 
     fun openHealthConnect() {
@@ -163,9 +180,12 @@ private fun App(vm: MainViewModel) {
         if (granted && Build.VERSION.SDK_INT >= 29) alwaysLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
     }
     val locationAccess by vm.locationAccess.collectAsStateWithLifecycle()
+    val update by vm.update.collectAsStateWithLifecycle()
     val places by vm.places.collectAsStateWithLifecycle()
 
     val activity = LocalActivity.current as MainActivity
+    // The app may first have to be allowed to install apps; the update carries on once it is.
+    val startUpdate = { if (!vm.startUpdate()) activity.allowInstalls() }
     val actions = Actions(
         openHealthConnect = activity::openHealthConnect,
         installHealthConnect = activity::installHealthConnect,
@@ -182,6 +202,8 @@ private fun App(vm: MainViewModel) {
 
     var openDay by remember { mutableStateOf<DaySummary?>(null) }
     var openNight by remember { mutableStateOf<SleepNight?>(null) }
+    // A nap opened from its day's page.
+    var openNap by remember { mutableStateOf<SleepNight?>(null) }
     // A night opened up to zoom into, from any night's chart.
     var exploring by remember { mutableStateOf<SleepNight?>(null) }
     // A day's steps opened up minute by minute, from its hour-by-hour chart.
@@ -230,6 +252,8 @@ private fun App(vm: MainViewModel) {
                         lastNightScore = nightBefore(state.today?.window)?.let { scores[it.wakeDate()] },
                         onOpenSleep = { tab = Tab.SLEEP },
                         onExploreSteps = { exploringSteps = it },
+                        update = update,
+                        onUpdate = startUpdate,
                     )
                     Tab.SLEEP -> SleepScreen(
                         state, scores, settings.restlessAsAwake,
@@ -247,6 +271,9 @@ private fun App(vm: MainViewModel) {
                         restBlocks = state.restBlocks,
                         places = places,
                         locationAccess = locationAccess,
+                        appUpdate = update,
+                        onCheckUpdate = { vm.checkForUpdate(force = true) },
+                        onUpdate = startUpdate,
                     )
                 }
             }
@@ -272,6 +299,8 @@ private fun App(vm: MainViewModel) {
                         nightScore = nightBefore(day.window)?.let { scores[it.wakeDate()] },
                         onOpenNight = { openNight = it },
                         onExploreSteps = { exploringSteps = it },
+                        loadNaps = vm::naps,
+                        onOpenNap = { openNap = it },
                     )
                 }
             }
@@ -291,6 +320,20 @@ private fun App(vm: MainViewModel) {
                         onEditScore = { editingScore = night }, onExplore = { exploring = it }, onBack = { openNight = null },
                         bottomPadding = bottom,
                     )
+                }
+            }
+        }
+        // A nap slides in over its day the same way.
+        AnimatedVisibility(
+            visible = openNap != null,
+            enter = slideInHorizontally(tween(420, easing = Glide)) { it } + fadeIn(tween(250)),
+            exit = slideOutHorizontally(tween(320, easing = Glide)) { it } + fadeOut(tween(200)),
+        ) {
+            val nap = remember { mutableStateOf(openNap) }.apply { if (openNap != null) value = openNap }.value
+            Box(Modifier.fillMaxSize()) {
+                Backdrop()
+                if (nap != null) {
+                    NapDetail(nap, settings.restlessAsAwake, onExplore = { exploring = it }, onBack = { openNap = null }, bottomPadding = bottom)
                 }
             }
         }
@@ -328,7 +371,7 @@ private fun App(vm: MainViewModel) {
                 .height(bottom)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.background.copy(alpha = 0.94f)))),
         )
-        TabBar(tab, onSelect = { openDay = null; openNight = null; exploring = null; exploringSteps = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
+        TabBar(tab, onSelect = { openDay = null; openNight = null; openNap = null; exploring = null; exploringSteps = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
         if (showDiagnostics) DiagnosticsSheet(onDone = { showDiagnostics = false })

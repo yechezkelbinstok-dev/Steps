@@ -17,6 +17,7 @@ import app.wakesteps.core.SleepNight
 import app.wakesteps.core.SleepScore
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.SoundRules
+import app.wakesteps.data.AppRelease
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalendarDay
 import app.wakesteps.data.DaySummary
@@ -26,6 +27,7 @@ import app.wakesteps.data.Locator
 import app.wakesteps.data.NightScores
 import app.wakesteps.data.SyncEvent
 import app.wakesteps.data.TodaySummary
+import app.wakesteps.data.Updates
 import app.wakesteps.data.wakeDate
 import app.wakesteps.sync.LiveModeService
 import app.wakesteps.widget.WidgetPusher
@@ -81,6 +83,19 @@ data class UiState(
 /** How much the app may know where the user is, for Shabbos times. */
 enum class LocationAccess { NONE, WHILE_OPEN, ALWAYS }
 
+/** Where updating the app stands. */
+sealed interface UpdateState {
+    /** Not looked yet (or looking quietly). */
+    data object Unknown : UpdateState
+    data object Checking : UpdateState
+    data object UpToDate : UpdateState
+    data class Available(val release: AppRelease) : UpdateState
+    data class Downloading(val release: AppRelease, val progress: Float) : UpdateState
+    /** Handed to Android, which asks to confirm (the first time) and then installs it. */
+    data class Installing(val release: AppRelease) : UpdateState
+    data class Failed(val release: AppRelease?, val message: String) : UpdateState
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application.app
     private val health = app.health
@@ -108,6 +123,91 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Locator.allowedInBackground(app) -> LocationAccess.ALWAYS
         Locator.allowed(app) -> LocationAccess.WHILE_OPEN
         else -> LocationAccess.NONE
+    }
+
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.Unknown)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+    private var updateCheckedAt: Instant? = null
+    /** The user tapped Update but first had to let the app install apps: carry on when they're back. */
+    private var updateWaitingForPermission = false
+    private var updateJob: Job? = null
+
+    /**
+     * Looks for a newer version: quietly when the app opens (at most every 3 hours), or now with
+     * [force] (Settings' check), showing that it's looking and if it couldn't.
+     */
+    fun checkForUpdate(force: Boolean = false) {
+        if (updateJob?.isActive == true) return
+        val last = updateCheckedAt
+        if (!force && last != null && Duration.between(last, Instant.now()) < Duration.ofHours(3)) return
+        if (_update.value is UpdateState.Downloading || _update.value is UpdateState.Installing) return
+        if (force) _update.value = UpdateState.Checking
+        updateJob = viewModelScope.launch {
+            val latest = runCatching { Updates.latest() }.getOrNull()
+            updateCheckedAt = Instant.now()
+            _update.value = when {
+                latest == null -> if (force) UpdateState.Failed(null, app.getString(R.string.update_check_failed)) else _update.value.takeUnless { it is UpdateState.Checking } ?: UpdateState.Unknown
+                latest.versionCode > Updates.installedCode(app) -> UpdateState.Available(latest)
+                else -> UpdateState.UpToDate
+            }
+        }
+    }
+
+    /**
+     * Downloads the newer version and hands it to Android to install. Returns false if the app
+     * must first be allowed to install apps (the caller opens that page; this carries on after).
+     */
+    fun startUpdate(): Boolean {
+        val release = when (val s = _update.value) {
+            is UpdateState.Available -> s.release
+            is UpdateState.Failed -> s.release ?: return true
+            else -> return true
+        }
+        if (!Updates.canInstall(app)) {
+            updateWaitingForPermission = true
+            return false
+        }
+        updateWaitingForPermission = false
+        updateJob?.cancel()
+        updateJob = viewModelScope.launch {
+            _update.value = UpdateState.Downloading(release, 0f)
+            try {
+                val apk = Updates.download(app, release) { p -> _update.value = UpdateState.Downloading(release, p) }
+                _update.value = UpdateState.Installing(release)
+                Updates.install(app, apk)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _update.value = UpdateState.Failed(release, e.message ?: app.getString(R.string.update_failed))
+            }
+        }
+        return true
+    }
+
+    /** Back in the app after letting it install apps: carry on with the update the user asked for. */
+    private fun resumeUpdate() {
+        if (updateWaitingForPermission && Updates.canInstall(app)) startUpdate()
+    }
+
+    /**
+     * Android's answer about the install: an intent to show (asking the user to confirm, which
+     * the activity starts), or the result.
+     */
+    fun installStatus(intent: android.content.Intent): android.content.Intent? {
+        val release = (_update.value as? UpdateState.Installing)?.release
+        return when (intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999)) {
+            android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION ->
+                @Suppress("DEPRECATION") intent.getParcelableExtra(android.content.Intent.EXTRA_INTENT)
+            android.content.pm.PackageInstaller.STATUS_SUCCESS -> {
+                _update.value = UpdateState.UpToDate
+                null
+            }
+            else -> {
+                val message = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE)
+                _update.value = UpdateState.Failed(release, message ?: app.getString(R.string.update_failed))
+                null
+            }
+        }
     }
 
     /** After the user answered a location request (or came back from settings): look now if allowed. */
@@ -192,6 +292,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             checkPlace()
+            resumeUpdate()
+            checkForUpdate()
             launch {
                 showingErrors {
                     val date = LocalDate.now()
@@ -437,6 +539,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             reload()
         }
     }
+
+    /** A day's naps with their stages, for its page. */
+    suspend fun naps(window: DayWindow): List<SleepNight> = app.engine.naps(settings.value, window)
 
     /** A day's steps minute by minute, for zooming into. */
     suspend fun minuteSteps(window: DayWindow): List<Pair<Instant, Long>> = app.engine.minuteSteps(window, settings.value)

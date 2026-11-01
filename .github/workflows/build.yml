@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# To publish releases (below).
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,10 +18,24 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
+      # The runner comes with the Android SDK (ANDROID_HOME); android-actions/setup-android failed
+      # every build installing its "tools" package, which no longer exists.
       - name: Test and build
         run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: awake-steps-apk
           path: app/build/outputs/apk/release/*.apk
+      # Each version pushed to the main branch is published as a release with its APK and its
+      # changelog notes: the app checks the latest release and updates itself from it. A version
+      # published again (sent but never installed, so it kept its number) replaces the one before.
+      - name: Publish the release the app updates from
+        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)
+          cp "app/build/outputs/apk/release/awake-steps-$version-release.apk" awake-steps.apk
+          awk -v head="## $version" '$0 == head { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
+          gh release delete "v$version" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "v$version" awake-steps.apk --title "Awake Steps $version" --notes-file notes.md --target "$GITHUB_SHA"

@@ -77,6 +77,9 @@ fun DayDetail(
     onOpenNight: (SleepNight) -> Unit = {},
     /** Opens the day's steps minute by minute. */
     onExploreSteps: (DayWindow) -> Unit = {},
+    /** The day's naps with their stages. */
+    loadNaps: suspend (DayWindow) -> List<SleepNight> = { emptyList() },
+    onOpenNap: (SleepNight) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val now = remember { Instant.now() }
@@ -118,6 +121,10 @@ fun DayDetail(
             HourlyPanel(buckets, settings.goal, ongoing = w.isOngoing, Modifier.entrance(3), onOpen = { onExploreSteps(w) })
         }
         TimelinePanel(day, overrides, now, Modifier.entrance(4))
+        if (w.naps.isNotEmpty()) {
+            val naps by produceState<List<SleepNight>>(emptyList(), w) { value = runCatching { loadNaps(w) }.getOrDefault(emptyList()) }
+            naps.forEach { nap -> NapCard(nap, settings.restlessAsAwake, onOpen = { onOpenNap(nap) }, Modifier.entrance(4)) }
+        }
         night?.let {
             LastNightCard(it, nightScore, settings.restlessAsAwake, stringResource(R.string.sleep_night_before), onOpen = { onOpenNight(it) }, Modifier.entrance(5))
         }

@@ -361,6 +361,49 @@ class ScreenRenderTest {
         render("sleep_shabbos", AppSettings(), Tab.SLEEP) { SleepScreen(state, scores(nights), false, {}, {}, {}, bottom) }
     }
 
+    /** A 36-minute nap with stages, from history()[2]. */
+    private fun nap(): SleepNight {
+        val span = history()[2].window.naps.single()
+        val stages = mutableListOf<StageSpan>()
+        var t = span.start
+        for ((minutes, stage) in listOf(4L to SleepStage.AWAKE, 9L to SleepStage.LIGHT, 14L to SleepStage.DEEP, 7L to SleepStage.LIGHT, 2L to SleepStage.AWAKE)) {
+            val end = minOf(t.plus(Duration.ofMinutes(minutes)), span.end)
+            stages += StageSpan(t, end, stage)
+            t = end
+        }
+        return SleepNights.build(span, listOf(SleepSession(span.start, span.end, stages, emptyList())))
+    }
+
+    private val release = app.wakesteps.data.AppRelease(
+        "1.17", 11700, "https://example.invalid/awake-steps.apk", 32_500_000,
+        "- Updates from inside the app: when there's a new version, Today offers it, and one tap downloads\n" +
+            "  and installs it.\n- Naps open with their stages, from their day's page.",
+    )
+
+    /** A day's nap and its page, and an update on offer on Today and in Settings. */
+    @Test
+    @Config(qualifiers = "w411dp-h1500dp-420dpi")
+    fun renderUpdatesAndNaps() {
+        val settings = AppSettings()
+        render("day_nap", settings, Tab.HISTORY) {
+            DayDetail(history()[2], settings, Overrides.NONE, { today(8120).hourly }, {}, {}, bottom, loadNaps = { listOf(nap()) })
+        }
+        render("nap", settings, Tab.HISTORY) { NapDetail(nap(), false, {}, {}, bottom) }
+        val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
+        render("today_update", settings, Tab.TODAY) {
+            TodayScreen(state, settings, actions, {}, {}, bottom, update = UpdateState.Available(release))
+        }
+        render("today_updating", settings, Tab.TODAY) {
+            TodayScreen(state, settings, actions, {}, {}, bottom, update = UpdateState.Downloading(release, 0.42f))
+        }
+        render("settings_update", settings, Tab.SETTINGS) {
+            SettingsScreen(
+                settings, {}, actions, state.access, now.minus(Duration.ofMinutes(6)), {}, {}, {}, null, bottom,
+                appUpdate = UpdateState.Available(release),
+            )
+        }
+    }
+
     /** A tall screen, to see a whole day page at once. */
     @Test
     @Config(qualifiers = "w411dp-h1500dp-420dpi")

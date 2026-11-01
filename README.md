@@ -107,6 +107,15 @@ or more (pauses of up to 2 minutes don't end one), each with its times, length, 
 Tap one to see it in the chart. The walks are in
 [`Walks.kt`](app/src/main/java/app/wakesteps/core/Walks.kt).
 
+## Updates
+
+The app updates itself: Today shows a new version at the top with what's new, and Settings →
+Updates has the version you have and a check. Tapping Update downloads the new APK and hands it
+to Android to install (the first time, Android asks to let the app install apps). Each version
+pushed to the main branch is built by GitHub Actions (`.github/workflows/build.yml`) and
+published as a release with its APK and its changelog notes; the app looks at the latest release.
+The logic is in [`Updates.kt`](app/src/main/java/app/wakesteps/data/Updates.kt).
+
 ## Shabbos and Yom Tov
 
 Shabbos and Yom Tov are blocked out, from shkiah (sunset) the evening before to nightfall after,
@@ -133,7 +142,7 @@ the [KosherJava Zmanim](https://kosherjava.com/) library; the logic is in
 The Sleep tab shows each night the app starts a day from (the sleep you woke from, your own
 calls included): its sleep score, what went into it, time in each stage, a chart of the night you
 can scrub, and the last 7 nights. Stages come from Google Health when it's connected, otherwise
-from Health Connect.
+from Health Connect. Naps are on their day's page: each opens like a night, with its stages.
 
 * **Sleep score.** Google Health doesn't share its sleep score with other apps, so the app
   estimates it from the six things Google says it weighs (duration, time to sound sleep, sound

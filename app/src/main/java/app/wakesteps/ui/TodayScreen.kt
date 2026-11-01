@@ -80,6 +80,9 @@ fun TodayScreen(
     onOpenSleep: () -> Unit = {},
     /** Opens a day's steps minute by minute. */
     onExploreSteps: (DayWindow) -> Unit = {},
+    /** A newer version of the app, if there is one, and the way to install it. */
+    update: UpdateState = UpdateState.Unknown,
+    onUpdate: () -> Unit = {},
 ) {
     val today = state.today
     Column(
@@ -91,6 +94,7 @@ fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Header(today?.now ?: Instant.now(), today?.latestDataAt, liveSteps, onShowSyncLog, Modifier.entrance(0))
+        UpdateCard(update, onUpdate, Modifier.entrance(1))
         AccessPrompts(state.access, state.liveStepsPrompt, actions)
         state.error?.let { ErrorNote(it) }
         if (today != null) {

@@ -82,6 +82,10 @@ fun SettingsScreen(
     restBlocks: List<RestBlock> = emptyList(),
     places: List<PlaceFix> = emptyList(),
     locationAccess: LocationAccess = LocationAccess.NONE,
+    /** A newer version of the app, if there is one. */
+    appUpdate: UpdateState = UpdateState.Unknown,
+    onCheckUpdate: () -> Unit = {},
+    onUpdate: () -> Unit = {},
 ) {
     val context = LocalContext.current
     Column(
@@ -186,6 +190,7 @@ fun SettingsScreen(
         val version = remember {
             runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
         }
+        UpdatesPanel(version ?: "?", appUpdate, onCheckUpdate, onUpdate, Modifier.entrance(6))
         Text(
             stringResource(R.string.app_version, version ?: "?"),
             style = MaterialTheme.typography.bodySmall,
