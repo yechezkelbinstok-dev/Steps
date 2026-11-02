@@ -16,6 +16,8 @@
     <string name="rest_soon">%1$s at %2$s</string>
     <string name="rest_soon_tomorrow">%1$s tomorrow at %2$s</string>
     <string name="month_summary">%1$s a day · goal %2$d of %3$d</string>
+    <string name="calendar_english">English</string>
+    <string name="calendar_hebrew">עברי</string>
     <string name="rest_motzei_steps">Motzei Shabbos</string>
     <string name="set_updates">Updates</string>
     <string name="update_ready">Update ready · %1$s</string>

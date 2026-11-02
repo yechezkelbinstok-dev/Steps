@@ -75,11 +75,18 @@ fun HistoryScreen(
     /** Months read for the calendar, and the way to read one. */
     months: Map<YearMonth, MonthData> = emptyMap(),
     onLoadMonth: (YearMonth) -> Unit = {},
-    initialMonth: YearMonth = YearMonth.now(),
+    /** Switches the calendar between everyday and Hebrew months. */
+    onHebrewCalendar: (Boolean) -> Unit = {},
+    initialDate: LocalDate = LocalDate.now(),
 ) {
     var mode by rememberSaveable { mutableIntStateOf(0) }
-    var month by rememberSaveable { mutableStateOf(initialMonth) }
-    LaunchedEffect(month, state.access) { onLoadMonth(month) }
+    // A date in the month shown, so switching calendars shows the month it's in.
+    var shown by rememberSaveable { mutableStateOf(initialDate) }
+    val period = remember(shown, settings.hebrewCalendar) {
+        if (settings.hebrewCalendar) CalendarPeriod.hebrew(shown) else CalendarPeriod.everyday(shown)
+    }
+    // A Hebrew month runs over two everyday ones.
+    LaunchedEffect(period.first, state.access) { period.months.forEach(onLoadMonth) }
     val rows = if (mode == 0) awakeRows(state, overrides, onOpenDay) else calendarRows(state)
     LazyColumn(
         Modifier.statusBarsPadding(),
@@ -102,8 +109,8 @@ fun HistoryScreen(
             )
         }
         item {
-            val cells = monthCells(month, mode, state, months[month])
-            MonthPanel(month, cells, settings.goal, onMonth = { month = it }, onOpenDay = onOpenDay, Modifier.entrance(2))
+            val cells = monthCells(period, mode, state, period.months.mapNotNull { months[it] })
+            MonthPanel(period, cells, settings.goal, onGo = { shown = it }, onHebrew = onHebrewCalendar, onOpenDay = onOpenDay, Modifier.entrance(2))
         }
         if (rows.isEmpty()) {
             item {
@@ -179,23 +186,24 @@ private fun awakeRows(state: UiState, overrides: Overrides, onOpenDay: (DaySumma
 }
 
 /**
- * [month]'s days for its calendar, whichever way days are counted: the last two weeks as History
- * has them (fresh), older ones from the month's own read.
+ * [period]'s days for its calendar, whichever way days are counted: the last two weeks as History
+ * has them (fresh), older ones from the reads of the months it runs over ([loaded]).
  */
 @Composable
-private fun monthCells(month: YearMonth, mode: Int, state: UiState, loaded: MonthData?): List<MonthCell> {
+private fun monthCells(period: CalendarPeriod, mode: Int, state: UiState, loaded: List<MonthData>): List<MonthCell> {
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now()
-    val blocks = (state.restBlocks + loaded?.rest.orEmpty()).distinctBy { it.start }
-    return remember(month, mode, state.history, state.calendar, blocks, loaded) {
+    val blocks = (state.restBlocks + loaded.flatMap { it.rest }).distinctBy { it.start }
+    return remember(period, mode, state.history, state.calendar, blocks, loaded) {
+        val within = period.first..period.last
         if (mode == 0) {
-            val fresh = state.history.filter { YearMonth.from(it.window.start.atZone(zone)) == month }
-            val older = loaded?.days.orEmpty().filter { old -> fresh.none { it.window.start == old.window.start } }
-            awakeMonthCells(month, fresh + older, blocks, today, zone)
+            val fresh = state.history.filter { it.window.start.atZone(zone).toLocalDate() in within }
+            val older = loaded.flatMap { it.days }.filter { old -> fresh.none { it.window.start == old.window.start } }
+            awakeMonthCells(period, fresh + older, blocks, today, zone)
         } else {
-            val fresh = state.calendar.filter { YearMonth.from(it.date) == month }
-            val older = loaded?.calendar.orEmpty().filter { old -> fresh.none { it.date == old.date } }
-            calendarMonthCells(month, fresh + older, blocks, today)
+            val fresh = state.calendar.filter { it.date in within }
+            val older = loaded.flatMap { it.calendar }.filter { old -> fresh.none { it.date == old.date } }
+            calendarMonthCells(period, fresh + older, blocks, today)
         }
     }
 }

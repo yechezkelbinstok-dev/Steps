@@ -15,13 +15,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.YearMonth
 import java.time.ZoneId
 
 class MonthCellsTest {
 
     private val zone = ZoneId.of("America/New_York")
-    private val october = YearMonth.of(2026, 10)
+    private val october = CalendarPeriod.everyday(LocalDate.of(2026, 10, 1), java.util.Locale.US)
     private fun at(d: Int, h: Int, m: Int = 0) = LocalDateTime.of(2026, 10, d, h, m).atZone(zone).toInstant()
     private fun day(d: Int, steps: Long, startHour: Int = 7, reason: StartReason = StartReason.WOKE_UP) =
         DaySummary(DayWindow(at(d, startHour), at(d, 23), reason, EndReason.WENT_TO_SLEEP), DayTotals(steps, null, null))

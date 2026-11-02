@@ -264,6 +264,7 @@ private fun App(vm: MainViewModel) {
                     Tab.HISTORY -> HistoryScreen(
                         state, settings, overrides, onOpenDay = { openDay = it }, bottomPadding = bottom,
                         months = months, onLoadMonth = vm::loadMonth,
+                        onHebrewCalendar = { hebrew -> vm.updateSettings { it.copy(hebrewCalendar = hebrew) } },
                     )
                     Tab.SETTINGS -> SettingsScreen(
                         settings, vm::updateSettings, actions, state.access, state.today?.latestDataAt,

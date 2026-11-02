@@ -22,13 +22,21 @@ object HebrewDate {
     )
 
     fun of(date: LocalDate): String {
-        val calendar = HebrewCalendar(TimeZone.GMT_ZONE)
-        calendar.timeInMillis = date.atTime(12, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
+        val calendar = calendarOn(date)
+        return "${numeral(calendar.get(Calendar.DAY_OF_MONTH))} ${monthName(calendar)}"
+    }
+
+    /** ICU's Hebrew calendar on [date] (at midday, so the date is the day's own). */
+    internal fun calendarOn(date: LocalDate): HebrewCalendar = HebrewCalendar(TimeZone.GMT_ZONE).apply {
+        timeInMillis = date.atTime(12, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
+    }
+
+    /** "חשון", or in a leap year "אדר א׳" and "אדר ב׳". */
+    internal fun monthName(calendar: HebrewCalendar): String {
         val year = calendar.get(Calendar.EXTENDED_YEAR)
         val month = calendar.get(Calendar.MONTH)
         val leap = (7 * year + 1) % 19 < 7
-        val name = if (month == HebrewCalendar.ADAR && leap) "אדר ב$GERESH" else MONTHS[month]
-        return "${numeral(calendar.get(Calendar.DAY_OF_MONTH))} $name"
+        return if (month == HebrewCalendar.ADAR && leap) "אדר ב$GERESH" else MONTHS[month]
     }
 
     /**
@@ -54,5 +62,34 @@ object HebrewDate {
             }
         }
         return if (letters.length == 1) "$letters$GERESH" else "${letters.dropLast(1)}$GERSHAYIM${letters.last()}"
+    }
+}
+
+/**
+ * A month of the Hebrew calendar, from its first day for [length] days: "חשון תשפ״ז" ([title]),
+ * for the calendar in History.
+ */
+class HebrewMonth private constructor(val first: LocalDate, val length: Int, val title: String) {
+    val last: LocalDate get() = first.plusDays(length - 1L)
+    val dates: List<LocalDate> get() = (0 until length).map { first.plusDays(it.toLong()) }
+
+    fun previous(): HebrewMonth = of(first.minusDays(1))
+
+    fun next(): HebrewMonth = of(last.plusDays(1))
+
+    override fun equals(other: Any?) = other is HebrewMonth && other.first == first
+
+    override fun hashCode() = first.hashCode()
+
+    companion object {
+        /** The Hebrew month [date] falls in. */
+        fun of(date: LocalDate): HebrewMonth {
+            val calendar = HebrewDate.calendarOn(date)
+            val day = calendar.get(Calendar.DAY_OF_MONTH)
+            val length = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+            val year = calendar.get(Calendar.EXTENDED_YEAR)
+            // The year without its thousands, as it's written: 5787 is תשפ״ז.
+            return HebrewMonth(date.minusDays(day - 1L), length, "${HebrewDate.monthName(calendar)} ${HebrewDate.numeral(year % 1000)}")
+        }
     }
 }

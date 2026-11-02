@@ -8,6 +8,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -27,35 +30,106 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.Format
+import app.wakesteps.core.HebrewDate
+import app.wakesteps.core.HebrewMonth
 import app.wakesteps.core.RestBlock
 import app.wakesteps.data.CalendarDay
 import app.wakesteps.data.DaySummary
 import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
 import kotlin.math.abs
 
-/** One day of a month in its calendar. */
+/** What the calendar shows: a month of the everyday calendar, or of the Hebrew one. */
+class CalendarPeriod private constructor(
+    val dates: List<LocalDate>,
+    /** "November 2026", or "חשון תשפ״ז". */
+    val title: String,
+    /** Under a Hebrew month, the everyday dates it runs over: "Oct 12 – Nov 9". */
+    val span: String?,
+    /** Each day's number: "12", or "י״ב". */
+    val labels: List<String>,
+    val weekStart: DayOfWeek,
+    /** The weekdays' initials from [weekStart]: S M T…, or א ב ג… */
+    val weekdays: List<String>,
+    /** A date in the month before it, and in the one after, to move to. */
+    val previous: LocalDate,
+    val next: LocalDate,
+    val hebrew: Boolean,
+) {
+    val first: LocalDate get() = dates.first()
+    val last: LocalDate get() = dates.last()
+
+    /** The everyday months it runs over, to read. */
+    val months: List<YearMonth> get() = listOf(YearMonth.from(first), YearMonth.from(last)).distinct()
+
+    companion object {
+        /** The everyday month [date] is in, its weeks as the phone starts them. */
+        fun everyday(date: LocalDate, locale: Locale = Locale.getDefault()): CalendarPeriod {
+            val month = YearMonth.from(date)
+            val week = WeekFields.of(locale).firstDayOfWeek
+            return CalendarPeriod(
+                (1..month.lengthOfMonth()).map { month.atDay(it) },
+                "${month.month.getDisplayName(TextStyle.FULL, locale)} ${month.year}",
+                null,
+                (1..month.lengthOfMonth()).map { it.toString() },
+                week,
+                (0L until 7L).map { week.plus(it).getDisplayName(TextStyle.NARROW, locale) },
+                month.minusMonths(1).atDay(15),
+                month.plusMonths(1).atDay(15),
+                hebrew = false,
+            )
+        }
+
+        /** The Hebrew month [date] is in, in Hebrew, its weeks from Sunday to Shabbos. */
+        fun hebrew(date: LocalDate): CalendarPeriod {
+            val month = HebrewMonth.of(date)
+            val short = DateTimeFormatter.ofPattern("MMM d")
+            return CalendarPeriod(
+                month.dates,
+                month.title,
+                "${short.format(month.first)} – ${short.format(month.last)}",
+                (1..month.length).map { HebrewDate.numeral(it) },
+                DayOfWeek.SUNDAY,
+                listOf("א", "ב", "ג", "ד", "ה", "ו", "ש"),
+                month.previous().first.plusDays(14),
+                month.next().first.plusDays(14),
+                hebrew = true,
+            )
+        }
+    }
+}
+
+/** One day in the calendar. */
 class MonthCell(
     val date: LocalDate,
+    /** Its number as the calendar writes it: "12", or "י״ב". */
+    val label: String,
     /** Its steps; null for days still to come, or with nothing read. */
     val steps: Long?,
     /** The awake day it opens, if there is one. */
@@ -69,59 +143,58 @@ class MonthCell(
 )
 
 /**
- * [month]'s days from the awake [days] (each on the date it began): Shabbos and Yom Tov show as
+ * [period]'s days from the awake [days] (each on the date it began): Shabbos and Yom Tov show as
  * such, with motzei Shabbos (the evening after) folded into its last day, as in History.
  */
-fun awakeMonthCells(month: YearMonth, days: List<DaySummary>, blocks: List<RestBlock>, today: LocalDate, zone: ZoneId): List<MonthCell> {
+fun awakeMonthCells(period: CalendarPeriod, days: List<DaySummary>, blocks: List<RestBlock>, today: LocalDate, zone: ZoneId): List<MonthCell> {
     val now = Instant.now()
-    return (1..month.lengthOfMonth()).map { d ->
-        val date = month.atDay(d)
+    return period.dates.mapIndexed { i, date ->
         val rest = blocks.firstOrNull { b -> b.days.any { it.date == date } }
         if (rest != null) {
             val motzei = if (date == rest.days.last().date) days.firstOrNull { it.window.start == rest.end } else null
-            MonthCell(date, motzei?.totals?.steps, motzei, rest, date == today, date.isAfter(today))
+            MonthCell(date, period.labels[i], motzei?.totals?.steps, motzei, rest, date == today, date.isAfter(today))
         } else {
             // Rarely two days begin on one date (a day started by hand): the longer one.
             val day = days.filter { it.window.start.atZone(zone).toLocalDate() == date }
                 .maxByOrNull { Duration.between(it.window.start, it.window.endOr(now)) }
-            MonthCell(date, day?.totals?.steps, day, null, date == today, date.isAfter(today))
+            MonthCell(date, period.labels[i], day?.totals?.steps, day, null, date == today, date.isAfter(today))
         }
     }
 }
 
-/** [month]'s midnight-to-midnight days, Shabbos and Yom Tov showing as such. */
-fun calendarMonthCells(month: YearMonth, calendar: List<CalendarDay>, blocks: List<RestBlock>, today: LocalDate): List<MonthCell> =
-    (1..month.lengthOfMonth()).map { d ->
-        val date = month.atDay(d)
+/** [period]'s midnight-to-midnight days, Shabbos and Yom Tov showing as such. */
+fun calendarMonthCells(period: CalendarPeriod, calendar: List<CalendarDay>, blocks: List<RestBlock>, today: LocalDate): List<MonthCell> =
+    period.dates.mapIndexed { i, date ->
         val rest = blocks.firstOrNull { b -> b.days.any { it.date == date } }
         val steps = calendar.firstOrNull { it.date == date }?.totals?.steps?.takeUnless { date.isAfter(today) }
-        MonthCell(date, steps, null, rest, date == today, date.isAfter(today))
+        MonthCell(date, period.labels[i], steps, null, rest, date == today, date.isAfter(today))
     }
 
 /**
- * A month at a glance: a ring for each day, filling toward the goal and gold once it's made,
- * candles for Shabbos and Yom Tov. The steps a day and the days at goal (Shabbos, Yom Tov and
- * today left out) above it. Arrows or a swipe move between months; a day opens its page.
+ * A month at a glance, of the everyday calendar or the Hebrew one: a ring for each day, filling
+ * toward the goal and gold once it's made, candles for Shabbos and Yom Tov. The steps a day and
+ * the days at goal (Shabbos, Yom Tov and today left out) above it. Arrows or a swipe move between
+ * months, up to a year back; a day opens its page.
  */
 @Composable
 fun MonthPanel(
-    month: YearMonth,
+    period: CalendarPeriod,
     cells: List<MonthCell>,
     goal: Int,
-    onMonth: (YearMonth) -> Unit,
+    onGo: (LocalDate) -> Unit,
+    onHebrew: (Boolean) -> Unit,
     onOpenDay: (DaySummary) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val thisMonth = remember { YearMonth.now() }
+    val today = remember { LocalDate.now() }
     val counted = cells.filter { it.rest == null && !it.today && it.steps != null }
+    val canGoBack = period.first.isAfter(today.minusMonths(12))
+    val canGoOn = period.last.isBefore(today)
     Panel(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    "${month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${month.year}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Palette.text,
-                )
+                Text(period.title, style = MaterialTheme.typography.titleMedium, color = Palette.text)
+                period.span?.let { Caption(it, style = MaterialTheme.typography.bodySmall, color = Palette.faint) }
                 Caption(
                     if (counted.isEmpty()) " " else stringResource(
                         R.string.month_summary,
@@ -132,16 +205,36 @@ fun MonthPanel(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            MonthArrow(Icons.AutoMirrored.Filled.KeyboardArrowLeft, enabled = month > thisMonth.minusMonths(12)) { onMonth(month.minusMonths(1)) }
+            MonthArrow(Icons.AutoMirrored.Filled.KeyboardArrowLeft, enabled = canGoBack) { onGo(period.previous) }
             Spacer(Modifier.width(8.dp))
-            MonthArrow(Icons.AutoMirrored.Filled.KeyboardArrowRight, enabled = month < thisMonth) { onMonth(month.plusMonths(1)) }
+            MonthArrow(Icons.AutoMirrored.Filled.KeyboardArrowRight, enabled = canGoOn) { onGo(period.next) }
         }
+        Spacer(Modifier.height(12.dp))
+        CalendarSwitch(period.hebrew, onHebrew)
         Spacer(Modifier.height(16.dp))
-        val week = WeekFields.of(Locale.getDefault())
+        // A Hebrew month reads right to left, as a luach does: Sunday on the right, Shabbos on the left.
+        val direction = if (period.hebrew) LayoutDirection.Rtl else LocalLayoutDirection.current
+        CompositionLocalProvider(LocalLayoutDirection provides direction) {
+            MonthDays(period, cells, goal, today, onGo, onOpenDay)
+        }
+    }
+}
+
+/** The weekdays' initials, then the days under them, sliding from month to month. */
+@Composable
+private fun MonthDays(
+    period: CalendarPeriod,
+    cells: List<MonthCell>,
+    goal: Int,
+    today: LocalDate,
+    onGo: (LocalDate) -> Unit,
+    onOpenDay: (DaySummary) -> Unit,
+) {
+    Column {
         Row(Modifier.fillMaxWidth()) {
-            for (i in 0 until 7) {
+            for (initial in period.weekdays) {
                 Text(
-                    week.firstDayOfWeek.plus(i.toLong()).getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                    initial,
                     style = MaterialTheme.typography.labelMedium,
                     color = Palette.faint,
                     textAlign = TextAlign.Center,
@@ -151,27 +244,54 @@ fun MonthPanel(
         }
         Spacer(Modifier.height(8.dp))
         AnimatedContent(
-            targetState = month to cells,
+            targetState = period to cells,
             transitionSpec = {
-                val forward = targetState.first > initialState.first
+                val forward = targetState.first.first > initialState.first.first
                 (fadeIn(tween(240)) + slideInHorizontally(tween(320)) { if (forward) it / 6 else -it / 6 })
                     .togetherWith(fadeOut(tween(160)) + slideOutHorizontally(tween(320)) { if (forward) -it / 6 else it / 6 })
             },
-            contentKey = { it.first },
+            contentKey = { it.first.first to it.first.hebrew },
             label = "month",
         ) { (shown, shownCells) ->
-            MonthGrid(shown, shownCells, goal, week, onOpenDay, Modifier.pointerInput(shown) {
+            MonthGrid(shown, shownCells, goal, onOpenDay, Modifier.pointerInput(shown.first, shown.hebrew) {
                 var dragged = 0f
                 detectHorizontalDragGestures(
                     onDragStart = { dragged = 0f },
                     onDragEnd = {
                         if (abs(dragged) > 60.dp.toPx()) {
-                            val next = if (dragged < 0) shown.plusMonths(1) else shown.minusMonths(1)
-                            if (next <= thisMonth && next > thisMonth.minusMonths(13)) onMonth(next)
+                            if (dragged < 0 && shown.last.isBefore(today)) onGo(shown.next)
+                            if (dragged > 0 && shown.first.isAfter(today.minusMonths(12))) onGo(shown.previous)
                         }
                     },
                 ) { _, amount -> dragged += amount }
             })
+        }
+    }
+}
+
+/** English or Hebrew months: a small two-way switch. */
+@Composable
+private fun CalendarSwitch(hebrew: Boolean, onHebrew: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, glassEdge(), CircleShape)
+            .padding(3.dp),
+    ) {
+        for ((label, value) in listOf(stringResource(R.string.calendar_english) to false, stringResource(R.string.calendar_hebrew) to true)) {
+            val selected = value == hebrew
+            val source = remember { MutableInteractionSource() }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) Palette.text else Palette.muted,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (selected) Palette.cardHigh else Color.Transparent)
+                    .clickable(source, indication = null) { if (!selected) onHebrew(value) }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
         }
     }
 }
@@ -185,9 +305,9 @@ private fun MonthArrow(icon: androidx.compose.ui.graphics.vector.ImageVector, en
 
 /** The month's days in weeks, each day its number over its ring. */
 @Composable
-private fun MonthGrid(month: YearMonth, cells: List<MonthCell>, goal: Int, week: WeekFields, onOpenDay: (DaySummary) -> Unit, modifier: Modifier) {
-    // Blank places before the 1st, so it falls under its weekday.
-    val lead = (month.atDay(1).dayOfWeek.value - week.firstDayOfWeek.value + 7) % 7
+private fun MonthGrid(period: CalendarPeriod, cells: List<MonthCell>, goal: Int, onOpenDay: (DaySummary) -> Unit, modifier: Modifier) {
+    // Blank places before the first day, so it falls under its weekday.
+    val lead = (period.first.dayOfWeek.value - period.weekStart.value + 7) % 7
     val places: List<MonthCell?> = List(lead) { null } + cells
     Column(modifier.fillMaxWidth()) {
         places.chunked(7).forEachIndexed { row, days ->
@@ -214,7 +334,7 @@ private fun DayPlace(cell: MonthCell, goal: Int, index: Int, onOpenDay: (DaySumm
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            cell.date.dayOfMonth.toString(),
+            cell.label,
             style = AppType.eyebrow.copy(
                 fontWeight = if (cell.today) FontWeight.Bold else FontWeight.Medium,
                 letterSpacing = AppType.eyebrow.letterSpacing * 0,

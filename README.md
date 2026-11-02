@@ -43,7 +43,8 @@ covered by unit tests.
 ## History
 
 History has a month calendar at the top: a ring for each day, filling toward your goal and gold
-once you made it, and candles for Shabbos and Yom Tov. Go back a month at a time (arrows or a
+once you made it, and candles for Shabbos and Yom Tov. Switch it to עברי for Hebrew months, laid
+out right to left like a luach with each day lettered. Go back a month at a time (arrows or a
 swipe, up to a year) and tap a day to open it. Under it are the last 7 days and the days
 themselves, counted your way (wake to sleep) or midnight to midnight.
 

@@ -57,4 +57,32 @@ class HebrewDateTest {
         assertEquals("תשפ״ז", HebrewDate.numeral(787))
         assertEquals("תשט״ו", HebrewDate.numeral(715))
     }
+
+    @Test
+    fun hebrewMonths() {
+        // Cheshvan 5787 began on Oct 12, 2026 (Oct 17 is ו׳ חשון).
+        val cheshvan = HebrewMonth.of(date(2026, 10, 17))
+        assertEquals(date(2026, 10, 12), cheshvan.first)
+        assertEquals("חשון תשפ״ז", cheshvan.title)
+        assertEquals(cheshvan.last.plusDays(1), cheshvan.next().first)
+        assertEquals("כסלו תשפ״ז", cheshvan.next().title)
+        assertEquals("תשרי תשפ״ז", cheshvan.previous().title)
+        assertEquals(30, cheshvan.previous().length)
+        // 5787 is a leap year: Adar I and Adar II, one after the other.
+        val adarI = HebrewMonth.of(civil(5787, HebrewCalendar.ADAR_1, 10))
+        assertEquals("אדר א׳ תשפ״ז", adarI.title)
+        assertEquals("אדר ב׳ תשפ״ז", adarI.next().title)
+    }
+
+    @Test
+    fun theCalendarInHebrewMonths() {
+        val period = app.wakesteps.ui.CalendarPeriod.hebrew(date(2026, 10, 17))
+        assertEquals("חשון תשפ״ז", period.title)
+        assertEquals(date(2026, 10, 12), period.first)
+        assertEquals("א׳", period.labels.first())
+        assertEquals("ט״ו", period.labels[14])
+        assertEquals(java.time.DayOfWeek.SUNDAY, period.weekStart)
+        assertEquals(listOf(java.time.YearMonth.of(2026, 10), java.time.YearMonth.of(2026, 11)), period.months)
+        assertEquals("כסלו תשפ״ז", app.wakesteps.ui.CalendarPeriod.hebrew(period.next).title)
+    }
 }
