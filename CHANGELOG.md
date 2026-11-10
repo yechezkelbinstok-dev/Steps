@@ -10,9 +10,9 @@ labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not
 1.16 includes one briefly labelled 1.16.1).
 
 ## 1.19.1
-- Google Health's figures and scores for six more nights (the mornings of Nov 2, 3, 4, 6, 8 and
-  9), from the Coach: sound sleep is now tuned to 29 nights, and the score estimate learns from
-  6 more scores.
+- Google Health's figures and score for Nov 10, from its sleep page: sound sleep is now tuned to
+  24 nights, and the score estimate learns from one more score. (Nov 8 is left out: the band's
+  battery ran out partway through.)
 
 ## 1.19
 - The month calendar in History can show Hebrew months: switch it from English to עברי (it

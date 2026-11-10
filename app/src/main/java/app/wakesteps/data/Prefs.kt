@@ -141,13 +141,8 @@ private val SEED_SCORES = mapOf(
     LocalDate.of(2026, 10, 23) to 86,
     LocalDate.of(2026, 10, 22) to 82,
     LocalDate.of(2026, 10, 21) to 83,
-    // The fifth, from the Coach on Nov 10, by the morning each night ended.
-    LocalDate.of(2026, 11, 9) to 84,
-    LocalDate.of(2026, 11, 8) to 74,
-    LocalDate.of(2026, 11, 6) to 87,
-    LocalDate.of(2026, 11, 4) to 78,
-    LocalDate.of(2026, 11, 3) to 73,
-    LocalDate.of(2026, 11, 2) to 89,
+    // The fifth, from Google Health's sleep page on Nov 10.
+    LocalDate.of(2026, 11, 10) to 84,
 )
 
 /** The first batch, which 1.12 marked as added with a single flag. */
