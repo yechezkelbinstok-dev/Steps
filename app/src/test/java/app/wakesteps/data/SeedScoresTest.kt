@@ -13,7 +13,7 @@ class SeedScoresTest {
     @Test
     fun aFreshInstallGetsEveryScoreSentOver() {
         val (entries, added) = withSeedScores(emptyMap(), added = null, firstBatchAdded = false)!!
-        assertEquals(23, entries.size)
+        assertEquals(29, entries.size)
         assertEquals(77, entries.getValue(date(9, 14)).score)
         assertEquals(78, entries.getValue(date(11, 1)).score)
         assertEquals(56, entries.getValue(date(10, 30)).score)
@@ -39,8 +39,8 @@ class SeedScoresTest {
         assertEquals(ScoreEntry(date(10, 18), 71, 74), entries.getValue(date(10, 18)))
         assertEquals(61, entries.getValue(date(10, 12)).score)
         assertEquals(66, entries.getValue(date(9, 15)).score)
-        assertEquals(3 + 19, entries.size)
-        assertEquals(23, added.size)
+        assertEquals(3 + 25, entries.size)
+        assertEquals(29, added.size)
     }
 
     @Test
