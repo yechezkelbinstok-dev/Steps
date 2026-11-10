@@ -4,10 +4,16 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901, 1.19.2 → 11902. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below;
 1.16 includes one briefly labelled 1.16.1).
+
+## 1.19.2
+- Nov 8 is taken down: the band's battery ran out partway through, so it's gone from Sleep,
+  Today, its day, the scores and the averages.
+- Settings → Leave out a night does the same for any night the band didn't record whole, and
+  brings one back.
 
 ## 1.19.1
 - Google Health's figures and scores for six more nights (Oct 20, Nov 2, 3, 4, 6 and 9), each

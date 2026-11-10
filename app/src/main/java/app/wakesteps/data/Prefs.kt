@@ -150,6 +150,9 @@ private val SEED_SCORES = mapOf(
     LocalDate.of(2026, 10, 20) to 66,
 )
 
+/** Nights the user asked to be taken down, by the morning they ended: Nov 8, 2026 (the band's battery ran out). */
+private val REMOVED_NIGHTS = setOf(LocalDate.of(2026, 11, 8))
+
 /** The first batch, which 1.12 marked as added with a single flag. */
 private val FIRST_SEEDS = SEED_SCORES.keys.take(4).toSet()
 
@@ -254,6 +257,10 @@ class Prefs(private val context: Context) {
         val scoresSeeded = booleanPreferencesKey("sleep_scores_seeded")
         /** Comma-separated dates whose sent-over score has been added, so each is added only once. */
         val seededScoreDates = stringPreferencesKey("sleep_scores_seeded_dates")
+        /** Comma-separated mornings of nights left out (the band didn't record them whole). */
+        val removedNights = stringPreferencesKey("removed_nights")
+        /** Comma-separated mornings of [REMOVED_NIGHTS] already left out, so one brought back stays back. */
+        val removedSeeded = stringPreferencesKey("removed_nights_seeded")
 
         /** Which way of estimating the kept estimates came from (SleepScore.MODEL). */
         val scoreModel = intPreferencesKey("sleep_score_model")
@@ -332,6 +339,31 @@ class Prefs(private val context: Context) {
     }
 
     /** Adds each score the user sent over, once. */
+    /** Nights left out of the app, by the morning they ended. */
+    val removedNights: Flow<Set<LocalDate>> = context.dataStore.data.map { parseDates(it[K.removedNights]) }
+
+    /** Leaves out (or brings back) the night that ended on [date]. */
+    suspend fun setNightRemoved(date: LocalDate, removed: Boolean) {
+        context.dataStore.edit { p ->
+            val dates = parseDates(p[K.removedNights])
+            p[K.removedNights] = (if (removed) dates + date else dates - date).sorted().joinToString(",")
+        }
+    }
+
+    /** Leaves out the nights the user asked to be taken down ([REMOVED_NIGHTS]), once each. */
+    suspend fun seedRemovedNights() {
+        context.dataStore.edit { p ->
+            val done = parseDates(p[K.removedSeeded])
+            val fresh = REMOVED_NIGHTS - done
+            if (fresh.isEmpty()) return@edit
+            p[K.removedNights] = (parseDates(p[K.removedNights]) + fresh).sorted().joinToString(",")
+            p[K.removedSeeded] = (done + fresh).sorted().joinToString(",")
+        }
+    }
+
+    private fun parseDates(text: String?): Set<LocalDate> =
+        text.orEmpty().split(',').mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSet()
+
     suspend fun seedSleepScores() {
         context.dataStore.edit { p ->
             val added = p[K.seededScoreDates]?.split(',')?.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }?.toSet()

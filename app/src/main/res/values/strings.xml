@@ -20,6 +20,10 @@
     <string name="calendar_hebrew">עברי</string>
     <string name="rest_motzei_steps">Motzei Shabbos</string>
     <string name="set_updates">Updates</string>
+    <string name="nights_left_out">Leave out a night</string>
+    <string name="nights_left_out_note">For a night your band didn\'t record whole (a flat battery, taken off): it\'s left out of Sleep, Today, its day, the scores and the averages. Bring it back any time.</string>
+    <string name="nights_leave_out">Leave out</string>
+    <string name="nights_bring_back">Bring back</string>
     <string name="update_ready">Update ready · %1$s</string>
     <string name="update_button">Update</string>
     <string name="update_to">Update to %1$s</string>

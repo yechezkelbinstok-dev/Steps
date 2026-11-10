@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -51,6 +52,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.Format
+import app.wakesteps.data.wakeDate
+import app.wakesteps.core.SleepNight
 import app.wakesteps.core.PlaceFix
 import app.wakesteps.core.RestBlock
 import app.wakesteps.data.AppSettings
@@ -58,6 +61,7 @@ import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import kotlinx.coroutines.delay
 import java.time.Instant
+import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -86,6 +90,10 @@ fun SettingsScreen(
     appUpdate: UpdateState = UpdateState.Unknown,
     onCheckUpdate: () -> Unit = {},
     onUpdate: () -> Unit = {},
+    /** Every night read, newest first, and which are left out (by the morning they ended). */
+    nights: List<SleepNight> = emptyList(),
+    removedNights: Set<LocalDate> = emptySet(),
+    onNightRemoved: (SleepNight, Boolean) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     Column(
@@ -190,6 +198,7 @@ fun SettingsScreen(
         val version = remember {
             runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
         }
+        LeftOutNights(nights, removedNights, onNightRemoved, Modifier.entrance(6))
         UpdatesPanel(version ?: "?", appUpdate, onCheckUpdate, onUpdate, Modifier.entrance(6))
         Text(
             stringResource(R.string.app_version, version ?: "?"),
@@ -197,6 +206,44 @@ fun SettingsScreen(
             color = Palette.faint,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
+    }
+}
+
+/**
+ * Leaving out a night the band didn't record whole (a flat battery, the band off): it goes from
+ * the Sleep tab, Today and a day's page, its score and the averages. Tucked away: the nights only
+ * show once opened, each to leave out or bring back.
+ */
+@Composable
+private fun LeftOutNights(nights: List<SleepNight>, removed: Set<LocalDate>, onRemoved: (SleepNight, Boolean) -> Unit, modifier: Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Panel(modifier.fillMaxWidth(), padding = PaddingValues(vertical = 6.dp)) {
+        LinkRow(stringResource(R.string.nights_left_out), onClick = { open = !open }) {
+            if (removed.isNotEmpty()) {
+                Text(removed.size.toString(), style = MaterialTheme.typography.labelLarge, color = Palette.muted)
+            }
+        }
+        if (open) {
+            Text(
+                stringResource(R.string.nights_left_out_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = Palette.faint,
+                modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp),
+            )
+            nights.forEach { night ->
+                val out = night.wakeDate() in removed
+                Divider()
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(Format.day(night.end), style = MaterialTheme.typography.bodyLarge, color = if (out) Palette.faint else Palette.text)
+                        Caption("${Format.time(night.start)} – ${Format.time(night.end)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = { onRemoved(night, !out) }) {
+                        Text(stringResource(if (out) R.string.nights_bring_back else R.string.nights_leave_out))
+                    }
+                }
+            }
+        }
     }
 }
 

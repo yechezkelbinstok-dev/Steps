@@ -182,6 +182,8 @@ private fun App(vm: MainViewModel) {
     val locationAccess by vm.locationAccess.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
     val months by vm.months.collectAsStateWithLifecycle()
+    val allNights by vm.allNights.collectAsStateWithLifecycle()
+    val removedNights by vm.removedNights.collectAsStateWithLifecycle()
     val places by vm.places.collectAsStateWithLifecycle()
 
     val activity = LocalActivity.current as MainActivity
@@ -277,6 +279,9 @@ private fun App(vm: MainViewModel) {
                         places = places,
                         locationAccess = locationAccess,
                         appUpdate = update,
+                        nights = allNights,
+                        removedNights = removedNights,
+                        onNightRemoved = vm::setNightRemoved,
                         onCheckUpdate = { vm.checkForUpdate(force = true) },
                         onUpdate = startUpdate,
                     )

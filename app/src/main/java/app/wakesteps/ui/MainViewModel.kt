@@ -371,17 +371,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     /** The nights [windows] began with, then the sleep scores learn from them. */
+    /** Every night read, left-out ones included (Settings lists them to leave out or bring back). */
+    private val _allNights = MutableStateFlow<List<SleepNight>>(emptyList())
+    val allNights: StateFlow<List<SleepNight>> = _allNights.asStateFlow()
+
+    /** Nights left out of the app, by the morning they ended. */
+    val removedNights: StateFlow<Set<LocalDate>> =
+        app.prefs.removedNights.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Shows [nights] (all of them, as read) without the ones left out. */
+    private suspend fun showNights(nights: List<SleepNight>) {
+        val removed = app.prefs.removedNights.first()
+        _allNights.value = nights
+        _state.update { it.copy(nights = nights.filter { n -> n.wakeDate() !in removed }) }
+    }
+
+    /** Leaves out (or brings back) [night]: for one the band didn't record whole. */
+    fun setNightRemoved(night: SleepNight, removed: Boolean) {
+        viewModelScope.launch {
+            app.prefs.setNightRemoved(night.wakeDate(), removed)
+            showNights(_allNights.value.ifEmpty { _state.value.nights })
+        }
+    }
+
     private suspend fun loadNights(s: AppSettings, windows: List<DayWindow>) {
         app.prefs.seedSleepScores()
+        app.prefs.seedRemovedNights()
         app.prefs.forgetEstimatesUnless(SleepScore.MODEL)
         val read = app.engine.nights(s, windows)
-        _state.update { it.copy(nights = read, nightsLoaded = true) }
+        showNights(read)
+        _state.update { it.copy(nightsLoaded = true) }
         // Sound sleep from heart rate fills in once it's read (a read for each night not yet worked out).
         _googleHeart.value = app.engine.heartAllowed(s)
         // What counts as sound is learnt from Google's own figures, once.
         val rules = if (_googleHeart.value) app.engine.soundRules(s, read.associateBy { it.wakeDate() }) else SoundRules.DEFAULT
         val nights = app.engine.withSoundSleep(s, read, rules)
-        if (nights != read) _state.update { it.copy(nights = nights) }
+        if (nights != read) showNights(nights)
         // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
         app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
         // Scores entered for older nights (sent over from Google Health): read those nights once to learn from.
