@@ -8,6 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -235,6 +238,18 @@ class ScreenRenderTest {
             NightDetail(SleepNights.build(plainSpan, listOf(SleepSession(plainSpan.start, plainSpan.end))), null, false, {}, {}, {}, bottom)
         }
         render("sleep_empty", settings, Tab.SLEEP) { SleepScreen(state.copy(nights = emptyList()), emptyMap(), false, {}, {}, {}, bottom) }
+        // A ring for each of Google's four bands, best to worst.
+        render("score_bands", settings, Tab.SLEEP) {
+            Row(Modifier.fillMaxSize().padding(top = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                listOf(94, 84, 68, 52).forEach { value ->
+                    val score = NightScore(value, fromGoogle = true)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        ScoreRing(score, 84.dp) { Text("$value", color = Palette.text) }
+                        Text(ratingName(score.rating), color = ratingColor(score.rating), modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+            }
+        }
         render("score_sheet", settings, Tab.SLEEP) {
             Box(Modifier.fillMaxSize().background(Palette.cardHigh)) {
                 Column(Modifier.padding(top = 48.dp)) { ScoreContent(nights[1], scores[nights[1].wakeDate()], {}, {}) }

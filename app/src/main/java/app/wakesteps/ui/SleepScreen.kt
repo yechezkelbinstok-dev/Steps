@@ -166,6 +166,19 @@ fun ratingColor(rating: SleepRating): Color = when (rating) {
     SleepRating.POOR -> stageColor(SleepStage.AWAKE)
 }
 
+/**
+ * A score's ring, 12 o'clock to its tip, in its band's colour like the word under it: gold for
+ * excellent, indigo into aqua for good, amber for fair, coral for poor. Not the steps ring's
+ * all-or-nothing: each of Google's four bands looks like itself.
+ */
+@Composable
+fun ratingRing(rating: SleepRating): Pair<Color, Color> = when (rating) {
+    SleepRating.EXCELLENT -> Palette.goalStart to Palette.goalEnd
+    SleepRating.GOOD -> stageColor(SleepStage.DEEP) to stageColor(SleepStage.REM)
+    SleepRating.FAIR -> Color(0xFFE0892E) to stageColor(SleepStage.RESTLESS)
+    SleepRating.POOR -> Color(0xFFE0533F) to stageColor(SleepStage.AWAKE)
+}
+
 @Composable
 fun ratingName(rating: SleepRating): String = stringResource(
     when (rating) {
@@ -356,10 +369,7 @@ fun SleepRing(
     }
 }
 
-/**
- * The score as a ring that fills to it, deep indigo turning aqua towards the tip, or gold for an
- * excellent night (like a met step goal). [content] sits inside.
- */
+/** The score as a ring that fills to it, in its band's colours ([ratingRing]). [content] sits inside. */
 @Composable
 fun ScoreRing(
     score: NightScore,
@@ -372,13 +382,12 @@ fun ScoreRing(
 ) {
     val shown by animateOnShow(score.value / 100f, durationMillis = 1500, delayMillis = delayMillis)
     val colors = Palette
-    val excellent = score.rating == SleepRating.EXCELLENT
+    val (from, to) = ratingRing(score.rating)
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
             val stroke = this.size.minDimension * strokeFraction
             val arc = Size(this.size.width - stroke, this.size.height - stroke)
             val topLeft = Offset(stroke / 2, stroke / 2)
-            val (from, to) = if (excellent) colors.goalStart to colors.goalEnd else stageColor(SleepStage.DEEP) to stageColor(SleepStage.REM)
             if (glow) {
                 drawCircle(
                     Brush.radialGradient(listOf(from.copy(alpha = 0.26f), from.copy(alpha = 0.06f), Color.Transparent), radius = this.size.minDimension / 2),
