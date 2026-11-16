@@ -17,11 +17,14 @@ data class GoogleFigures(
 
         /**
          * The figures the user sent over from Google Health, by the day each sleep ended, as
-         * Google Health dates it (checked against each sleep's start and end times on Nov 10,
-         * 2026): shown as they are for those nights, and what the app's sound sleep is tuned to
-         * match. Nights the band didn't record whole (Nov 8: its battery ran out) are left out.
+         * Google Health dates it (checked against each sleep's start and end times when sent):
+         * shown as they are for those nights, and what the app's sound sleep is tuned to match.
+         * Nights the band didn't record whole (Nov 8: its battery ran out) are left out.
          */
         val KNOWN: Map<LocalDate, GoogleFigures> = mapOf(
+            // Sent Nov 16: 2:28 to 10:28 AM that morning, and Nov 10 from 8:32 AM to 5:05 PM.
+            LocalDate.of(2026, 11, 16) to of(12, 153, 28, 5),
+            LocalDate.of(2026, 11, 10) to of(16, 181, 27, 6),
             // Nov 9 as Google Health's sleep page shows it (its Coach had 10 minutes to sound sleep).
             LocalDate.of(2026, 11, 9) to of(35, 164, 24, 0),
             LocalDate.of(2026, 11, 6) to of(15, 168, 27, 0),

@@ -158,6 +158,9 @@ private val SEED_SCORES = mapOf(
     LocalDate.of(2026, 11, 3) to 73,
     LocalDate.of(2026, 11, 2) to 89,
     LocalDate.of(2026, 10, 20) to 66,
+    // The sixth, on Nov 16: Nov 16 from 2:28 to 10:28 AM, and Nov 10 from 8:32 AM to 5:05 PM.
+    LocalDate.of(2026, 11, 16) to 82,
+    LocalDate.of(2026, 11, 10) to 84,
 )
 
 /** Nights the user asked to be taken down, by the morning they ended: Nov 8, 2026 (the band's battery ran out). */
@@ -401,10 +404,13 @@ class Prefs(private val context: Context) {
         }
     }
 
-    /** The sound-sleep rules learnt from the nights in [signature], if they've been learnt. */
-    suspend fun soundRules(signature: String): SoundRules? {
+    /**
+     * The sound-sleep rules learnt from the nights in [signature], if they've been learnt; with a
+     * null [signature], whichever were learnt last.
+     */
+    suspend fun soundRules(signature: String?): SoundRules? {
         val f = context.dataStore.data.first()[K.soundRules]?.split('|') ?: return null
-        if (f.getOrNull(4) != signature) return null
+        if (signature != null && f.getOrNull(4) != signature) return null
         return runCatching { SoundRules(f[0].toDouble(), f[1].toDouble(), f[2].toInt(), f[3] == "1") }.getOrNull()
     }
 

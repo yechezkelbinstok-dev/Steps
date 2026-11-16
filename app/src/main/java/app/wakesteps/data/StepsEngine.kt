@@ -69,6 +69,9 @@ class StepsEngine(
     /** Whether a Google Health failure is currently on record (so success only clears it once). */
     @Volatile private var googleErrorShown = true
 
+    /** Whether this run has already tried learning what counts as sound sleep (see [soundRules]). */
+    @Volatile private var soundRulesTried = false
+
     /**
      * Reads through Google Health when it's switched on and signed in, otherwise (or if that
      * fails) through Health Connect. Why Google Health failed is kept for the Settings sheet.
@@ -340,14 +343,25 @@ class StepsEngine(
      * What counts as sound sleep, learnt once from the nights Google's own figures are known for
      * ([GoogleFigures.KNOWN]) and their heart rate; the defaults until heart rate can be read.
      * [loaded] are the nights already read, by the morning they ended; the others are read here.
+     * That's a read for every one of those nights, and the nights wait for it, so it's tried once
+     * a run: if it can't be done (Google Health busy), the rules learnt before stand till the next.
      */
     suspend fun soundRules(settings: AppSettings, loaded: Map<LocalDate, SleepNight>): SoundRules {
         val signature = GoogleFigures.KNOWN.keys.sorted().joinToString(",")
         prefs.soundRules(signature)?.let { return it }
-        if (!settings.googleHealth) return SoundRules.DEFAULT
-        val token = google.heartToken() ?: return SoundRules.DEFAULT
+        val before = prefs.soundRules(signature = null) ?: SoundRules.DEFAULT
+        if (!settings.googleHealth || soundRulesTried) return before
+        val token = google.heartToken() ?: return before
+        soundRulesTried = true
         val nights = loaded + nightsEndingOn(settings, GoogleFigures.KNOWN.keys.filter { it !in loaded }.toSet())
-        val resting = runCatching { google.restingHeartRates(token) }.getOrDefault(emptyMap())
+        // Learnt without the resting rates, the rules would be off for every night measured with them.
+        val resting = try {
+            google.restingHeartRates(token)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return before
+        }
         val examples = GoogleFigures.KNOWN.mapNotNull { (date, figures) ->
             val night = nights[date] ?: return@mapNotNull null
             val heart = try {
@@ -359,7 +373,7 @@ class StepsEngine(
             }
             SoundSleeps.prepare(night, heart, resting[date] ?: resting[date.minusDays(1)])?.let { it to figures }
         }
-        if (examples.size < 3) return SoundRules.DEFAULT
+        if (examples.size < 3) return before
         // Several hundred trial rules over each night: off the main thread.
         return withContext(Dispatchers.Default) { SoundSleeps.tune(examples) }.also { prefs.keepSoundRules(it, signature) }
     }
