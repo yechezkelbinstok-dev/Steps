@@ -104,8 +104,18 @@ data class Snapshot(
     val error: String?,
 )
 
-/** A night's sound sleep as worked out from heart rate; [settled] once all its heart rate has surely arrived. */
-data class KeptSound(val sound: SoundSleep, val settled: Boolean)
+/**
+ * A night's sound sleep as worked out from heart rate; [settled] once all its heart rate has
+ * surely arrived (it's never read again), and how many heart [samples] it came from (null if kept
+ * before 1.19.3).
+ */
+data class KeptSound(val sound: SoundSleep, val settled: Boolean, val samples: Int? = null) {
+    /**
+     * Whether [samples] heart readings are more than this came from: the band has sent more of
+     * the night, so it's worked out again. With nothing new, the figure (and the score) stays put.
+     */
+    fun outdatedBy(samples: Int): Boolean = this.samples == null || samples > this.samples
+}
 
 /** A sleep score read off the Google Health app for the night ending on [date], and the app's estimate for it. */
 data class ScoreEntry(val date: LocalDate, val score: Int, val estimate: Int?)
@@ -265,7 +275,7 @@ class Prefs(private val context: Context) {
         /** Which way of estimating the kept estimates came from (SleepScore.MODEL). */
         val scoreModel = intPreferencesKey("sleep_score_model")
 
-        /** Newline-separated "<night start s>|<night end s>|<sound min>|<time to sound min or empty>|<1 if settled>". */
+        /** Newline-separated "<night start s>|<night end s>|<sound min>|<time to sound min or empty>|<1 if settled>|<heart samples>". */
         val soundSleeps = stringPreferencesKey("sound_sleeps")
 
         /** The sound-sleep rules learnt from Google's figures: "<offset>|<steady>|<stretch>|<1 if capped>|<which nights>". */
@@ -414,7 +424,7 @@ class Prefs(private val context: Context) {
             val all = parseSounds(p[K.soundSleeps]) + fresh
             p[K.soundSleeps] = all.entries.sortedByDescending { it.key.first }.take(120).joinToString("\n") { (night, kept) ->
                 val (start, end) = night
-                "${start.epochSecond}|${end.epochSecond}|${kept.sound.total.toMinutes()}|${kept.sound.timeTo?.toMinutes() ?: ""}|${if (kept.settled) 1 else 0}"
+                "${start.epochSecond}|${end.epochSecond}|${kept.sound.total.toMinutes()}|${kept.sound.timeTo?.toMinutes() ?: ""}|${if (kept.settled) 1 else 0}|${kept.samples ?: ""}"
             }
         }
     }
@@ -425,7 +435,7 @@ class Prefs(private val context: Context) {
         val end = f.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
         val total = f.getOrNull(2)?.toLongOrNull() ?: return@mapNotNull null
         val sound = SoundSleep(Duration.ofMinutes(total), f.getOrNull(3)?.toLongOrNull()?.let(Duration::ofMinutes))
-        (Instant.ofEpochSecond(start) to Instant.ofEpochSecond(end)) to KeptSound(sound, f.getOrNull(4) == "1")
+        (Instant.ofEpochSecond(start) to Instant.ofEpochSecond(end)) to KeptSound(sound, f.getOrNull(4) == "1", f.getOrNull(5)?.toIntOrNull())
     }.toMap()
 
     private suspend fun editScores(change: (MutableMap<LocalDate, ScoreEntry>) -> Unit) {

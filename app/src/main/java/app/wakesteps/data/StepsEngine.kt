@@ -256,12 +256,13 @@ class StepsEngine(
     /**
      * The night each of [days] began with: the sleep the user woke from, as the day logic decided
      * (their own calls included), stage by stage, in the same order. Days that began without one
-     * (after an all-nighter) are skipped.
+     * (after an all-nighter) are skipped. With [keepIfGoogleFails], null when Google Health is on
+     * but couldn't be read, rather than Health Connect's copy of the nights (which scores differently).
      */
-    suspend fun nights(settings: AppSettings, days: List<DayWindow>): List<SleepNight> {
+    suspend fun nights(settings: AppSettings, days: List<DayWindow>, keepIfGoogleFails: Boolean = false): List<SleepNight>? {
         val spans = days.mapNotNull { it.wokeFrom }.distinct()
         if (spans.isEmpty()) return emptyList()
-        val sessions = sleepSessions(settings, spans.minOf { it.start }, spans.maxOf { it.end })
+        val sessions = sleepSessions(settings, spans.minOf { it.start }, spans.maxOf { it.end }, keepIfGoogleFails) ?: return null
         return spans.map { SleepNights.build(it, sessions) }
     }
 
@@ -286,8 +287,11 @@ class StepsEngine(
 
     /**
      * [nights] with their sound sleep measured from heart rate, where Google Health has the band's
-     * heart rate and the user has allowed it. Each night is worked out once and kept, except in its
-     * first half day, while its heart rate may still be arriving.
+     * heart rate and the user has allowed it. Each night is worked out once and kept. In its first
+     * half day, while its heart rate may still be arriving, it's read again, but only worked out
+     * again if the band has sent more of it: otherwise the same night could come out a little
+     * differently each time (a resting rate that wasn't in yet, say), and its score jump about.
+     * A read that fails (the resting rate's included) keeps what was there, never half a measure.
      */
     suspend fun withSoundSleep(settings: AppSettings, nights: List<SleepNight>, rules: SoundRules): List<SleepNight> {
         if (!settings.googleHealth || nights.none { it.staged }) return nights
@@ -307,21 +311,26 @@ class StepsEngine(
                 asked = true
                 token = google.heartToken()
             }
-            val measured = token?.let { t ->
+            val settled = night.end.isBefore(now.minus(Duration.ofHours(12)))
+            val keep = token?.let { t ->
                 try {
                     val heart = google.heartRate(t, night.start, night.end)
-                    val rates = resting ?: runCatching { google.restingHeartRates(t) }.getOrDefault(emptyMap()).also { resting = it }
-                    val day = night.end.atZone(zone).toLocalDate()
-                    SoundSleeps.of(night, heart, rates[day] ?: rates[day.minusDays(1)], rules)
+                    if (known != null && !known.outdatedBy(heart.size)) {
+                        known.copy(settled = settled)
+                    } else {
+                        val rates = resting ?: google.restingHeartRates(t).also { resting = it }
+                        val day = night.end.atZone(zone).toLocalDate()
+                        SoundSleeps.of(night, heart, rates[day] ?: rates[day.minusDays(1)], rules)?.let { KeptSound(it, settled, heart.size) }
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     null
                 }
             }
-            if (measured == null) return@map known?.let { night.copy(sound = it.sound) } ?: night
-            fresh[key] = KeptSound(measured, settled = night.end.isBefore(now.minus(Duration.ofHours(12))))
-            night.copy(sound = measured)
+            if (keep == null) return@map known?.let { night.copy(sound = it.sound) } ?: night
+            if (keep != known) fresh[key] = keep
+            night.copy(sound = keep.sound)
         }
         if (fresh.isNotEmpty()) prefs.keepSoundSleeps(fresh)
         return out
@@ -362,12 +371,17 @@ class StepsEngine(
      * Sleep sessions overlapping [from]..[to]. Google Health has the band's stages; without it (or
      * if it has nothing), Health Connect.
      */
-    private suspend fun sleepSessions(settings: AppSettings, from: Instant, to: Instant): List<SleepSession> {
-        val cloud: List<SleepSession> = if (settings.googleHealth) {
+    private suspend fun sleepSessions(settings: AppSettings, from: Instant, to: Instant): List<SleepSession> =
+        sleepSessions(settings, from, to, keepIfGoogleFails = false).orEmpty()
+
+    /** As above; with [keepIfGoogleFails], null when Google Health is on but couldn't be read. */
+    private suspend fun sleepSessions(settings: AppSettings, from: Instant, to: Instant, keepIfGoogleFails: Boolean): List<SleepSession>? {
+        val cloud: List<SleepSession>? = if (settings.googleHealth) {
             // Google finds sleep by when it ended: anything overlapping ends after [from], and within a day of [to].
-            read(settings, { sleepSessions(it, from, to.plus(Duration.ofDays(1))) }) { emptyList() }.filter { it.start < to }
+            read<List<SleepSession>?>(settings, { sleepSessions(it, from, to.plus(Duration.ofDays(1))) }) { null }?.filter { it.start < to }
         } else emptyList()
-        return cloud.ifEmpty {
+        if (cloud == null && keepIfGoogleFails) return null
+        return cloud.orEmpty().ifEmpty {
             try {
                 health.sleepSessions(from, to, settings.sourcePackage)
             } catch (e: CancellationException) {

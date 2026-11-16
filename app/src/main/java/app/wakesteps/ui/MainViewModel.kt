@@ -398,15 +398,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         app.prefs.seedSleepScores()
         app.prefs.seedRemovedNights()
         app.prefs.forgetEstimatesUnless(SleepScore.MODEL)
-        val read = app.engine.nights(s, windows)
-        showNights(read)
-        _state.update { it.copy(nightsLoaded = true) }
-        // Sound sleep from heart rate fills in once it's read (a read for each night not yet worked out).
+        // Google Health busy for a moment keeps the nights on screen, rather than swapping in Health
+        // Connect's copy of them, which scores differently, for one reload.
+        val read = app.engine.nights(s, windows, keepIfGoogleFails = _allNights.value.isNotEmpty()) ?: return
+        // Sound sleep from heart rate: as kept, or read now for a night not yet settled.
         _googleHeart.value = app.engine.heartAllowed(s)
         // What counts as sound is learnt from Google's own figures, once.
         val rules = if (_googleHeart.value) app.engine.soundRules(s, read.associateBy { it.wakeDate() }) else SoundRules.DEFAULT
         val nights = app.engine.withSoundSleep(s, read, rules)
-        if (nights != read) showNights(nights)
+        // Shown once, with sound sleep in: a night's score is never drawn first from the stand-in
+        // (deep and REM) and redrawn from heart rate a moment later, on every reload. Until then
+        // the nights already on screen stay.
+        showNights(nights)
+        _state.update { it.copy(nightsLoaded = true) }
         // Keep each estimate beside any score entered for it, so the learning outlives the 2 weeks shown.
         app.prefs.noteEstimates(nights.mapNotNull { n -> SleepScore.estimate(n)?.let { n.wakeDate() to it } }.toMap())
         // Scores entered for older nights (sent over from Google Health): read those nights once to learn from.
