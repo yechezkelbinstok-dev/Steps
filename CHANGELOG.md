@@ -4,10 +4,18 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901, 1.19.2 → 11902, 1.19.3 → 11903, 1.19.4 → 11904. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901, 1.19.2 → 11902, 1.19.3 → 11903, 1.19.4 → 11904, 1.20 → 12000. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below;
 1.16 includes one briefly labelled 1.16.1; 1.19.3 one briefly labelled 1.19.4, not the 1.19.4 below).
+
+## 1.20
+- A day's steps opened up show the day's total by the minute (or bar) under your finger, as well
+  as its own steps: "4,177 for the day by then". Not touching it, the day's whole total.
+- **Every minute**: switch the chart from Grouped to Every minute (it remembers) to see every
+  minute of the day however far out you are. Zoomed out, the day is squeezed into slivers, each as
+  tall as the busiest minute in it, so every walk and every lull shows at once; touch one for its
+  minute. Zoom in and they open out into a bar a minute, as before.
 
 ## 1.19.4
 - A sleep score's ring is in its band's colour, the way the word under it already was: gold for

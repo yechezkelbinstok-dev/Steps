@@ -34,4 +34,11 @@ class BarMinutesTest {
     fun aDayJustBegunIsMinuteByMinute() {
         assertEquals(1, barMinutes(30.0, 30))
     }
+
+    @Test
+    fun theDaysTotalByEachMinuteAddsUpAsItGoes() {
+        val minutes = longArrayOf(0, 12, 0, 104, 98, 0, 5)
+        assertEquals(listOf(0L, 12, 12, 116, 214, 214, 219), runningTotals(minutes).toList())
+        assertEquals(0, runningTotals(LongArray(0)).size)
+    }
 }

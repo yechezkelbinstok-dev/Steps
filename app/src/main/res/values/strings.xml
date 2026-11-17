@@ -70,6 +70,10 @@
     <string name="walk_goal">Goal</string>
     <string name="steps_unavailable">Couldn\'t read this day\'s steps minute by minute.</string>
     <string name="steps_every">Every %1$d min</string>
+    <string name="steps_grouped">Grouped</string>
+    <string name="steps_every_minute">Every minute</string>
+    <string name="steps_day_total">%1$s for the day</string>
+    <string name="steps_day_total_by_then">%1$s for the day by then</string>
 
     <string name="hc_missing_title">Health Connect needed</string>
     <string name="hc_missing_body">This app reads your Fitbit steps and sleep through Health Connect. Install or update it, then turn on Health Connect sync in the Fitbit app.</string>

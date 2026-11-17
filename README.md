@@ -103,8 +103,11 @@ You'll only see Awake Steps listed under "active apps" in quick settings.
 Tap *Hour by hour*, on Today or on any day's page, to open the day's steps up. It starts hour by
 hour across the whole day and gets finer a step at a time as you zoom in (pinch, double-tap, or −
 and +) until it's minute by minute, with 40 minutes or less across. Drag a finger along it to read
-the steps and time of each bar; the whole day sits below to move around in. Hours are the clock's,
-the first running from when you woke to the next o'clock.
+the steps and time of each bar, and the day's total by then; the whole day sits below to move
+around in. Hours are the clock's, the first running from when you woke to the next o'clock.
+Switch it to *Every minute* (it remembers) to see every minute however far out: zoomed out, each
+sliver of the chart is as tall as the busiest minute in it, so the whole day's ups and downs show
+at once.
 
 A minute is as fine as it goes: the band keeps steps a minute at a time (Google Health stores them
 at one-minute resolution). With Google Health connected the minutes come straight from the band;

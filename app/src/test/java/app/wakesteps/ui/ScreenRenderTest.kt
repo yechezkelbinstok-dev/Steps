@@ -291,6 +291,13 @@ class ScreenRenderTest {
         render("steps_middle", settings, Tab.HISTORY) {
             StepsExplorer(day.window, settings.goal, { minutes }, {}, bottom, initialView = 0.25f..0.45f, now = now)
         }
+        // Every minute of the whole day squeezed in, then with a minute under the finger.
+        render("steps_every_minute", settings, Tab.HISTORY) {
+            StepsExplorer(day.window, settings.goal, { minutes }, {}, bottom, now = now, everyMinute = true)
+        }
+        render("steps_every_minute_picked", settings, Tab.HISTORY) {
+            StepsExplorer(day.window, settings.goal, { minutes }, {}, bottom, initialMinute = 300, now = now, everyMinute = true)
+        }
         val today = today(6432).window
         val todayMinutes = minuteSteps(today, 6432)
         render("steps_today", settings, Tab.TODAY) { StepsExplorer(today, settings.goal, { todayMinutes }, {}, bottom, now = now) }

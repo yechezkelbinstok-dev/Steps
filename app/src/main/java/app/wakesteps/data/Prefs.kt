@@ -51,7 +51,7 @@ enum class WidgetStyle {
 }
 
 /**
- * Only [goal], [widgetStyle], [googleHealth], [restlessAsAwake] and [hebrewCalendar] are chosen in the app. Everything else is
+ * Only [goal], [widgetStyle], [googleHealth], [restlessAsAwake], [hebrewCalendar] and [everyMinute] are chosen in the app. Everything else is
  * tuned in code (the user asks for changes rather than fiddling with settings), so those values are never read
  * from storage.
  */
@@ -64,6 +64,8 @@ data class AppSettings(
     val restlessAsAwake: Boolean = false,
     /** History's month calendar in Hebrew months rather than everyday ones. */
     val hebrewCalendar: Boolean = false,
+    /** A day's steps opened up show every minute however far out, rather than grouped into bars. */
+    val everyMinute: Boolean = false,
     /** Sleep mostly during the user's night counts (starts a new day) from this long. */
     val minNightSleepMinutes: Int = 60,
     /** Sleep mostly during the day is a nap unless it's at least this long. */
@@ -243,6 +245,7 @@ class Prefs(private val context: Context) {
         val googleHealth = booleanPreferencesKey("google_health")
         val restlessAsAwake = booleanPreferencesKey("restless_as_awake")
         val hebrewCalendar = booleanPreferencesKey("hebrew_calendar")
+        val everyMinute = booleanPreferencesKey("steps_every_minute")
         val googleHealthError = stringPreferencesKey("google_health_error")
         /** The user said no to the phone's step counter, so stop offering it. */
         val liveStepsDeclined = booleanPreferencesKey("live_steps_declined")
@@ -535,6 +538,7 @@ class Prefs(private val context: Context) {
             p[K.googleHealth] = s.googleHealth
             p[K.restlessAsAwake] = s.restlessAsAwake
             p[K.hebrewCalendar] = s.hebrewCalendar
+            p[K.everyMinute] = s.everyMinute
         }
     }
 
@@ -570,6 +574,7 @@ class Prefs(private val context: Context) {
         googleHealth = this[K.googleHealth] ?: false,
         restlessAsAwake = this[K.restlessAsAwake] ?: false,
         hebrewCalendar = this[K.hebrewCalendar] ?: false,
+        everyMinute = this[K.everyMinute] ?: false,
     )
 
     private fun Preferences.toSnapshot(): Snapshot? {

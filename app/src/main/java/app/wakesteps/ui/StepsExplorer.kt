@@ -45,7 +45,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -69,6 +71,8 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.ln
 
 /** How many minutes each bar can stand for, finest first. */
@@ -89,6 +93,12 @@ internal fun barMinutes(visible: Double, day: Int): Int {
     val t = (ln(visible / MINUTE_BARS_WITHIN) / ln(day / MINUTE_BARS_WITHIN)).coerceIn(0.0, 1.0)
     val ideal = t * ln(60.0)
     return BAR_MINUTES.minBy { abs(ln(it.toDouble()) - ideal) }
+}
+
+/** The day's steps by the end of each minute: [minutes] added up as they go. */
+internal fun runningTotals(minutes: LongArray): LongArray {
+    var sum = 0L
+    return LongArray(minutes.size) { i -> sum += minutes[i]; sum }
 }
 
 /** Steps in each minute from [start] to [end]; minutes without any are 0. */
@@ -125,10 +135,10 @@ private fun bars(minutes: LongArray, offset: Int, size: Int): List<Pair<Int, Lon
 
 /**
  * One day's steps opened up: hour by hour across the whole day, finer as you zoom in (pinch,
- * double-tap, or − and +) down to minute by minute, the steps and time of the bar under your
- * finger, and the whole day below with the part in view framed (drag along it to move, tap to
- * jump). Bars from the minute you passed your goal are gold. Under it, the day's walks: tap one
- * to see it in the chart.
+ * double-tap, or − and +) down to minute by minute, or with [everyMinute] every minute however far
+ * out. The bar under your finger gives its steps and time and the day's total by then; the whole
+ * day sits below with the part in view framed (drag along it to move, tap to jump). Bars from the
+ * minute you passed your goal are gold. Under it, the day's walks: tap one to see it in the chart.
  */
 @Composable
 fun StepsExplorer(
@@ -140,6 +150,8 @@ fun StepsExplorer(
     initialView: ClosedFloatingPointRange<Float>? = null,
     initialMinute: Int? = null,
     now: Instant = Instant.now(),
+    everyMinute: Boolean = false,
+    onEveryMinute: (Boolean) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     // A day still going runs up to when it was opened.
@@ -195,8 +207,14 @@ fun StepsExplorer(
                     loaded.indexOfFirst { sum += it; sum >= goal }.takeIf { it >= 0 }
                 }
                 val walks = remember(loaded) { Walks.of(loaded) }
-                ZoomableSteps(window.start, loaded, goalMinute, view, selection, Modifier.entrance(1))
-                WalksPanel(walks, window.start, goalMinute, Modifier.entrance(2)) { walk ->
+                PillToggle(
+                    listOf(stringResource(R.string.steps_grouped), stringResource(R.string.steps_every_minute)),
+                    selected = if (everyMinute) 1 else 0,
+                    onSelect = { onEveryMinute(it == 1) },
+                    modifier = Modifier.fillMaxWidth().entrance(1),
+                )
+                ZoomableSteps(window.start, loaded, goalMinute, everyMinute, view, selection, Modifier.entrance(2))
+                WalksPanel(walks, window.start, goalMinute, Modifier.entrance(3)) { walk ->
                     selection.index = null
                     view.glideTo(scope, walk.first.toFloat() / loaded.size, (walk.last + 1f) / loaded.size)
                     scope.launch { scroll.animateScrollTo(0) }
@@ -212,11 +230,13 @@ private fun ZoomableSteps(
     start: Instant,
     minutes: LongArray,
     goalMinute: Int?,
+    everyMinute: Boolean,
     view: SpanView,
     selection: ChartSelection,
     modifier: Modifier,
 ) {
     val n = minutes.size
+    val totals = remember(minutes) { runningTotals(minutes) }
     val zone = ZoneId.systemDefault()
     val offset = remember(start) { start.atZone(zone).let { it.hour * 60 + it.minute } }
     val scope = rememberCoroutineScope()
@@ -231,10 +251,12 @@ private fun ZoomableSteps(
     Panel(modifier.fillMaxWidth()) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val visible = view.width * n.toDouble()
-            // Never more bars than fit 3dp apart, on however narrow a screen.
-            val barMinutes = barMinutes(visible, n).let { ideal ->
+            // Never more bars than fit 3dp apart, on however narrow a screen; every minute a bar of
+            // its own when asked for, squeezed into slivers when more are in view than fit apart.
+            val barMinutes = if (everyMinute) 1 else barMinutes(visible, n).let { ideal ->
                 BAR_MINUTES.firstOrNull { it >= ideal && visible / it <= maxWidth / 3.dp } ?: 60
             }
+            val squeezed = barMinutes == 1 && maxWidth / visible.toFloat() < 3.dp
             val all = remember(minutes, barMinutes) { bars(minutes, offset, barMinutes) }
             val top by animateFloatAsState(all.maxOf { it.second }.coerceAtLeast(1L).toFloat(), label = "scale")
             // When the bars change size, the old ones fade out as the new ones grow in.
@@ -255,28 +277,38 @@ private fun ZoomableSteps(
             fun pick(across: Float) {
                 val m = ((view.left + across * view.width) * n).toInt().coerceIn(0, n - 1)
                 val bar = all.lastOrNull { it.first <= m }
-                if (selection.index == null || bar != pickedBar) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                // Squeezed, a tick each quarter hour crossed, not each of the minutes flying by.
+                val moved = if (squeezed) selection.index?.let { (offset + it) / 15 != (offset + m) / 15 } ?: true else bar != pickedBar
+                if (selection.index == null || moved) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                 selection.index = m
             }
 
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                        if (pickedBar != null) {
-                            val (barStart, steps) = pickedBar
-                            Text(Format.number(steps), style = AppType.number(30f), color = colors.text, maxLines = 1)
-                            Spacer(Modifier.width(10.dp))
-                            val a = at(maxOf(barStart, 0))
-                            Caption(
-                                if (barMinutes == 1) Format.time(a) else "${Format.time(a)} – ${Format.time(at(minOf(barStart + barMinutes, n)))}",
-                                Modifier.padding(bottom = 5.dp),
-                                color = colors.text,
-                            )
-                        } else {
-                            Text(Format.number((first until last).sumOf { minutes[it] }), style = AppType.number(30f), color = colors.text, maxLines = 1)
-                            Spacer(Modifier.width(10.dp))
-                            Caption("${Format.time(from)} – ${Format.time(to)}", Modifier.padding(bottom = 5.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            if (pickedBar != null) {
+                                val (barStart, steps) = pickedBar
+                                Text(Format.number(steps), style = AppType.number(30f), color = colors.text, maxLines = 1)
+                                Spacer(Modifier.width(10.dp))
+                                val a = at(maxOf(barStart, 0))
+                                Caption(
+                                    if (barMinutes == 1) Format.time(a) else "${Format.time(a)} – ${Format.time(at(minOf(barStart + barMinutes, n)))}",
+                                    Modifier.padding(bottom = 5.dp),
+                                    color = colors.text,
+                                )
+                            } else {
+                                Text(Format.number((first until last).sumOf { minutes[it] }), style = AppType.number(30f), color = colors.text, maxLines = 1)
+                                Spacer(Modifier.width(10.dp))
+                                Caption("${Format.time(from)} – ${Format.time(to)}", Modifier.padding(bottom = 5.dp))
+                            }
                         }
+                        // The day's running total: by the end of the bar under your finger, or the whole day.
+                        val dayTotal = pickedBar?.let { (barStart, _) -> totals[(minOf(barStart + barMinutes, n) - 1).coerceIn(0, n - 1)] } ?: totals[n - 1]
+                        Caption(
+                            stringResource(if (pickedBar != null) R.string.steps_day_total_by_then else R.string.steps_day_total, Format.number(dayTotal)),
+                            color = colors.muted,
+                        )
                     }
                     ZoomButton("−", enabled = view.zoomed) { view.zoom(scope, 0.5f) }
                     Spacer(Modifier.width(8.dp))
@@ -322,9 +354,58 @@ private fun ZoomableSteps(
                         val at = x(Duration.between(start, t).toMillis() / 60_000f)
                         drawLine(Color.White.copy(alpha = 0.05f), Offset(at, head), Offset(at, size.height), 1.dp.toPx())
                     }
+                    // Every minute with more in view than fit side by side: each sliver of the chart
+                    // as tall as the busiest minute in it, so no burst or lull is averaged away.
+                    fun drawSlivers(alpha: Float, picked: Pair<Int, Long>?) {
+                        val sliver = maxOf(1f, scale)
+                        val plain = Path()
+                        val gold = Path()
+                        var column = Int.MIN_VALUE
+                        var peak = 0L
+                        var golden = false
+                        fun flush() {
+                            if (column == Int.MIN_VALUE || peak == 0L) return
+                            val h = (chart * peak / top).coerceAtLeast(1.dp.toPx())
+                            val cx = column * sliver + sliver / 2
+                            (if (golden) gold else plain).apply { moveTo(cx, size.height); lineTo(cx, size.height - h) }
+                        }
+                        val firstShown = floor(view.left * n).toInt().coerceIn(0, n - 1)
+                        val lastShown = ceil(view.right * n).toInt().coerceIn(firstShown, n - 1)
+                        for (m in firstShown..lastShown) {
+                            val c = floor(x(m + 0.5f) / sliver).toInt()
+                            if (c != column) {
+                                flush()
+                                column = c
+                                peak = 0L
+                                golden = false
+                            }
+                            peak = maxOf(peak, minutes[m])
+                            if (goalMinute != null && m >= goalMinute) golden = true
+                        }
+                        flush()
+                        val (hi, lo) = if (colors.gradient) colors.accent to colors.accentEnd else colors.accent to colors.accent.copy(alpha = 0.5f)
+                        val dim = if (picked != null) 0.45f else 1f
+                        drawPath(plain, Brush.verticalGradient(listOf(hi, lo), startY = head, endY = size.height), alpha = alpha * dim, style = Stroke(sliver))
+                        drawPath(gold, Brush.verticalGradient(listOf(colors.goalStart, colors.goalEnd), startY = head, endY = size.height), alpha = alpha * dim, style = Stroke(sliver))
+                        // The minute under your finger, lit, with a dot at its count (on the floor for none).
+                        if (picked != null) {
+                            val (m, steps) = picked
+                            val cx = x(m + 0.5f)
+                            val h = chart * steps / top
+                            val lit = if (goalMinute != null && m >= goalMinute) colors.goal else hi
+                            drawLine(
+                                colors.text.copy(alpha = 0.35f * alpha), Offset(cx, head), Offset(cx, size.height - h - 6.dp.toPx()), 1.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())),
+                            )
+                            if (h > 0f) drawLine(lit.copy(alpha = alpha), Offset(cx, size.height), Offset(cx, size.height - h), maxOf(sliver, 2.dp.toPx()))
+                            drawCircle(colors.text.copy(alpha = alpha), 3.dp.toPx(), Offset(cx, size.height - h))
+                        }
+                    }
+
                     // [set]'s bars of [each] minutes, those at least partly in view, at [alpha].
                     fun drawBars(set: List<Pair<Int, Long>>, each: Int, alpha: Float, picked: Pair<Int, Long>?) {
                         val pitch = each * scale
+                        if (each == 1 && pitch < 3.dp.toPx()) return drawSlivers(alpha, picked)
                         val w = (pitch * 0.62f).coerceIn(1.5.dp.toPx(), 26.dp.toPx())
                         val shownFrom = view.left * n - each
                         val shownTo = view.right * n

@@ -369,7 +369,11 @@ private fun App(vm: MainViewModel) {
             Box(Modifier.fillMaxSize()) {
                 Backdrop()
                 if (window != null) {
-                    StepsExplorer(window, settings.goal, loadMinutes = vm::minuteSteps, onBack = { exploringSteps = null }, bottomPadding = bottom)
+                    StepsExplorer(
+                        window, settings.goal, loadMinutes = vm::minuteSteps, onBack = { exploringSteps = null }, bottomPadding = bottom,
+                        everyMinute = settings.everyMinute,
+                        onEveryMinute = { on -> vm.updateSettings { it.copy(everyMinute = on) } },
+                    )
                 }
             }
         }
