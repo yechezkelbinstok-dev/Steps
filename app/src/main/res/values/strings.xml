@@ -189,8 +189,6 @@
     <string name="sleep_stages">Breakdown</string>
     <string name="sleep_through_night">Sleep stages</string>
     <string name="sleep_week">Last 7 nights</string>
-    <string name="sleep_longest_deep">longest deep sleep, from %1$s</string>
-    <string name="sleep_longest">longest stretch, from %1$s</string>
     <string name="sleep_average">a night, on average</string>
     <string name="sleep_earlier">Earlier nights</string>
     <string name="sleep_none">Once your band syncs a night\'s sleep, it shows up here.</string>

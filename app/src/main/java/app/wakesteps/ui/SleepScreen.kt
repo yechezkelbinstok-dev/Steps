@@ -697,8 +697,6 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
     val picked = selection.index?.let(::minuteAt)
     val pickedStage = picked?.let { night.stageAt(it) }
     val chart = remember(night) { chartNight(night) }
-    val anchor = if (night.staged) SleepStage.DEEP else SleepStage.ASLEEP
-    val longest = chart.bars.filter { it.stage == anchor }.maxByOrNull { it.duration }
 
     fun pick(fraction: Float) {
         val m = (fraction * minutes).toInt()
@@ -710,31 +708,21 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
     }
 
     Panel(modifier.fillMaxWidth(), onClick = onOpen) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Eyebrow(stringResource(R.string.sleep_through_night), Modifier.weight(1f))
-            if (night.staged) Eyebrow(stringResource(R.string.sleep_asleep_share, (night.efficiency * 100).roundToInt()))
+        // While you drag along the chart, the time and stage under your finger take the heading's
+        // place: one row of a fixed height, so the chart never moves under the finger.
+        Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (picked != null) {
+                Text(Format.time(picked), style = MaterialTheme.typography.titleMedium, color = colors.text)
+                Spacer(Modifier.width(10.dp))
+                val tone by animateColorAsState(pickedStage?.let(::stageTextColor) ?: colors.muted, label = "stage")
+                Text(pickedStage?.let { stageName(it) } ?: "", style = MaterialTheme.typography.titleMedium, color = tone, modifier = Modifier.weight(1f))
+            } else {
+                Eyebrow(stringResource(R.string.sleep_through_night), Modifier.weight(1f))
+                if (night.staged) Eyebrow(stringResource(R.string.sleep_asleep_share, (night.efficiency * 100).roundToInt()))
+            }
             if (onOpen != null) {
                 Spacer(Modifier.width(2.dp))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint, modifier = Modifier.size(20.dp))
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            if (picked != null) {
-                Text(Format.time(picked), style = AppType.number(34f), color = colors.text)
-                Spacer(Modifier.width(10.dp))
-                val tone by animateColorAsState(pickedStage?.let(::stageTextColor) ?: colors.muted, label = "stage")
-                Caption(pickedStage?.let { stageName(it) } ?: "", Modifier.padding(bottom = 6.dp), color = tone)
-            } else if (longest != null) {
-                Text(durationText(longest.duration.toMinutes(), 34f), style = AppType.number(34f), color = colors.text)
-                Spacer(Modifier.width(10.dp))
-                Caption(
-                    stringResource(
-                        if (night.staged) R.string.sleep_longest_deep else R.string.sleep_longest,
-                        Format.time(longest.start),
-                    ),
-                    Modifier.padding(bottom = 6.dp),
-                )
             }
         }
         Spacer(Modifier.height(14.dp))
