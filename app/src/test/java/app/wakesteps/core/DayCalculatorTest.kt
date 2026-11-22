@@ -1,6 +1,7 @@
 package app.wakesteps.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -297,29 +298,48 @@ class DayCalculatorTest {
 
     @Test
     fun twoSleepsJoinedAreOneNightAndSomeoneElsesSleepIsDropped() {
-        // Nov 19: asleep 7:28 AM to 12:15 PM, up all afternoon, asleep again 8:32 PM to 1:21 AM;
-        // the user said the two are one night. Then 3:59 to 8:24 AM was someone else wearing it.
+        // Asleep 8:32 PM to 1:21 AM, up till 7:28, asleep again till 12:15 PM: the user says
+        // that's one night. 3:59 to 8:24 the next morning was someone else wearing the band.
         val sleeps = listOf(
-            sleep("2026-11-18T00:30", "2026-11-18T08:00"),
+            sleep("2026-11-17T23:30", "2026-11-18T08:00"),
+            sleep("2026-11-18T20:32", "2026-11-19T01:21"),
             sleep("2026-11-19T07:28", "2026-11-19T12:15"),
-            sleep("2026-11-19T20:32", "2026-11-20T01:21"),
             sleep("2026-11-20T03:59", "2026-11-20T08:24"),
+            sleep("2026-11-20T23:00", "2026-11-21T07:00"),
         )
         val overrides = Overrides(
-            joins = setOf(t("2026-11-19T16:00")),
-            ignoredSleeps = setOf(t("2026-11-20T06:00")),
+            joins = listOf(t("2026-11-19T01:21")..t("2026-11-19T07:28")),
+            ignoredSleeps = listOf(t("2026-11-20T03:59")..t("2026-11-20T08:24")),
         )
-        val windows = DayCalculator.windows(sleeps, t("2026-11-17T00:00"), t("2026-11-20T12:00"), zone, rules, overrides)
-        val now = windows.last()
-        assertEquals(t("2026-11-20T01:21"), now.start)
-        assertEquals(SleepSpan(t("2026-11-19T07:28"), t("2026-11-20T01:21")), now.wokeFrom)
-        assertEquals(emptyList<SleepSpan>(), now.naps)
-        assertEquals(t("2026-11-19T07:28"), windows[windows.size - 2].end)
-        assertEquals(t("2026-11-18T08:00"), windows[windows.size - 2].start)
+        val windows = DayCalculator.windows(sleeps, t("2026-11-17T00:00"), t("2026-11-21T12:00"), zone, rules, overrides)
+        val thursday = windows.single { it.start == t("2026-11-19T12:15") }
+        assertEquals(SleepSpan(t("2026-11-18T20:32"), t("2026-11-19T12:15")), thursday.wokeFrom)
+        assertEquals(t("2026-11-18T20:32"), windows[windows.indexOf(thursday) - 1].end)
+        assertEquals(t("2026-11-21T07:00"), windows.last().start)
+        // Up from Thursday 12:15 PM to Friday night: an all-nighter, never ended or begun by the other sleep.
+        assertTrue(windows.none { it.end == t("2026-11-20T03:59") || it.start == t("2026-11-20T08:24") })
+        assertTrue(windows.none { it.start == t("2026-11-19T01:21") })
+    }
 
-        // Without them: three days, the last begun at 8:24 by the other sleep.
-        val plain = DayCalculator.windows(sleeps, t("2026-11-17T00:00"), t("2026-11-20T12:00"), zone, rules)
-        assertEquals(t("2026-11-20T08:24"), plain.last().start)
+    @Test
+    fun aJoinNeverBridgesMoreThanItsGap() {
+        // The sleep after the gap isn't there (and the next one is days off): nothing is joined.
+        val sleeps = listOf(
+            sleep("2026-11-18T20:32", "2026-11-19T01:21"),
+            sleep("2026-11-22T06:15", "2026-11-22T12:29"),
+        )
+        val overrides = Overrides(joins = listOf(t("2026-11-19T01:21")..t("2026-11-19T07:28")))
+        val windows = DayCalculator.windows(sleeps, t("2026-11-17T00:00"), t("2026-11-22T13:00"), zone, rules, overrides)
+        assertEquals(SleepSpan(t("2026-11-22T06:15"), t("2026-11-22T12:29")), windows.last().wokeFrom)
+        assertTrue(windows.mapNotNull { it.wokeFrom }.all { it.duration <= Duration.ofHours(12) })
+    }
+
+    @Test
+    fun onlyASleepWithinTheStretchGivenIsDropped() {
+        val overrides = Overrides(ignoredSleeps = listOf(t("2026-11-20T03:59")..t("2026-11-20T08:24")))
+        // The band's times a few minutes off still count; a sleep running well past doesn't.
+        assertTrue(overrides.ignores(t("2026-11-20T03:57"), t("2026-11-20T08:30")))
+        assertFalse(overrides.ignores(t("2026-11-19T22:00"), t("2026-11-20T08:24")))
     }
 
     @Test

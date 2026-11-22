@@ -169,16 +169,52 @@ private val SEED_SCORES = mapOf(
 private val REMOVED_NIGHTS = setOf(LocalDate.of(2026, 11, 8))
 
 /**
- * Corrections to which sleep is the user's, as stored overrides (see [Overrides]):
- * - Thu Nov 19: the sleep from 7:28 AM to 12:15 PM and the one from 8:32 PM to 1:21 AM are one
- *   night, the afternoon between them awake (a join at 4 PM, between the two). Google only scored
- *   the first part, so its 49 isn't used; the night has the app's own score.
- * - Fri Nov 20: the sleep from 3:59 to 8:24 AM was someone else's (dropped by 6 AM, inside it).
+ * Corrections to which sleep is the user's, as stored overrides (see [Overrides]), each a stretch
+ * of time: "<kind>|<from s>|<to s>".
+ * - Thu Nov 19: Wednesday night's sleep, 8:32 PM to 1:21 AM, and the one from 7:28 AM to 12:15 PM
+ *   are one night, awake from 1:21 to 7:28 AM between them (Google lists both on Nov 19, the day
+ *   each ended). Google only scored the second, so its 49 isn't used; the night has the app's own score.
+ * - Fri Nov 20: the sleep from 3:59 to 8:24 AM was someone else's.
  */
 internal val SEED_CORRECTIONS = setOf(
+    correction("J", "2026-11-19T06:21:00Z", "2026-11-19T12:28:00Z"),
+    correction("I", "2026-11-20T08:59:00Z", "2026-11-20T13:24:00Z"),
+)
+
+/**
+ * What 1.20.2 put in for the same two, as single moments. Its join was on the wrong side of
+ * Nov 19 (Thursday afternoon), and with Friday morning's sleep gone it joined Thursday morning's
+ * sleep to Sunday's. Taken out again.
+ */
+internal val RETIRED_CORRECTIONS = setOf(
     "J|${Instant.parse("2026-11-19T21:00:00Z").epochSecond}",
     "I|${Instant.parse("2026-11-20T11:00:00Z").epochSecond}",
 )
+
+private fun correction(kind: String, from: String, to: String) =
+    "$kind|${Instant.parse(from).epochSecond}|${Instant.parse(to).epochSecond}"
+
+/** The stored calls and corrections, as [Overrides]. */
+internal fun parseOverrides(entries: Set<String>): Overrides {
+    val calls = mutableMapOf<Instant, Boolean>()
+    val skipped = mutableSetOf<Instant>()
+    val manual = mutableSetOf<Instant>()
+    val ignored = mutableListOf<ClosedRange<Instant>>()
+    val joins = mutableListOf<ClosedRange<Instant>>()
+    for (e in entries) {
+        val parts = e.split('|')
+        val at = parts.getOrNull(1)?.toLongOrNull()?.let(Instant::ofEpochSecond) ?: continue
+        val until = parts.getOrNull(2)?.toLongOrNull()?.let(Instant::ofEpochSecond)?.takeIf { it >= at }
+        when (parts[0]) {
+            "S" -> calls[at] = parts.getOrNull(2) == "1"
+            "R" -> skipped += at
+            "M" -> manual += at
+            "I" -> if (until != null) ignored += at..until
+            "J" -> if (until != null) joins += at..until
+        }
+    }
+    return Overrides(calls, skipped, manual, ignored.sortedBy { it.start }, joins.sortedBy { it.start })
+}
 
 /** The first batch, which 1.12 marked as added with a single flag. */
 private val FIRST_SEEDS = SEED_SCORES.keys.take(4).toSet()
@@ -495,15 +531,20 @@ class Prefs(private val context: Context) {
         return overrides.first()
     }
 
-    /** Adds each of [SEED_CORRECTIONS] once: one taken back later isn't put in again. */
+    /**
+     * Adds each of [SEED_CORRECTIONS] once (one taken back later isn't put in again) and takes out
+     * [RETIRED_CORRECTIONS].
+     */
     private suspend fun seedCorrections() {
-        if ((SEED_CORRECTIONS - context.dataStore.data.first()[K.correctionsSeeded].orEmpty()).isEmpty()) return
+        val now = context.dataStore.data.first()
+        val due = (SEED_CORRECTIONS - now[K.correctionsSeeded].orEmpty()).isNotEmpty() ||
+            now[K.overrides].orEmpty().any { it in RETIRED_CORRECTIONS }
+        if (!due) return
         context.dataStore.edit { p ->
             val done = p[K.correctionsSeeded].orEmpty()
             val fresh = SEED_CORRECTIONS - done
-            if (fresh.isEmpty()) return@edit
-            p[K.overrides] = p[K.overrides].orEmpty() + fresh
-            p[K.correctionsSeeded] = done + fresh
+            p[K.overrides] = p[K.overrides].orEmpty() - RETIRED_CORRECTIONS + fresh
+            p[K.correctionsSeeded] = done - RETIRED_CORRECTIONS + fresh
         }
     }
 
@@ -550,25 +591,6 @@ class Prefs(private val context: Context) {
 
     private fun epoch(entry: String): Long = entry.split('|').getOrNull(1)?.toLongOrNull() ?: 0
 
-    private fun parseOverrides(entries: Set<String>): Overrides {
-        val calls = mutableMapOf<Instant, Boolean>()
-        val skipped = mutableSetOf<Instant>()
-        val manual = mutableSetOf<Instant>()
-        val ignored = mutableSetOf<Instant>()
-        val joins = mutableSetOf<Instant>()
-        for (e in entries) {
-            val parts = e.split('|')
-            val at = parts.getOrNull(1)?.toLongOrNull()?.let(Instant::ofEpochSecond) ?: continue
-            when (parts[0]) {
-                "S" -> calls[at] = parts.getOrNull(2) == "1"
-                "R" -> skipped += at
-                "M" -> manual += at
-                "I" -> ignored += at
-                "J" -> joins += at
-            }
-        }
-        return Overrides(calls, skipped, manual, ignored, joins)
-    }
     suspend fun currentSnapshot(): Snapshot? = snapshot.first()
 
     suspend fun update(transform: (AppSettings) -> AppSettings) {

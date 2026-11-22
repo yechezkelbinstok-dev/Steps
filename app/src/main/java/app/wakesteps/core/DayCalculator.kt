@@ -89,23 +89,35 @@ data class Overrides(
     val sleepCalls: Map<Instant, Boolean> = emptyMap(),
     val skippedResets: Set<Instant> = emptySet(),
     val manualStarts: Set<Instant> = emptySet(),
-    /** A sleep with one of these in it isn't the user's (someone else wore the band): it's dropped. */
-    val ignoredSleeps: Set<Instant> = emptySet(),
-    /** One of these between two sleeps makes them one, with the time between them awake. */
-    val joins: Set<Instant> = emptySet(),
+    /**
+     * When someone else wore the band: a sleep that lies within one of these (give or take
+     * [SLACK]) isn't the user's and is dropped. A sleep running past it is kept whole.
+     */
+    val ignoredSleeps: List<ClosedRange<Instant>> = emptyList(),
+    /**
+     * Gaps the user was awake in, in the middle of one night: the sleeps either side of one are
+     * joined, the gap awake. Only a gap within one (give or take [SLACK]) is bridged, so a sleep
+     * missing on one side never joins sleeps further off.
+     */
+    val joins: List<ClosedRange<Instant>> = emptyList(),
 ) {
     /** The user's call on this sleep, if they made one. */
     fun callFor(span: SleepSpan): Boolean? =
         sleepCalls.entries.firstOrNull { it.key >= span.start && it.key <= span.end }?.value
 
     /** Whether the sleep from [start] to [end] isn't the user's. */
-    fun ignores(start: Instant, end: Instant): Boolean = ignoredSleeps.any { it >= start && it <= end }
+    fun ignores(start: Instant, end: Instant): Boolean =
+        ignoredSleeps.any { start >= it.start.minus(SLACK) && end <= it.endInclusive.plus(SLACK) }
 
     /** Whether a sleep ending at [end] and the next one, starting at [start], are one. */
-    fun joined(end: Instant, start: Instant): Boolean = joins.any { it >= end && it <= start }
+    fun joined(end: Instant, start: Instant): Boolean =
+        joins.any { end >= it.start.minus(SLACK) && start <= it.endInclusive.plus(SLACK) }
 
     companion object {
         val NONE = Overrides()
+
+        /** How far the band's times for a sleep can be from the ones the user gave. */
+        val SLACK: Duration = Duration.ofMinutes(30)
     }
 }
 
