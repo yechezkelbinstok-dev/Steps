@@ -168,6 +168,18 @@ private val SEED_SCORES = mapOf(
 /** Nights the user asked to be taken down, by the morning they ended: Nov 8, 2026 (the band's battery ran out). */
 private val REMOVED_NIGHTS = setOf(LocalDate.of(2026, 11, 8))
 
+/**
+ * Corrections to which sleep is the user's, as stored overrides (see [Overrides]):
+ * - Thu Nov 19: the sleep from 7:28 AM to 12:15 PM and the one from 8:32 PM to 1:21 AM are one
+ *   night, the afternoon between them awake (a join at 4 PM, between the two). Google only scored
+ *   the first part, so its 49 isn't used; the night has the app's own score.
+ * - Fri Nov 20: the sleep from 3:59 to 8:24 AM was someone else's (dropped by 6 AM, inside it).
+ */
+internal val SEED_CORRECTIONS = setOf(
+    "J|${Instant.parse("2026-11-19T21:00:00Z").epochSecond}",
+    "I|${Instant.parse("2026-11-20T11:00:00Z").epochSecond}",
+)
+
 /** The first batch, which 1.12 marked as added with a single flag. */
 private val FIRST_SEEDS = SEED_SCORES.keys.take(4).toSet()
 
@@ -277,6 +289,8 @@ class Prefs(private val context: Context) {
         val removedNights = stringPreferencesKey("removed_nights")
         /** Comma-separated mornings of [REMOVED_NIGHTS] already left out, so one brought back stays back. */
         val removedSeeded = stringPreferencesKey("removed_nights_seeded")
+        /** Which of [SEED_CORRECTIONS] are already in the overrides. */
+        val correctionsSeeded = stringSetPreferencesKey("corrections_seeded")
 
         /** Which way of estimating the kept estimates came from (SleepScore.MODEL). */
         val scoreModel = intPreferencesKey("sleep_score_model")
@@ -474,7 +488,24 @@ class Prefs(private val context: Context) {
     suspend fun setGoogleHealthError(message: String?) {
         context.dataStore.edit { p -> if (message == null) p.remove(K.googleHealthError) else p[K.googleHealthError] = message }
     }
-    suspend fun currentOverrides(): Overrides = overrides.first()
+
+    /** The user's calls, with the corrections they sent over ([SEED_CORRECTIONS]) put in first. */
+    suspend fun currentOverrides(): Overrides {
+        seedCorrections()
+        return overrides.first()
+    }
+
+    /** Adds each of [SEED_CORRECTIONS] once: one taken back later isn't put in again. */
+    private suspend fun seedCorrections() {
+        if ((SEED_CORRECTIONS - context.dataStore.data.first()[K.correctionsSeeded].orEmpty()).isEmpty()) return
+        context.dataStore.edit { p ->
+            val done = p[K.correctionsSeeded].orEmpty()
+            val fresh = SEED_CORRECTIONS - done
+            if (fresh.isEmpty()) return@edit
+            p[K.overrides] = p[K.overrides].orEmpty() + fresh
+            p[K.correctionsSeeded] = done + fresh
+        }
+    }
 
     /** Rule a sleep main (true) or a nap (false), replacing any earlier call on it. */
     suspend fun setSleepCall(span: SleepSpan, main: Boolean) = editOverrides { entries ->
@@ -495,21 +526,27 @@ class Prefs(private val context: Context) {
         if (present) entries += "M|${at.epochSecond}" else entries -= "M|${at.epochSecond}"
     }
 
-    /** Drops every call the user made between [from] and [to] (inclusive). */
+    /**
+     * Drops every call the user made between [from] and [to] (inclusive). Which sleeps are theirs
+     * and which are one ([Overrides.ignoredSleeps], [Overrides.joins]) stay.
+     */
     suspend fun clearOverrides(from: Instant, to: Instant) = editOverrides { entries ->
-        entries.removeAll { epoch(it) in from.epochSecond..to.epochSecond }
+        entries.removeAll { !it.isCorrection() && epoch(it) in from.epochSecond..to.epochSecond }
     }
 
     private suspend fun editOverrides(change: (MutableSet<String>) -> Unit) {
         context.dataStore.edit { p ->
             val entries = p[K.overrides].orEmpty().toMutableSet()
             change(entries)
-            // Keep a couple of months; older days aren't shown anywhere.
+            // Keep a couple of months of calls; older days are only totals. Corrections to which
+            // sleep is whose are kept, since the month calendar goes back further.
             val cutoff = Instant.now().minus(Duration.ofDays(60)).epochSecond
-            entries.removeAll { epoch(it) < cutoff }
+            entries.removeAll { !it.isCorrection() && epoch(it) < cutoff }
             p[K.overrides] = entries
         }
     }
+
+    private fun String.isCorrection(): Boolean = startsWith("I|") || startsWith("J|")
 
     private fun epoch(entry: String): Long = entry.split('|').getOrNull(1)?.toLongOrNull() ?: 0
 
@@ -517,6 +554,8 @@ class Prefs(private val context: Context) {
         val calls = mutableMapOf<Instant, Boolean>()
         val skipped = mutableSetOf<Instant>()
         val manual = mutableSetOf<Instant>()
+        val ignored = mutableSetOf<Instant>()
+        val joins = mutableSetOf<Instant>()
         for (e in entries) {
             val parts = e.split('|')
             val at = parts.getOrNull(1)?.toLongOrNull()?.let(Instant::ofEpochSecond) ?: continue
@@ -524,9 +563,11 @@ class Prefs(private val context: Context) {
                 "S" -> calls[at] = parts.getOrNull(2) == "1"
                 "R" -> skipped += at
                 "M" -> manual += at
+                "I" -> ignored += at
+                "J" -> joins += at
             }
         }
-        return Overrides(calls, skipped, manual)
+        return Overrides(calls, skipped, manual, ignored, joins)
     }
     suspend fun currentSnapshot(): Snapshot? = snapshot.first()
 

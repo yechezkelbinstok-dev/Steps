@@ -89,10 +89,20 @@ data class Overrides(
     val sleepCalls: Map<Instant, Boolean> = emptyMap(),
     val skippedResets: Set<Instant> = emptySet(),
     val manualStarts: Set<Instant> = emptySet(),
+    /** A sleep with one of these in it isn't the user's (someone else wore the band): it's dropped. */
+    val ignoredSleeps: Set<Instant> = emptySet(),
+    /** One of these between two sleeps makes them one, with the time between them awake. */
+    val joins: Set<Instant> = emptySet(),
 ) {
     /** The user's call on this sleep, if they made one. */
     fun callFor(span: SleepSpan): Boolean? =
         sleepCalls.entries.firstOrNull { it.key >= span.start && it.key <= span.end }?.value
+
+    /** Whether the sleep from [start] to [end] isn't the user's. */
+    fun ignores(start: Instant, end: Instant): Boolean = ignoredSleeps.any { it >= start && it <= end }
+
+    /** Whether a sleep ending at [end] and the next one, starting at [start], are one. */
+    fun joined(end: Instant, start: Instant): Boolean = joins.any { it >= end && it <= start }
 
     companion object {
         val NONE = Overrides()
@@ -159,14 +169,16 @@ object DayCalculator {
         rules: DayRules,
         overrides: Overrides,
     ): List<Pair<SleepSpan, Boolean>> {
-        val night = nightWindow(raw, zone, rules)
-        val merged = merge(raw) { a, b ->
+        val own = raw.filterNot { overrides.ignores(it.start, it.end) }
+        val night = nightWindow(own, zone, rules)
+        val merged = merge(own) { a, b ->
             val gap = Duration.between(a.end, b.start)
-            // Never glue together two sleeps the user has ruled on differently.
+            // Never glue together two sleeps the user has ruled on differently, unless they said
+            // the two are one.
             val callA = overrides.callFor(a)
             val callB = overrides.callFor(b)
             val conflicting = callA != null && callB != null && callA != callB
-            !conflicting && (
+            overrides.joined(a.end, b.start) || !conflicting && (
                 gap <= rules.mergeGap ||
                     (gap <= rules.nightMergeGap && nightFraction(a.end, b.start, zone, night) == 1.0)
                 )

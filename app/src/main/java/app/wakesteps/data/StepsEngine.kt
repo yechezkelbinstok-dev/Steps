@@ -112,11 +112,15 @@ class StepsEngine(
     private suspend fun recentSleeps(settings: AppSettings, now: Instant, days: Long): List<SleepSpan> =
         sleepsBetween(settings, now.minus(Duration.ofDays(maxOf(days, LEARN_DAYS) + 1)), now)
 
-    /** Sleep from [from] to [to]: Health Connect's, and Google Health's with it when it's on. */
+    /**
+     * Sleep from [from] to [to]: Health Connect's, and Google Health's with it when it's on. Sleep
+     * the user said wasn't theirs is left out.
+     */
     private suspend fun sleepsBetween(settings: AppSettings, from: Instant, to: Instant): List<SleepSpan> {
         val local = health.sleeps(from, to, settings.sourcePackage)
         val cloud = if (settings.googleHealth) read(settings, { sleeps(it, from, to) }, { emptyList() }) else emptyList()
-        return (local + cloud).sortedBy { it.start }
+        val overrides = prefs.currentOverrides()
+        return (local + cloud).filterNot { overrides.ignores(it.start, it.end) }.sortedBy { it.start }
     }
 
     suspend fun today(settings: AppSettings, includeHourly: Boolean): TodaySummary {
@@ -388,21 +392,26 @@ class StepsEngine(
     private suspend fun sleepSessions(settings: AppSettings, from: Instant, to: Instant): List<SleepSession> =
         sleepSessions(settings, from, to, keepIfGoogleFails = false).orEmpty()
 
-    /** As above; with [keepIfGoogleFails], null when Google Health is on but couldn't be read. */
+    /**
+     * As above; with [keepIfGoogleFails], null when Google Health is on but couldn't be read. Sleep
+     * the user said wasn't theirs is left out.
+     */
     private suspend fun sleepSessions(settings: AppSettings, from: Instant, to: Instant, keepIfGoogleFails: Boolean): List<SleepSession>? {
         val cloud: List<SleepSession>? = if (settings.googleHealth) {
             // Google finds sleep by when it ended: anything overlapping ends after [from], and within a day of [to].
             read<List<SleepSession>?>(settings, { sleepSessions(it, from, to.plus(Duration.ofDays(1))) }) { null }?.filter { it.start < to }
         } else emptyList()
         if (cloud == null && keepIfGoogleFails) return null
-        return cloud.orEmpty().ifEmpty {
-            try {
-                health.sleepSessions(from, to, settings.sourcePackage)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                emptyList()
-            }
+        val overrides = prefs.currentOverrides()
+        val own = cloud.orEmpty().filterNot { overrides.ignores(it.start, it.end) }
+        // Health Connect only when Google had nothing at all, not when everything it had was left out.
+        if (cloud.orEmpty().isNotEmpty()) return own
+        return try {
+            health.sleepSessions(from, to, settings.sourcePackage).filterNot { overrides.ignores(it.start, it.end) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
