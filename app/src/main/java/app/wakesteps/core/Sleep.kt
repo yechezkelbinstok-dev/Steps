@@ -105,6 +105,18 @@ data class SleepNight(
     /** The stage at [t], if it's within the night. */
     fun stageAt(t: Instant): SleepStage? = stages.firstOrNull { !t.isBefore(it.start) && t.isBefore(it.end) }?.stage
 
+    /** The whole stretch of one stage that [t] falls in, from when that stage began to when it changed. */
+    fun stretchAt(t: Instant): StageSpan? {
+        val i = stages.indexOfFirst { !t.isBefore(it.start) && t.isBefore(it.end) }
+        if (i < 0) return null
+        val stage = stages[i].stage
+        var first = i
+        while (first > 0 && stages[first - 1].stage == stage && stages[first - 1].end == stages[first].start) first--
+        var last = i
+        while (last < stages.lastIndex && stages[last + 1].stage == stage && stages[last + 1].start == stages[last].end) last++
+        return StageSpan(stages[first].start, stages[last].end, stage)
+    }
+
     /** Just the part of the night from [from] to [to], as a night of its own: for its time in each stage. */
     fun within(from: Instant, to: Instant): SleepNight = copy(
         start = from,

@@ -170,4 +170,20 @@ class SleepNightsTest {
         assertNull(n.fellAsleepIn)
         assertEquals(0, n.fullAwakenings)
     }
+
+    @Test
+    fun theStretchUnderAMomentRunsFromWhenItsStageBeganToWhenItChanged() {
+        val n = SleepNights.build(SleepSpan(at(0), at(480)), listOf(night))
+        // Deep from 2:00 to 3:20 into the night, though a stir split it in two.
+        val deep = n.stretchAt(at(170))!!
+        assertEquals(SleepStage.DEEP, deep.stage)
+        assertEquals(at(131), deep.start)
+        assertEquals(at(200), deep.end)
+        // The ten-minute wake-up.
+        assertEquals(mins(10), n.stretchAt(at(245))!!.duration)
+        // Pieces of one stage side by side are one stretch.
+        val pieces = n.copy(stages = listOf(span(0, 30, SleepStage.LIGHT), span(30, 50, SleepStage.LIGHT), span(50, 60, SleepStage.REM)))
+        assertEquals(span(0, 50, SleepStage.LIGHT), pieces.stretchAt(at(40)))
+        assertNull(pieces.stretchAt(at(90)))
+    }
 }

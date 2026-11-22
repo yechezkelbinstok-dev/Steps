@@ -696,6 +696,7 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
     fun minuteAt(m: Int): Instant = night.start.plus(Duration.ofMinutes(m.toLong()))
     val picked = selection.index?.let(::minuteAt)
     val pickedStage = picked?.let { night.stageAt(it) }
+    val pickedStretch = picked?.let { night.stretchAt(it) }
     val chart = remember(night) { chartNight(night) }
 
     fun pick(fraction: Float) {
@@ -708,14 +709,19 @@ fun NightChart(night: SleepNight, modifier: Modifier = Modifier, initialMinute: 
     }
 
     Panel(modifier.fillMaxWidth(), onClick = onOpen) {
-        // While you drag along the chart, the time and stage under your finger take the heading's
-        // place: one row of a fixed height, so the chart never moves under the finger.
+        // While you drag along the chart, the time and stage under your finger, and how long that
+        // stretch of it lasted, take the heading's place: one row of a fixed height, so the chart
+        // never moves under the finger.
         Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
             if (picked != null) {
                 Text(Format.time(picked), style = MaterialTheme.typography.titleMedium, color = colors.text)
                 Spacer(Modifier.width(10.dp))
                 val tone by animateColorAsState(pickedStage?.let(::stageTextColor) ?: colors.muted, label = "stage")
-                Text(pickedStage?.let { stageName(it) } ?: "", style = MaterialTheme.typography.titleMedium, color = tone, modifier = Modifier.weight(1f))
+                Text(pickedStage?.let { stageName(it) } ?: "", style = MaterialTheme.typography.titleMedium, color = tone, maxLines = 1)
+                pickedStretch?.let {
+                    Text(" · ${stretchLength(it.duration)}", style = MaterialTheme.typography.titleMedium, color = colors.muted, maxLines = 1)
+                }
+                Spacer(Modifier.weight(1f))
             } else {
                 Eyebrow(stringResource(R.string.sleep_through_night), Modifier.weight(1f))
                 if (night.staged) Eyebrow(stringResource(R.string.sleep_asleep_share, (night.efficiency * 100).roundToInt()))
@@ -774,6 +780,10 @@ private fun laneCaptions(lanes: List<SleepStage>, night: SleepNight): List<LaneC
 
 /** "4h 06m" or "45m", all one size, for small labels. */
 private fun plainDuration(minutes: Long): String = if (minutes >= 60) "${minutes / 60}h %02dm".format(minutes % 60) else "${minutes}m"
+
+/** How long a stretch of one stage lasted: "6h 07m", "12m", or "40s" for a stir under a minute. */
+private fun stretchLength(length: Duration): String =
+    if (length < Duration.ofMinutes(1)) "${length.seconds}s" else plainDuration(length.toMinutes())
 
 /**
  * The part of [night] from [from] to [to] (fractions of it) across this canvas, a row per lane:
@@ -937,6 +947,7 @@ private fun ZoomableNight(night: SleepNight, view: SpanView, modifier: Modifier,
     val to = at(view.right)
     val picked = selection.index?.let { night.start.plus(Duration.ofMinutes(it.toLong())) }
     val pickedStage = picked?.let { night.stageAt(it) }
+    val pickedStretch = picked?.let { night.stretchAt(it) }
     fun pick(across: Float) {
         val m = ((view.left + across * view.width) * minutes).toInt().coerceIn(0, minutes - 1)
         val before = selection.index?.let { night.stageAt(night.start.plus(Duration.ofMinutes(it.toLong()))) }
@@ -954,6 +965,9 @@ private fun ZoomableNight(night: SleepNight, view: SpanView, modifier: Modifier,
                     Spacer(Modifier.width(10.dp))
                     val tone by animateColorAsState(pickedStage?.let(::stageTextColor) ?: colors.muted, label = "stage")
                     Caption(pickedStage?.let { stageName(it) } ?: "", Modifier.padding(bottom = 5.dp), color = tone)
+                    pickedStretch?.let {
+                        Caption(" · ${stretchLength(it.duration)}", Modifier.padding(bottom = 5.dp), color = colors.muted)
+                    }
                 } else {
                     Text(durationText(Duration.between(from, to).toMinutes(), 30f), style = AppType.number(30f), color = colors.text, maxLines = 1)
                     Spacer(Modifier.width(10.dp))
