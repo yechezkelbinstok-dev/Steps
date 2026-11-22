@@ -606,7 +606,12 @@ private fun FactorTile(part: ScorePart, delayMillis: Int, modifier: Modifier) {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            if (part.factor == ScoreFactor.RESTLESSNESS) "${factorName(part.factor)} · ${part.count}×" else factorName(part.factor),
+            when {
+                part.factor == ScoreFactor.RESTLESSNESS -> "${factorName(part.factor)} · ${part.count}×"
+                // Much of the night awake: say how much of it was asleep, since that's what cost it.
+                part.factor == ScoreFactor.DURATION && part.count > 0 -> stringResource(R.string.factor_duration_share, part.count)
+                else -> factorName(part.factor)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = Palette.muted,
             maxLines = 1,

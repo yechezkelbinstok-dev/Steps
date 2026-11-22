@@ -24,7 +24,9 @@ enum class ScoreFactor(val weight: Float) {
 /**
  * How one factor went: its measure (minutes, or a count) and how well it did, from 0 (poorly) to
  * 1 (as good as it gets). Not [measured] means it stands in for a measure the app couldn't take
- * (sound sleep without heart rate): good enough for the estimate, not to show.
+ * (sound sleep without heart rate): good enough for the estimate, not to show. For
+ * [ScoreFactor.DURATION], [count] is the percentage of the night spent asleep when that cost it
+ * credit (see [SleepScore.WHOLE_NIGHT]), and 0 otherwise.
  */
 data class ScorePart(val factor: ScoreFactor, val minutes: Long, val count: Int, val quality: Float, val measured: Boolean = true)
 
@@ -42,8 +44,19 @@ object SleepScore {
     /**
      * Bumped whenever the estimates change meaning (2: sound sleep from heart rate), so the
      * estimates kept beside entered scores are worked out again rather than learnt from as they were.
+     * Not for [WHOLE_NIGHT]: it only changes nights asleep less than three quarters of the time,
+     * and the nights with Google scores, at under 25 minutes of interruptions each, aren't.
      */
     const val MODEL = 3
+
+    /**
+     * How much of the time from going to sleep to getting up has to be asleep for the time slept
+     * to count in full: three quarters. Below that its credit shrinks, to nothing at a third
+     * ([BROKEN_NIGHT]): a night with hours awake in the middle (two sleeps joined into one) isn't
+     * worth its total. Ordinary nights, with their wake-ups, are well above it.
+     */
+    const val WHOLE_NIGHT = 0.75f
+    private const val BROKEN_NIGHT = 0.35f
 
     /**
      * How each factor went. With [google]'s own figures for the night, those stand in for the
@@ -58,9 +71,11 @@ object SleepScore {
         val awakenings = night.fullAwakenings
         val interrupted = (google?.interruptions ?: night.interruptions).toMinutes()
         val measured = google != null || night.soundMeasured
+        val share = night.efficiency
+        val whole = ((share - BROKEN_NIGHT) / (WHOLE_NIGHT - BROKEN_NIGHT)).coerceIn(0f, 1f)
         return listOf(
-            // 3 hours earns nothing, 8½ hours full marks.
-            ScorePart(ScoreFactor.DURATION, asleep, 0, ramp(asleep, 180, 510)),
+            // 3 hours earns nothing, 8½ hours full marks; less when much of the night was awake.
+            ScorePart(ScoreFactor.DURATION, asleep, if (whole < 1f) (share * 100).roundToInt() else 0, ramp(asleep, 180, 510) * whole),
             // Within 5 minutes is ideal; 45 or more earns nothing.
             ScorePart(ScoreFactor.TIME_TO_SOUND_SLEEP, toSound, 0, 1f - ramp(toSound, 5, 45), measured),
             // An hour earns nothing, four full marks.

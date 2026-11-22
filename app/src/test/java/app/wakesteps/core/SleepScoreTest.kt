@@ -57,6 +57,49 @@ class SleepScoreTest {
         assertTrue(long > typical && typical > short)
     }
 
+    /** A sleep's stages from [from] to [to] minutes: a few minutes to drift off, then cycles, with one wake-up. */
+    private fun sleepBetween(from: Long, to: Long): SleepSession {
+        val stages = mutableListOf(span(from, from + 8, SleepStage.AWAKE))
+        var t = from + 8
+        val cycle = listOf(SleepStage.LIGHT to 28L, SleepStage.DEEP to 27L, SleepStage.LIGHT to 14L, SleepStage.REM to 18L, SleepStage.RESTLESS to 3L)
+        var cycles = 0
+        while (t < to) {
+            for ((stage, minutes) in cycle) {
+                if (t >= to) break
+                val end = minOf(t + minutes, to)
+                stages += span(t, end, stage)
+                t = end
+            }
+            if (++cycles == 2 && t + 12 < to) {
+                stages += span(t, t + 12, SleepStage.AWAKE)
+                t += 12
+            }
+        }
+        return SleepSession(at(from), at(to), stages)
+    }
+
+    @Test
+    fun aNightWithHoursAwakeInTheMiddleIsNotScoredLikeAWholeNight() {
+        // Asleep 8:32 PM to 1:21 AM, up till 7:28 AM, asleep again till 12:15 PM: joined into one night.
+        val first = sleepBetween(0, 289)
+        val second = sleepBetween(656, 943)
+        val split = SleepNights.build(SleepSpan(at(0), at(943)), listOf(first, second))
+        val whole = SleepNights.build(SleepSpan(at(0), at(550)), listOf(sleepBetween(0, 550)))
+        val half = SleepNights.build(SleepSpan(at(656), at(943)), listOf(second))
+        val splitScore = SleepScore.estimate(split)!!
+        // As much sleep as a whole night, but scored well below one, and a little above either half alone.
+        assertEquals(whole.asleep.toMinutes().toDouble(), split.asleep.toMinutes().toDouble(), 15.0)
+        assertTrue("got $splitScore against ${SleepScore.estimate(whole)}", splitScore <= SleepScore.estimate(whole)!! - 15)
+        assertTrue("got $splitScore against ${SleepScore.estimate(half)}", splitScore >= SleepScore.estimate(half)!!)
+        // The duration tile says why: 56% of the night asleep.
+        val duration = SleepScore.parts(split)!!.first { it.factor == ScoreFactor.DURATION }
+        assertEquals(56, duration.count)
+        assertTrue(duration.quality in 0.45f..0.6f)
+        // An ordinary night, with its wake-ups, isn't touched.
+        assertEquals(0, SleepScore.parts(night(7.5, wakeUps = 2))!!.first { it.factor == ScoreFactor.DURATION }.count)
+        assertEquals(0, SleepScore.parts(whole)!!.first { it.factor == ScoreFactor.DURATION }.count)
+    }
+
     @Test
     fun everyFactorIsThere() {
         val parts = SleepScore.parts(night(7.5))!!
