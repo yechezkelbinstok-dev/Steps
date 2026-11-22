@@ -17,6 +17,8 @@ labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not
   as it was, and Sunday's sleep is a night of its own again.
 - A join now only bridges the gap it was made for, and only a sleep inside the stretch given is
   dropped, so neither can reach other days' sleep.
+- Settings → Updates no longer has the line about Android asking, the first time, to let the app
+  install updates.
 
 ## 1.20.2
 - Thursday Nov 19's two sleeps, 7:28 AM to 12:15 PM and 8:32 PM to 1:21 AM, are one night, with

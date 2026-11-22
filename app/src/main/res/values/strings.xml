@@ -38,7 +38,6 @@
     <string name="update_available">%1$s is ready</string>
     <string name="update_check">Check for updates</string>
     <string name="update_whats_new">What\'s new</string>
-    <string name="update_first_time">The first time, Android asks to let Awake Steps install apps: turn it on, then come back and it carries on.</string>
     <string name="set_rest">Shabbos &amp; Yom Tov</string>
     <string name="rest_next">Next</string>
     <string name="rest_now">Now</string>

@@ -154,8 +154,6 @@ fun UpdatesPanel(installed: String, state: UpdateState, onCheck: () -> Unit, onU
             }
             Spacer(Modifier.height(16.dp))
             UpdateAction(state, onUpdate, stringResource(R.string.update_to, release.versionName))
-            Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.update_first_time), style = MaterialTheme.typography.bodySmall, color = Palette.faint)
         } else if (state !is UpdateState.Checking) {
             Spacer(Modifier.height(14.dp))
             SoftButton(stringResource(R.string.update_check), onCheck)
