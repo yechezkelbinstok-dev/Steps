@@ -79,25 +79,21 @@ class SleepScoreTest {
     }
 
     @Test
-    fun aNightWithHoursAwakeInTheMiddleIsNotScoredLikeAWholeNight() {
-        // Asleep 8:32 PM to 1:21 AM, up till 7:28 AM, asleep again till 12:15 PM: joined into one night.
+    fun aNightSplitInTwoCountsAllItsSleepButNotAsUnbroken() {
+        // Asleep 8:32 PM to 1:21 AM, up till 7:28 AM, asleep again till 12:15 PM: joined into one
+        // night. Split sleep adding up to a full night rests about as well as one block, so all of
+        // it counts for duration; the split only costs what unbroken sleep earns.
         val first = sleepBetween(0, 289)
         val second = sleepBetween(656, 943)
         val split = SleepNights.build(SleepSpan(at(0), at(943)), listOf(first, second))
         val whole = SleepNights.build(SleepSpan(at(0), at(550)), listOf(sleepBetween(0, 550)))
         val half = SleepNights.build(SleepSpan(at(656), at(943)), listOf(second))
+        val parts = SleepScore.parts(split)!!
+        assertEquals(1f, parts.first { it.factor == ScoreFactor.DURATION }.quality, 0f)
+        assertEquals(0f, parts.first { it.factor == ScoreFactor.INTERRUPTIONS }.quality, 0f)
         val splitScore = SleepScore.estimate(split)!!
-        // As much sleep as a whole night, but scored well below one, and a little above either half alone.
-        assertEquals(whole.asleep.toMinutes().toDouble(), split.asleep.toMinutes().toDouble(), 15.0)
-        assertTrue("got $splitScore against ${SleepScore.estimate(whole)}", splitScore <= SleepScore.estimate(whole)!! - 15)
-        assertTrue("got $splitScore against ${SleepScore.estimate(half)}", splitScore >= SleepScore.estimate(half)!!)
-        // The duration tile says why: 56% of the night asleep.
-        val duration = SleepScore.parts(split)!!.first { it.factor == ScoreFactor.DURATION }
-        assertEquals(56, duration.count)
-        assertTrue(duration.quality in 0.45f..0.6f)
-        // An ordinary night, with its wake-ups, isn't touched.
-        assertEquals(0, SleepScore.parts(night(7.5, wakeUps = 2))!!.first { it.factor == ScoreFactor.DURATION }.count)
-        assertEquals(0, SleepScore.parts(whole)!!.first { it.factor == ScoreFactor.DURATION }.count)
+        assertTrue("got $splitScore against ${SleepScore.estimate(whole)}", splitScore < SleepScore.estimate(whole)!!)
+        assertTrue("got $splitScore against ${SleepScore.estimate(half)}", splitScore >= SleepScore.estimate(half)!! + 20)
     }
 
     @Test

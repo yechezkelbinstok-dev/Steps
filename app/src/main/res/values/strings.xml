@@ -210,7 +210,6 @@
     <string name="score_google">Google Health</string>
     <string name="sleep_score_factors">Behind the score</string>
     <string name="factor_duration">Duration</string>
-    <string name="factor_duration_share">Duration · %1$d%% asleep</string>
     <string name="factor_time_to_sound">Time to sound sleep</string>
     <string name="factor_sound">Sound sleep</string>
     <string name="factor_restlessness">Restlessness</string>
