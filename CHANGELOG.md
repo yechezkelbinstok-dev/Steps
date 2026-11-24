@@ -4,10 +4,22 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901, 1.19.2 → 11902, 1.19.3 → 11903, 1.19.4 → 11904, 1.20 → 12000, 1.20.1 → 12001, 1.20.2 → 12002, 1.20.3 → 12003, 1.20.4 → 12004, 1.20.5 → 12005, 1.20.6 → 12006. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901, 1.19.2 → 11902, 1.19.3 → 11903, 1.19.4 → 11904, 1.20 → 12000, 1.20.1 → 12001, 1.20.2 → 12002, 1.20.3 → 12003, 1.20.4 → 12004, 1.20.5 → 12005, 1.20.6 → 12006, 1.21 → 12100. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below;
 1.16 includes one briefly labelled 1.16.1; 1.19.3 one briefly labelled 1.19.4, not the 1.19.4 below).
+
+## 1.21
+- **Heart rate**, as Google's heart rate page shows it, but you can zoom in. A card on Today (and
+  on each day's page) shows the day's range and resting rate; tap it for the day midnight to
+  midnight: "63–120 bpm, High of 120 bpm in light zone", Google's zone lines (moderate, vigorous,
+  peak, at your own 123, 148 and 180), grey bars from each stretch's lowest to its highest, and the
+  line through them coloured by zone. ‹ and › go a day back and forward.
+- Pinch, double-tap or − and + to zoom in, down to a couple of minutes across. The scale closes in
+  with it, and from 30 minutes across it reads your band's heart rate five seconds at a time.
+  Drag along it for the heart rate, time and zone under your finger. The whole day sits below with
+  the part in view framed: drag it or tap it to move around.
+- Needs Google Health with heart rate allowed (Settings → Google Health), as sound sleep does.
 
 ## 1.20.6
 - Dragging along a night's (or nap's) stages, the readout says how long the stretch under your

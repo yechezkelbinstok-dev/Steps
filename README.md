@@ -118,6 +118,25 @@ or more (pauses of up to 2 minutes don't end one), each with its times, length, 
 Tap one to see it in the chart. The walks are in
 [`Walks.kt`](app/src/main/java/app/wakesteps/core/Walks.kt).
 
+## Heart rate
+
+With Google Health connected and heart rate allowed, Today has a **Heart rate** card (the day's
+range, resting rate, and the day small); each day's page has one for the day it began. Tap it for
+the day as Google's heart rate page shows it, midnight to midnight: the range and its high ("High
+of 120 bpm in light zone"), each zone's dotted line, grey bars from each stretch's lowest to its
+highest, and the line through them, coloured by zone. ‹ and › go a day back and forward.
+
+Zoom in (pinch, double-tap, or − and +) down to a couple of minutes across; the scale closes in
+with it, so the rises and falls show. The whole day is drawn averaged a few minutes at a time, as
+Google draws it, then minute by minute; at 30 minutes across or closer it's read five seconds at
+a time (Google keeps heart rate a second at a time). Drag a finger along it to read the heart rate,
+time and zone under it.
+
+The zones are Google's, from heart rate reserve (maximum less resting heart rate): moderate from
+40% of it, vigorous from 60%, peak from 85%, light below. Maximum is 200 (Google's lines for you,
+123, 148 and 180, come from 200 with a resting rate of 72), resting is Google's for the day. See
+[`HeartRate.kt`](app/src/main/java/app/wakesteps/core/HeartRate.kt).
+
 ## Updates
 
 The app updates itself: Today shows a new version at the top with what's new, and Settings →

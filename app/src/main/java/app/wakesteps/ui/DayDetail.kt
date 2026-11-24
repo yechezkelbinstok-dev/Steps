@@ -45,6 +45,7 @@ import app.wakesteps.R
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.EndReason
 import app.wakesteps.core.Format
+import app.wakesteps.core.HeartDay
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.Overrides
 import app.wakesteps.core.SleepNight
@@ -55,7 +56,9 @@ import app.wakesteps.ui.theme.AppType
 import app.wakesteps.ui.theme.Palette
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 
 /**
  * One day in full: its ring, calories and distance, the hour-by-hour chart, a timeline from
@@ -80,6 +83,10 @@ fun DayDetail(
     /** The day's naps with their stages. */
     loadNaps: suspend (DayWindow) -> List<SleepNight> = { emptyList() },
     onOpenNap: (SleepNight) -> Unit = {},
+    /** Reads a day's heart rate; null when heart rate can't be read, and then there's no card. */
+    loadHeart: (suspend (LocalDate) -> HeartDay?)? = null,
+    /** Opens a day's heart rate. */
+    onOpenHeart: (LocalDate) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val now = remember { Instant.now() }
@@ -121,6 +128,20 @@ fun DayDetail(
             HourlyPanel(buckets, settings.goal, ongoing = w.isOngoing, Modifier.entrance(3), onOpen = { onExploreSteps(w) })
         }
         TimelinePanel(day, overrides, now, Modifier.entrance(4))
+        if (loadHeart != null) {
+            // The calendar day it began on, as Google's heart rate page has it.
+            val date = w.start.atZone(ZoneId.systemDefault()).toLocalDate()
+            val heart by produceState<HeartDay?>(null, date) {
+                value = try {
+                    loadHeart(date)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            heart?.takeIf { it.points.isNotEmpty() }?.let { HeartCard(it, onOpen = { onOpenHeart(date) }, Modifier.entrance(4)) }
+        }
         if (w.naps.isNotEmpty()) {
             val naps by produceState<List<SleepNight>>(emptyList(), w) { value = runCatching { loadNaps(w) }.getOrDefault(emptyList()) }
             naps.forEach { nap -> NapCard(nap, settings.restlessAsAwake, onOpen = { onOpenNap(nap) }, Modifier.entrance(4)) }

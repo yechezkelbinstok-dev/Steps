@@ -20,6 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.wakesteps.core.DayWindow
+import app.wakesteps.core.HeartDay
+import app.wakesteps.core.HeartPoint
+import app.wakesteps.core.HeartZones
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.SleepScore
 import app.wakesteps.core.EndReason
@@ -58,6 +61,7 @@ import java.io.File
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.LocalTime
 
 /**
@@ -304,6 +308,70 @@ class ScreenRenderTest {
         render("steps_empty", settings, Tab.TODAY) { StepsExplorer(today, settings.goal, { emptyList() }, {}, bottom, now = now) }
     }
 
+    /**
+     * A day's heart rate a minute at a time, to 6:45 PM: up and about to 4:30 AM with a spike
+     * before 4, asleep and low till 2:30 PM, up through the afternoon; the band off for a few
+     * minutes at 9.
+     */
+    private fun heartDay(date: LocalDate = LocalDate.of(2026, 10, 17)): HeartDay {
+        val zone = ZoneId.systemDefault()
+        val start = date.atStartOfDay(zone).toInstant()
+        val random = java.util.Random(7)
+        val points = (0 until 18 * 60 + 45).mapNotNull { m ->
+            if (m in 540..548) return@mapNotNull null
+            val h = m / 60.0
+            val base = when {
+                h < 4.5 -> 98.0 + 6 * kotlin.math.sin(m / 17.0)
+                h < 5.0 -> 86.0
+                h < 14.5 -> 69.0 + 5 * kotlin.math.sin(m / 40.0)
+                else -> 97.0 + 10 * kotlin.math.sin(m / 23.0)
+            }
+            val avg = base + (if (m in 210..216) 20.0 else 0.0) + random.nextGaussian() * 2.5
+            val spread = 2 + random.nextDouble() * 5
+            HeartPoint(start.plus(Duration.ofMinutes(m.toLong())), avg.toFloat(), (avg - spread).toFloat(), (avg + spread * 1.2).toFloat())
+        }
+        return HeartDay(date, start, date.plusDays(1).atStartOfDay(zone).toInstant(), points, 72.0, HeartZones.of(72.0))
+    }
+
+    /** [day]'s heart rate five seconds at a time from [from] to [to], wandering about each minute's. */
+    private fun heartDetail(day: HeartDay, from: Instant, to: Instant): List<HeartPoint> {
+        val random = java.util.Random(11)
+        return day.points.filter { !it.at.isBefore(from) && it.at.isBefore(to) }.flatMap { p ->
+            (0 until 12).map { k ->
+                val v = p.avg + (random.nextGaussian() * 2.2).toFloat()
+                HeartPoint(p.at.plusSeconds(k * 5L), v, v - 0.5f, v + 0.5f)
+            }
+        }
+    }
+
+    /** A day's heart rate opened up: the whole day, a reading picked, zoomed in, close in a second at a time, and not set up. */
+    @Test
+    @Config(qualifiers = "w411dp-h1400dp-420dpi")
+    fun renderHeart() {
+        val settings = AppSettings()
+        val day = heartDay()
+        val date = day.date
+        fun explorer(view: ClosedFloatingPointRange<Float>? = null, second: Int? = null): @Composable () -> Unit = {
+            HeartExplorer(
+                date, loadDay = { day }, loadDetail = { a, b -> heartDetail(day, a, b) }, onBack = {}, onSetUp = {},
+                bottomPadding = bottom, today = date, initialView = view, initialSecond = second,
+            )
+        }
+        render("heart", settings, Tab.TODAY, screen = explorer())
+        render("heart_picked", settings, Tab.TODAY, screen = explorer(second = 3 * 3600 + 32 * 60))
+        render("heart_zoomed", settings, Tab.TODAY, screen = explorer(view = 0.58f..0.70f))
+        // Ten minutes across: read five seconds at a time once the view settles.
+        val close = (15 * 60 + 10) / 1440f..(15 * 60 + 20) / 1440f
+        render("heart_close", settings, Tab.TODAY, settle = Duration.ofSeconds(1), screen = explorer(view = close, second = (15 * 60 + 14) * 60 + 20))
+        render("heart_setup", settings, Tab.TODAY) {
+            HeartExplorer(date, loadDay = { null }, loadDetail = { _, _ -> emptyList() }, onBack = {}, onSetUp = {}, bottomPadding = bottom, today = date)
+        }
+        val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
+        render("today_heart", settings, Tab.TODAY) {
+            TodayScreen(state, settings, actions, {}, {}, bottom, loadHeart = { day })
+        }
+    }
+
     /** Last Shabbos (now, Saturday afternoon) and the one before, with Vayera's and Lech Lecha's names. */
     private val shabbos = RestBlock(
         Instant.parse("2026-10-16T22:31:00Z"), Instant.parse("2026-10-17T23:13:00Z"),
@@ -463,7 +531,7 @@ class ScreenRenderTest {
         }
     }
 
-    private fun render(name: String, settings: AppSettings, tab: Tab, screen: @Composable () -> Unit) {
+    private fun render(name: String, settings: AppSettings, tab: Tab, settle: Duration = Duration.ZERO, screen: @Composable () -> Unit) {
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent {
             CompositionLocalProvider(LocalSnapAnimations provides true) {
@@ -477,6 +545,12 @@ class ScreenRenderTest {
             }
         }
         shadowOf(Looper.getMainLooper()).idle()
+        if (!settle.isZero) {
+            // Coroutine delays run on real time; let it pass, then the frames that follow.
+            shadowOf(Looper.getMainLooper()).idleFor(settle)
+            Thread.sleep(settle.toMillis())
+            repeat(4) { shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100)) }
+        }
         val view: View = activity.window.decorView
         val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bmp))

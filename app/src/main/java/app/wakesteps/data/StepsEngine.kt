@@ -3,6 +3,9 @@ package app.wakesteps.data
 import android.content.Context
 import app.wakesteps.core.DayCalculator
 import app.wakesteps.core.DayWindow
+import app.wakesteps.core.HeartDay
+import app.wakesteps.core.HeartPoint
+import app.wakesteps.core.HeartZones
 import app.wakesteps.core.NightWindow
 import app.wakesteps.core.PlaceFix
 import app.wakesteps.core.RestBlock
@@ -384,6 +387,44 @@ class StepsEngine(
 
     /** Whether heart rate can be read: Google Health connected and heart rate allowed. */
     suspend fun heartAllowed(settings: AppSettings): Boolean = settings.googleHealth && google.heartToken() != null
+
+    /** Google's resting heart rates and when they were read: read again after half an hour. */
+    @Volatile private var restingRates: Pair<Instant, Map<LocalDate, Double>>? = null
+
+    private suspend fun restingRates(token: String): Map<LocalDate, Double> {
+        restingRates?.let { (at, rates) -> if (Duration.between(at, Instant.now()) < Duration.ofMinutes(30)) return rates }
+        return google.restingHeartRates(token).also { restingRates = Instant.now() to it }
+    }
+
+    /**
+     * [date]'s heart rate from Google Health, as its heart rate page has it: midnight to midnight,
+     * minute by minute, with the day's resting rate and the zones from it. Null when heart rate
+     * can't be read (Google Health not connected, or heart rate not allowed); throws when Google
+     * Health couldn't be reached.
+     */
+    suspend fun heartDay(settings: AppSettings, date: LocalDate, zone: ZoneId = ZoneId.systemDefault()): HeartDay? {
+        if (!settings.googleHealth) return null
+        val token = google.heartToken() ?: return null
+        val start = date.atStartOfDay(zone).toInstant()
+        val end = date.plusDays(1).atStartOfDay(zone).toInstant()
+        val until = minOf(end, Instant.now())
+        val points = if (until.isAfter(start)) google.heartPoints(token, start, until, Duration.ofMinutes(1)) else emptyList()
+        // The day's resting rate, or the day before's until Google has worked it out; zones without.
+        val resting = try {
+            restingRates(token).let { it[date] ?: it[date.minusDays(1)] }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        return HeartDay(date, start, end, points, resting, resting?.let { HeartZones.of(it) } ?: HeartZones.USUAL)
+    }
+
+    /** Heart rate from [from] to [to] five seconds at a time, for the few minutes zoomed in on. */
+    suspend fun heartDetail(from: Instant, to: Instant): List<HeartPoint> {
+        val token = google.heartToken() ?: return emptyList()
+        return google.heartPoints(token, from, to, Duration.ofSeconds(5))
+    }
 
     /**
      * Sleep sessions overlapping [from]..[to]. Google Health has the band's stages; without it (or

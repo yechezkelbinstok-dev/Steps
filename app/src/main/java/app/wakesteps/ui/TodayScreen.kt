@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,10 +48,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.wakesteps.R
 import app.wakesteps.core.DayWindow
-import app.wakesteps.core.StartReason
 import app.wakesteps.core.Format
+import app.wakesteps.core.HeartDay
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.SleepNight
+import app.wakesteps.core.StartReason
 import app.wakesteps.data.AppSettings
 import app.wakesteps.data.CalorieMode
 import app.wakesteps.data.DayTotals
@@ -59,9 +61,11 @@ import app.wakesteps.ui.theme.Palette
 import app.wakesteps.widget.StepsWidgetReceiver
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun TodayScreen(
@@ -83,6 +87,10 @@ fun TodayScreen(
     /** A newer version of the app, if there is one, and the way to install it. */
     update: UpdateState = UpdateState.Unknown,
     onUpdate: () -> Unit = {},
+    /** Reads a day's heart rate; null when heart rate can't be read, and then there's no card. */
+    loadHeart: (suspend (LocalDate) -> HeartDay?)? = null,
+    /** Opens a day's heart rate. */
+    onOpenHeart: (LocalDate) -> Unit = {},
 ) {
     val today = state.today
     Column(
@@ -109,6 +117,20 @@ fun TodayScreen(
                     today.hourly, settings.goal, ongoing = today.window.isOngoing, Modifier.entrance(4), chartSelection,
                     onOpen = { onExploreSteps(today.window) },
                 )
+            }
+            if (loadHeart != null) {
+                // Today as Google's heart rate page has it: since midnight.
+                val date = today.now.atZone(ZoneId.systemDefault()).toLocalDate()
+                val heart by produceState<HeartDay?>(null, date, today.now) {
+                    value = try {
+                        loadHeart(date)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                heart?.takeIf { it.points.isNotEmpty() }?.let { HeartCard(it, onOpen = { onOpenHeart(date) }, Modifier.entrance(5)) }
             }
             AddWidgetPrompt()
         }

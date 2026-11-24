@@ -2,6 +2,7 @@ package app.wakesteps.data
 
 import android.content.Context
 import android.content.pm.PackageManager
+import app.wakesteps.core.HeartPoint
 import app.wakesteps.core.SleepSession
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.SleepStage
@@ -69,6 +70,15 @@ class GoogleHealth(private val context: Context) {
         val kcal: (JSONObject) -> Double? = { it.optJSONObject("totalCalories")?.optDouble("kcalSum")?.takeUnless(Double::isNaN) }
         /** A heart-rate window's average, in beats a minute. */
         val bpm: (JSONObject) -> Double? = { it.optJSONObject("heartRate")?.optDouble("beatsPerMinuteAvg")?.takeUnless(Double::isNaN) }
+        private val bpmMin: (JSONObject) -> Double? = { it.optJSONObject("heartRate")?.optDouble("beatsPerMinuteMin")?.takeUnless(Double::isNaN) }
+        private val bpmMax: (JSONObject) -> Double? = { it.optJSONObject("heartRate")?.optDouble("beatsPerMinuteMax")?.takeUnless(Double::isNaN) }
+
+        /** Rolled-up heart-rate windows as [HeartPoint]s, oldest first; windows without any are left out. */
+        fun heartPoints(points: List<JSONObject>): List<HeartPoint> = points.mapNotNull { p ->
+            val at = start(p) ?: return@mapNotNull null
+            val avg = bpm(p) ?: return@mapNotNull null
+            HeartPoint(at, avg.toFloat(), (bpmMin(p) ?: avg).toFloat(), (bpmMax(p) ?: avg).toFloat())
+        }.sortedBy { it.at }
 
         /** Resting heart rate by day, from a `daily-resting-heart-rate` list. */
         fun parseRestingHeartRates(json: String): Map<LocalDate, Double> {
@@ -289,6 +299,13 @@ class GoogleHealth(private val context: Context) {
         rollUp(token, "heart-rate", from, to, "60s")
             .mapNotNull { p -> start(p)?.let { at -> bpm(p)?.let { at to it } } }
             .sortedBy { it.first }
+
+    /**
+     * Heart rate from [from] to [to] in windows of [window] (a minute for a day, down to a few
+     * seconds zoomed in: Google keeps it a second at a time), each with its average, lowest and highest.
+     */
+    suspend fun heartPoints(token: String, from: Instant, to: Instant, window: Duration): List<HeartPoint> =
+        heartPoints(rollUp(token, "heart-rate", from, to, "${window.seconds.coerceAtLeast(1)}s"))
 
     /** The resting heart rate Google worked out for each of the last couple of months. */
     suspend fun restingHeartRates(token: String): Map<LocalDate, Double> =

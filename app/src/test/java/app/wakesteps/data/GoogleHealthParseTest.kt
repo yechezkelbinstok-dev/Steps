@@ -1,5 +1,6 @@
 package app.wakesteps.data
 
+import app.wakesteps.core.HeartPoint
 import app.wakesteps.core.SleepSpan
 import app.wakesteps.core.SleepStage
 import app.wakesteps.core.StageSpan
@@ -123,6 +124,11 @@ class GoogleHealthParseTest {
         )
         assertEquals(54.5, GoogleHealth.bpm(points[0])!!, 0.0)
         assertNull("a minute without any", GoogleHealth.bpm(points[1]))
+        // Each window with its lowest and highest, oldest first, the minute without any left out.
+        assertEquals(
+            listOf(HeartPoint(Instant.parse("2026-10-19T03:01:00Z"), 54.5f, 52f, 57f)),
+            GoogleHealth.heartPoints(points),
+        )
 
         val resting = GoogleHealth.parseRestingHeartRates(
             """

@@ -7,10 +7,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -26,14 +26,10 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import app.wakesteps.data.DaySummary
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -47,6 +43,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -56,6 +53,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -81,11 +80,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.wakesteps.R
 import app.wakesteps.core.DayWindow
 import app.wakesteps.core.SleepNight
+import app.wakesteps.data.DaySummary
 import app.wakesteps.data.HealthSource
 import app.wakesteps.data.Updates
 import app.wakesteps.data.wakeDate
 import app.wakesteps.ui.theme.Palette
 import app.wakesteps.ui.theme.WakeStepsTheme
+import java.time.LocalDate
 
 internal enum class Tab(val label: Int) {
     TODAY(R.string.tab_today),
@@ -211,6 +212,8 @@ private fun App(vm: MainViewModel) {
     var exploring by remember { mutableStateOf<SleepNight?>(null) }
     // A day's steps opened up minute by minute, from its hour-by-hour chart.
     var exploringSteps by remember { mutableStateOf<DayWindow?>(null) }
+    // A day's heart rate opened up, from Today or a day's page.
+    var exploringHeart by remember { mutableStateOf<LocalDate?>(null) }
     // The night today began with, and the one before each day in History.
     fun nightBefore(day: DayWindow?): SleepNight? = day?.wokeFrom?.let { span -> state.nights.firstOrNull { it.span == span } }
     // Keep an open day in step with fresh data (e.g. after adjusting it).
@@ -257,6 +260,8 @@ private fun App(vm: MainViewModel) {
                         onExploreSteps = { exploringSteps = it },
                         update = update,
                         onUpdate = startUpdate,
+                        loadHeart = if (googleHeart) vm::heartDay else null,
+                        onOpenHeart = { exploringHeart = it },
                     )
                     Tab.SLEEP -> SleepScreen(
                         state, scores, settings.restlessAsAwake,
@@ -311,6 +316,8 @@ private fun App(vm: MainViewModel) {
                         onExploreSteps = { exploringSteps = it },
                         loadNaps = vm::naps,
                         onOpenNap = { openNap = it },
+                        loadHeart = if (googleHeart) vm::heartDay else null,
+                        onOpenHeart = { exploringHeart = it },
                     )
                 }
             }
@@ -377,6 +384,24 @@ private fun App(vm: MainViewModel) {
                 }
             }
         }
+        // A day's heart rate opened up grows out of its card the same way.
+        AnimatedVisibility(
+            visible = exploringHeart != null,
+            enter = fadeIn(tween(260)) + scaleIn(tween(420, easing = Glide), initialScale = 0.92f),
+            exit = fadeOut(tween(200)) + scaleOut(tween(260, easing = Glide), targetScale = 0.96f),
+        ) {
+            val date = remember { mutableStateOf(exploringHeart) }.apply { if (exploringHeart != null) value = exploringHeart }.value
+            Box(Modifier.fillMaxSize()) {
+                Backdrop()
+                if (date != null) {
+                    HeartExplorer(
+                        date, loadDay = vm::heartDay, loadDetail = vm::heartDetail,
+                        onBack = { exploringHeart = null }, onSetUp = { showGoogleHealth = true },
+                        bottomPadding = bottom, allowed = googleHeart,
+                    )
+                }
+            }
+        }
         // Content fades out under the tab bar instead of running into it.
         Box(
             Modifier
@@ -385,7 +410,11 @@ private fun App(vm: MainViewModel) {
                 .height(bottom)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Palette.background.copy(alpha = 0.94f)))),
         )
-        TabBar(tab, onSelect = { openDay = null; openNight = null; openNap = null; exploring = null; exploringSteps = null; tab = it }, modifier = Modifier.align(Alignment.BottomCenter))
+        TabBar(
+            tab,
+            onSelect = { openDay = null; openNight = null; openNap = null; exploring = null; exploringSteps = null; exploringHeart = null; tab = it },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
         adjusting?.let { day -> AdjustDaySheet(day, overrides, vm, onDone = { adjusting = null }) }
         if (showSyncLog) SyncLogSheet(syncLog, onDone = { showSyncLog = false })
         if (showDiagnostics) DiagnosticsSheet(onDone = { showDiagnostics = false })

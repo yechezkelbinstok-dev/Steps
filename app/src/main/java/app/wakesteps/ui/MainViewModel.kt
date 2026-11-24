@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import app.wakesteps.R
 import app.wakesteps.app
 import app.wakesteps.core.DayWindow
+import app.wakesteps.core.HeartDay
+import app.wakesteps.core.HeartPoint
 import app.wakesteps.core.NightScore
 import app.wakesteps.core.Overrides
 import app.wakesteps.core.PlaceFix
@@ -609,6 +611,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Hour-by-hour steps for a day opened from History. */
     suspend fun hourly(window: DayWindow): List<Pair<Instant, Long>> = app.engine.hourly(window, settings.value)
+
+    /** Days' heart rate already read, and when: earlier days kept, today's read again after a few minutes. */
+    private val heartDays = mutableMapOf<LocalDate, Pair<Instant, HeartDay>>()
+
+    /** [date]'s heart rate, midnight to midnight; null when heart rate can't be read. */
+    suspend fun heartDay(date: LocalDate): HeartDay? {
+        val now = Instant.now()
+        heartDays[date]?.let { (at, day) ->
+            if (date < LocalDate.now() || Duration.between(at, now) < Duration.ofMinutes(3)) return day
+        }
+        val day = app.engine.heartDay(settings.value, date) ?: return null
+        heartDays[date] = now to day
+        return day
+    }
+
+    /** Heart rate five seconds at a time, for a few minutes zoomed in on. */
+    suspend fun heartDetail(from: Instant, to: Instant): List<HeartPoint> = app.engine.heartDetail(from, to)
 
     fun permissionsToRequest(): Set<String> = HealthSource.CORE_PERMISSIONS + HealthSource.EXTRA_PERMISSIONS
     fun backgroundPermission(): Set<String> = setOf(HealthSource.BACKGROUND_PERMISSION)
