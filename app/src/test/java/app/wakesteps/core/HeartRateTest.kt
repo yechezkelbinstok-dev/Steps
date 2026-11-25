@@ -41,9 +41,34 @@ class HeartRateTest {
     }
 
     @Test
+    fun zoomedInBetweenTwoMinutesTheRangeIsTheMinuteThatRunsIntoIt() {
+        // Half a minute across, from 00:01:10 to 00:01:40: no minute begins in it, but the one
+        // that began at 00:01 runs through it.
+        val points = listOf(point(0, 70f, 66f, 74f), point(1, 90f, 63f, 120f), point(2, 80f))
+        val from = at(1).plusSeconds(10)
+        val to = at(1).plusSeconds(40)
+        assertNull(heartRange(points, from, to))
+        assertEquals(63 to 120, heartRange(points, from, to, Duration.ofMinutes(1)))
+        // A minute that ended before the view began isn't in it.
+        assertEquals(63 to 120, heartRange(points, at(1), at(2), Duration.ofMinutes(1)))
+    }
+
+    @Test
     fun barsLineUpWithTheClockAndSkipEmptyStretches() {
         val points = listOf(point(1, 70f, 68f, 72f), point(14, 90f, 85f, 95f), point(15, 60f), point(61, 100f))
-        val bars = heartBars(points, midnight, 15)
-        assertEquals(listOf(HeartBar(0, 15, 68f, 95f), HeartBar(15, 15, 60f, 60f), HeartBar(60, 15, 100f, 100f)), bars)
+        val bars = heartBars(points, midnight, 15 * 60)
+        assertEquals(listOf(HeartBar(0, 900, 68f, 95f), HeartBar(900, 900, 60f, 60f), HeartBar(3600, 900, 100f, 100f)), bars)
+    }
+
+    @Test
+    fun barsOfAFewSecondsFromReadingsASecondApart() {
+        // A reading every second from 00:10:03 to 00:10:21, climbing a beat a second.
+        val start = at(10)
+        val points = (3..21).map { HeartPoint(start.plusSeconds(it.toLong()), 80f + it, 80f + it, 80f + it) }
+        val bars = heartBars(points, midnight, 10)
+        assertEquals(
+            listOf(HeartBar(600, 10, 83f, 89f), HeartBar(610, 10, 90f, 99f), HeartBar(620, 10, 100f, 101f)),
+            bars,
+        )
     }
 }

@@ -218,6 +218,8 @@
     <string name="heart_zone_peak">Peak</string>
     <string name="heart_no_reading">No reading</string>
     <string name="heart_every_5s">Every 5 seconds</string>
+    <string name="heart_every_second">Every second</string>
+    <string name="heart_every_reading">Every reading</string>
     <string name="heart_reading_closer">Reading closer…</string>
     <string name="heart_resting">Resting %1$d bpm</string>
     <string name="heart_none">No heart rate this day.</string>

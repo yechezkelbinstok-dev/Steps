@@ -420,10 +420,13 @@ class StepsEngine(
         return HeartDay(date, start, end, points, resting, resting?.let { HeartZones.of(it) } ?: HeartZones.USUAL)
     }
 
-    /** Heart rate from [from] to [to] five seconds at a time, for the few minutes zoomed in on. */
-    suspend fun heartDetail(from: Instant, to: Instant): List<HeartPoint> {
+    /**
+     * Heart rate from [from] to [to] in windows of [window] (five seconds, or one: every reading
+     * Google has, as it keeps heart rate a second at a time), for the few minutes zoomed in on.
+     */
+    suspend fun heartDetail(from: Instant, to: Instant, window: Duration): List<HeartPoint> {
         val token = google.heartToken() ?: return emptyList()
-        return google.heartPoints(token, from, to, Duration.ofSeconds(5))
+        return google.heartPoints(token, from, to, window)
     }
 
     /**

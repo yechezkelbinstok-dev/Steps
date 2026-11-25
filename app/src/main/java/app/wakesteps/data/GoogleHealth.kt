@@ -301,8 +301,8 @@ class GoogleHealth(private val context: Context) {
             .sortedBy { it.first }
 
     /**
-     * Heart rate from [from] to [to] in windows of [window] (a minute for a day, down to a few
-     * seconds zoomed in: Google keeps it a second at a time), each with its average, lowest and highest.
+     * Heart rate from [from] to [to] in windows of [window] (a minute for a day, down to a second
+     * zoomed in: Google keeps it a second at a time), each with its average, lowest and highest.
      */
     suspend fun heartPoints(token: String, from: Instant, to: Instant, window: Duration): List<HeartPoint> =
         heartPoints(rollUp(token, "heart-rate", from, to, "${window.seconds.coerceAtLeast(1)}s"))

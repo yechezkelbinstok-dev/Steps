@@ -333,18 +333,27 @@ class ScreenRenderTest {
         return HeartDay(date, start, date.plusDays(1).atStartOfDay(zone).toInstant(), points, 72.0, HeartZones.of(72.0))
     }
 
-    /** [day]'s heart rate five seconds at a time from [from] to [to], wandering about each minute's. */
-    private fun heartDetail(day: HeartDay, from: Instant, to: Instant): List<HeartPoint> {
+    /**
+     * [day]'s heart rate from [from] to [to] in windows of [window], wandering about each minute's:
+     * five seconds at a time, or a second at a time with a reading every second (as the band reads
+     * when you're up and about) and every five while resting before 2:30 PM.
+     */
+    private fun heartDetail(day: HeartDay, from: Instant, to: Instant, window: Duration): List<HeartPoint> {
         val random = java.util.Random(11)
+        val zone = ZoneId.systemDefault()
         return day.points.filter { !it.at.isBefore(from) && it.at.isBefore(to) }.flatMap { p ->
-            (0 until 12).map { k ->
-                val v = p.avg + (random.nextGaussian() * 2.2).toFloat()
-                HeartPoint(p.at.plusSeconds(k * 5L), v, v - 0.5f, v + 0.5f)
+            val every = if (window.seconds >= 5 || p.at.atZone(zone).hour < 14) 5 else 1
+            (0 until 60 / every).map { k ->
+                val v = p.avg + (random.nextGaussian() * if (every == 1) 0.9 else 2.2).toFloat() + 3f * kotlin.math.sin(k * every / 9.0).toFloat()
+                HeartPoint(p.at.plusSeconds(k.toLong() * every), v, v - 0.5f, v + 0.5f)
             }
         }
     }
 
-    /** A day's heart rate opened up: the whole day, a reading picked, zoomed in, close in a second at a time, and not set up. */
+    /**
+     * A day's heart rate opened up: the whole day, a reading picked, zoomed in, close in five
+     * seconds at a time, closer a second at a time, all the way in with a second picked, and not set up.
+     */
     @Test
     @Config(qualifiers = "w411dp-h1400dp-420dpi")
     fun renderHeart() {
@@ -353,7 +362,7 @@ class ScreenRenderTest {
         val date = day.date
         fun explorer(view: ClosedFloatingPointRange<Float>? = null, second: Int? = null): @Composable () -> Unit = {
             HeartExplorer(
-                date, loadDay = { day }, loadDetail = { a, b -> heartDetail(day, a, b) }, onBack = {}, onSetUp = {},
+                date, loadDay = { day }, loadDetail = { a, b, w -> heartDetail(day, a, b, w) }, onBack = {}, onSetUp = {},
                 bottomPadding = bottom, today = date, initialView = view, initialSecond = second,
             )
         }
@@ -363,8 +372,17 @@ class ScreenRenderTest {
         // Ten minutes across: read five seconds at a time once the view settles.
         val close = (15 * 60 + 10) / 1440f..(15 * 60 + 20) / 1440f
         render("heart_close", settings, Tab.TODAY, settle = Duration.ofSeconds(1), screen = explorer(view = close, second = (15 * 60 + 14) * 60 + 20))
+        // Three minutes across: a second at a time.
+        val closer = (15 * 60 + 13) / 1440f..(15 * 60 + 16) / 1440f
+        render("heart_seconds", settings, Tab.TODAY, settle = Duration.ofSeconds(1), screen = explorer(view = closer))
+        // All the way in, half a minute across, a dot each second, one picked.
+        val closest = ((15 * 60 + 14) * 60 + 10) / 86_400f..((15 * 60 + 14) * 60 + 40) / 86_400f
+        render("heart_closest", settings, Tab.TODAY, settle = Duration.ofSeconds(1), screen = explorer(view = closest, second = (15 * 60 + 14) * 60 + 23))
+        // Resting, half a minute across: a reading every five seconds.
+        val resting = ((9 * 60 + 30) * 60 + 10) / 86_400f..((9 * 60 + 30) * 60 + 40) / 86_400f
+        render("heart_closest_resting", settings, Tab.TODAY, settle = Duration.ofSeconds(1), screen = explorer(view = resting))
         render("heart_setup", settings, Tab.TODAY) {
-            HeartExplorer(date, loadDay = { null }, loadDetail = { _, _ -> emptyList() }, onBack = {}, onSetUp = {}, bottomPadding = bottom, today = date)
+            HeartExplorer(date, loadDay = { null }, loadDetail = { _, _, _ -> emptyList() }, onBack = {}, onSetUp = {}, bottomPadding = bottom, today = date)
         }
         val state = UiState(access = Access.Ready(true, true, false), today = today(6432), history = history())
         render("today_heart", settings, Tab.TODAY) {

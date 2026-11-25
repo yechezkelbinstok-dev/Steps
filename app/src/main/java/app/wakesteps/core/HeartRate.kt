@@ -66,36 +66,40 @@ data class HeartDay(
     val range: Pair<Int, Int>? get() = heartRange(points, start, end)
 }
 
-/** The lowest and highest heart rate among the [points] that began from [from] up to [to], if any did. */
-fun heartRange(points: List<HeartPoint>, from: Instant, to: Instant): Pair<Int, Int>? {
+/**
+ * The lowest and highest heart rate among the [points] from [from] up to [to], if there were any:
+ * those that began then, and those that began earlier but whose [window] (how long each point
+ * stands for) ran into it.
+ */
+fun heartRange(points: List<HeartPoint>, from: Instant, to: Instant, window: Duration = Duration.ZERO): Pair<Int, Int>? {
     var lo = Float.MAX_VALUE
     var hi = -Float.MAX_VALUE
     for (p in points) {
-        if (p.at.isBefore(from) || !p.at.isBefore(to)) continue
+        if (!p.at.isBefore(to)) continue
+        if (p.at.isBefore(from) && !p.at.plus(window).isAfter(from)) continue
         lo = minOf(lo, p.min)
         hi = maxOf(hi, p.max)
     }
     return if (hi < lo) null else lo.roundToInt() to hi.roundToInt()
 }
 
-/** One of a chart's bars: [minutes] minutes from [from] minutes into the day, with the lowest and highest in them. */
-data class HeartBar(val from: Int, val minutes: Int, val min: Float, val max: Float)
+/** One of a chart's bars: [seconds] seconds from [from] seconds into the day, with the lowest and highest in them. */
+data class HeartBar(val from: Int, val seconds: Int, val min: Float, val max: Float)
 
 /**
- * [points] from [start] (midnight) in bars of [size] minutes, so lined up with the clock (a
- * 15-minute bar runs from :00, :15, :30 or :45), each with the lowest and highest in it. Bars
- * without any heart rate are left out.
+ * [points] (oldest first) from [start] (midnight) in bars of [seconds], so lined up with the
+ * clock (a 15-minute bar runs from :00, :15, :30 or :45, a 10-second one from :00, :10, :20…),
+ * each with the lowest and highest in it. Bars without any heart rate are left out.
  */
-fun heartBars(points: List<HeartPoint>, start: Instant, size: Int): List<HeartBar> {
+fun heartBars(points: List<HeartPoint>, start: Instant, seconds: Int): List<HeartBar> {
     val out = mutableListOf<HeartBar>()
-    var key = Int.MIN_VALUE
+    var key = Long.MIN_VALUE
     var lo = 0f
     var hi = 0f
     for (p in points) {
-        val minute = Math.floorDiv(Duration.between(start, p.at).seconds, 60L).toInt()
-        val k = Math.floorDiv(minute, size)
+        val k = Math.floorDiv(Duration.between(start, p.at).seconds, seconds.toLong())
         if (k != key) {
-            if (key != Int.MIN_VALUE) out += HeartBar(key * size, size, lo, hi)
+            if (key != Long.MIN_VALUE) out += HeartBar((key * seconds).toInt(), seconds, lo, hi)
             key = k
             lo = p.min
             hi = p.max
@@ -104,6 +108,6 @@ fun heartBars(points: List<HeartPoint>, start: Instant, size: Int): List<HeartBa
             hi = maxOf(hi, p.max)
         }
     }
-    if (key != Int.MIN_VALUE) out += HeartBar(key * size, size, lo, hi)
+    if (key != Long.MIN_VALUE) out += HeartBar((key * seconds).toInt(), seconds, lo, hi)
     return out
 }

@@ -626,8 +626,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return day
     }
 
-    /** Heart rate five seconds at a time, for a few minutes zoomed in on. */
-    suspend fun heartDetail(from: Instant, to: Instant): List<HeartPoint> = app.engine.heartDetail(from, to)
+    /** Heart rate in windows of [window] (five seconds, or a second), for a few minutes zoomed in on. */
+    suspend fun heartDetail(from: Instant, to: Instant, window: Duration): List<HeartPoint> = app.engine.heartDetail(from, to, window)
 
     fun permissionsToRequest(): Set<String> = HealthSource.CORE_PERMISSIONS + HealthSource.EXTRA_PERMISSIONS
     fun backgroundPermission(): Set<String> = setOf(HealthSource.BACKGROUND_PERMISSION)

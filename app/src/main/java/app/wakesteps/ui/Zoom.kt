@@ -173,16 +173,20 @@ internal fun Modifier.zoomable(
         }
     }
 
+/** How far apart ticks can be, in seconds, finest first. */
+private val TICK_SECONDS = listOf(5L, 10L, 15L, 30L, 60L, 120L, 300L, 600L, 900L, 1800L, 3600L, 7200L, 10800L, 14400L)
+
 /**
  * Times worth marking across [from]..[to], no more than [maxCount]: every few hours, on the hour,
- * or every half, quarter, 10 or 5 minutes as it narrows.
+ * or every half, quarter, 10 or 5 minutes as it narrows, and closer in (if [finest], in seconds,
+ * lets it) every couple of minutes, every minute, or every 30, 15, 10 or 5 seconds.
  */
-internal fun ticks(from: Instant, to: Instant, zone: ZoneId, maxCount: Int): List<Instant> {
-    val span = Duration.between(from, to).toMinutes().coerceAtLeast(1)
-    val step = listOf(5L, 10L, 15L, 30L, 60L, 120L, 180L, 240L).firstOrNull { span / it <= maxCount - 1 } ?: 360L
+internal fun ticks(from: Instant, to: Instant, zone: ZoneId, maxCount: Int, finest: Long = 300L): List<Instant> {
+    val span = Duration.between(from, to).seconds.coerceAtLeast(1)
+    val step = TICK_SECONDS.filter { it >= finest }.firstOrNull { span / it <= maxCount - 1 } ?: 21600L
     val day = from.atZone(zone).truncatedTo(ChronoUnit.DAYS)
-    val first = Duration.between(day.toInstant(), from).toMinutes().let { (it + step - 1) / step * step }
-    return generateSequence(day.plusMinutes(first).toInstant()) { it.plus(Duration.ofMinutes(step)) }
+    val first = Duration.between(day.toInstant(), from).seconds.let { (it + step - 1) / step * step }
+    return generateSequence(day.plusSeconds(first).toInstant()) { it.plusSeconds(step) }
         .takeWhile { it.isBefore(to) }
         .filter { !it.isBefore(from) }
         .toList()
@@ -190,6 +194,7 @@ internal fun ticks(from: Instant, to: Instant, zone: ZoneId, maxCount: Int): Lis
 
 private val HOUR_TICK = DateTimeFormatter.ofPattern("h a")
 private val MINUTE_TICK = DateTimeFormatter.ofPattern("h:mm")
+private val SECOND_TICK = DateTimeFormatter.ofPattern("h:mm:ss")
 
 /** The tick times under the chart, each centred under its line (kept inside the edges). */
 @Composable
@@ -202,7 +207,11 @@ internal fun TickLabels(ticks: List<Instant>, from: Instant, to: Instant, modifi
         var free = 0f
         for (t in ticks) {
             val local = t.atZone(zone)
-            val text = (if (local.minute == 0) HOUR_TICK else MINUTE_TICK).format(local)
+            val text = when {
+                local.second != 0 -> SECOND_TICK
+                local.minute == 0 -> HOUR_TICK
+                else -> MINUTE_TICK
+            }.format(local)
             val m = measurer.measure(text, style)
             val x = Duration.between(from, t).toMillis() / span * size.width
             val left = (x - m.size.width / 2f).coerceIn(0f, size.width - m.size.width)

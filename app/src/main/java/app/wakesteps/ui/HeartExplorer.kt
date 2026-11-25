@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -81,19 +82,29 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-/** Zoomed in to this many minutes across or fewer, heart rate is read five seconds at a time. */
-private const val DETAIL_WITHIN = 30f
+/**
+ * Heart rate read closer than a minute at a time, once zoomed in to [within] minutes across or
+ * fewer: [seconds] at a time, in stretches of [chunk] minutes.
+ */
+private enum class Fine(val seconds: Int, val within: Float, val chunk: Int) {
+    /** From half an hour across, five seconds at a time. */
+    FIVE(5, 30f, 15),
 
-/** Heart rate read five seconds at a time comes in stretches of this many minutes. */
-private const val CHUNK = 15
+    /** From five minutes across, a second at a time: every reading Google has (it keeps heart rate to the second). */
+    ONE(1, 5f, 5),
+}
 
-/** How many minutes each grey bar can stand for, finest first. */
-private val HEART_BAR_MINUTES = listOf(1, 2, 3, 5, 10, 15, 20, 30, 60)
+/** As close as this many seconds across: a second a few dots wide. */
+private const val CLOSEST_SECONDS = 30f
+
+/** How many seconds each grey bar can stand for, finest first. */
+private val HEART_BAR_SECONDS = listOf(5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1200, 1800, 3600)
 
 /** The strip to the right of the chart for the zones' heart rates. */
 private val SCALE = 34.dp
@@ -120,10 +131,10 @@ internal fun zoneName(zone: HeartZone): String = stringResource(
 
 /**
  * The heart rate to draw, oldest first: each point's middle in seconds from midnight, its
- * average, and whether it was read five seconds at a time (a minute at a time otherwise, or
- * [step] seconds at a time when averaged down to fit the screen).
+ * average, and how many seconds it stands for ([window]: a minute, five seconds or one, or more
+ * when averaged down to fit the screen).
  */
-private class HeartLine(val at: FloatArray, val bpm: FloatArray, val fine: BooleanArray, val step: Float = 60f) {
+private class HeartLine(val at: FloatArray, val bpm: FloatArray, val window: IntArray) {
     val size: Int get() = at.size
 
     /** The first point at or after [second] (or [size]). */
@@ -150,10 +161,16 @@ private class HeartLine(val at: FloatArray, val bpm: FloatArray, val fine: Boole
     }
 
     /** Whether points [i] and [i] + 1 are close enough to draw joined (no gap where the band was off). */
-    fun joined(i: Int): Boolean = at[i + 1] - at[i] <= if (fine[i] && fine[i + 1]) 20f else maxOf(330f, step * 1.6f)
+    fun joined(i: Int): Boolean {
+        val w = maxOf(window[i], window[i + 1])
+        return at[i + 1] - at[i] <= if (w < 60) 20f else maxOf(330f, w * 1.6f)
+    }
 
     /** How far from [second] point [i] can be and still be what was there then. */
-    fun reach(i: Int): Float = if (fine[i]) 15f else maxOf(150f, step)
+    fun reach(i: Int): Float = if (window[i] < 60) 15f else maxOf(150f, window[i].toFloat())
+
+    /** When point [i]'s reading began, in seconds from midnight. */
+    fun began(i: Int): Float = at[i] - window[i] / 2f
 
     /**
      * Averaged [seconds] at a time (lined up with the clock), for more minutes in view than the
@@ -185,44 +202,126 @@ private class HeartLine(val at: FloatArray, val bpm: FloatArray, val fine: Boole
             count++
         }
         flush()
-        return HeartLine(at.toFloatArray(), bpm.toFloatArray(), BooleanArray(at.size), seconds.toFloat())
+        return HeartLine(at.toFloatArray(), bpm.toFloatArray(), IntArray(at.size) { seconds })
     }
 }
 
 /** How many seconds each point of the line can stand for when averaged to fit, finest first. */
 private val LINE_SECONDS = listOf(120, 180, 300, 600)
 
-/** The day's minutes, but where a stretch was read five seconds at a time ([detail], by stretch), those instead. */
-private fun heartLine(day: HeartDay, detail: Map<Int, List<HeartPoint>>, useDetail: Boolean): HeartLine {
-    fun second(i: Instant) = Duration.between(day.start, i).toMillis() / 1000f
-    fun covered(s: Float) = useDetail && detail[(s / 60f / CHUNK).toInt()]?.isNotEmpty() == true
-    val points = ArrayList<Triple<Float, Float, Boolean>>(day.points.size)
-    for (p in day.points) {
-        val s = second(p.at)
-        if (!covered(s)) points += Triple(s + 30f, p.avg, false)
+/** Readings, oldest first, that each stand for [window] seconds. */
+private class HeartReadings(val window: Int, val points: List<HeartPoint>)
+
+/**
+ * The day's heart rate at the finest there is of it: the day's minutes, but where a stretch was
+ * read closer ([fine], by level and stretch, for the levels [using]), those readings instead,
+ * and a second at a time over five seconds at a time.
+ */
+private fun heartReadings(day: HeartDay, fine: Map<Fine, Map<Int, List<HeartPoint>>>, using: List<Fine>): List<HeartReadings> {
+    fun covered(f: Fine, p: HeartPoint): Boolean {
+        val minute = Duration.between(day.start, p.at).seconds / 60f
+        return fine[f]?.get((minute / f.chunk).toInt())?.isNotEmpty() == true
     }
-    if (useDetail) for (list in detail.values) for (p in list) points += Triple(second(p.at) + 2.5f, p.avg, true)
-    points.sortBy { it.first }
+    val out = mutableListOf(HeartReadings(60, day.points.filter { p -> using.none { covered(it, p) } }))
+    for (f in using) {
+        val finer = using.filter { it.seconds < f.seconds }
+        val points = fine[f].orEmpty().values.flatten().filter { p -> finer.none { covered(it, p) } }.sortedBy { it.at }
+        out += HeartReadings(f.seconds, points)
+    }
+    return out
+}
+
+/** [readings] as one line, each reading at its middle. */
+private fun heartLine(day: HeartDay, readings: List<HeartReadings>): HeartLine {
+    val count = readings.sumOf { it.points.size }
+    val order = ArrayList<Pair<Float, Int>>(count)
+    val bpm = FloatArray(count)
+    val window = IntArray(count)
+    var k = 0
+    for (r in readings) for (p in r.points) {
+        order += Duration.between(day.start, p.at).toMillis() / 1000f + r.window / 2f to k
+        bpm[k] = p.avg
+        window[k] = r.window
+        k++
+    }
+    order.sortBy { it.first }
     return HeartLine(
-        FloatArray(points.size) { points[it].first },
-        FloatArray(points.size) { points[it].second },
-        BooleanArray(points.size) { points[it].third },
+        FloatArray(count) { order[it].first },
+        FloatArray(count) { bpm[order[it].second] },
+        IntArray(count) { window[order[it].second] },
     )
+}
+
+/** What's been read of one [Fine] level: its readings by stretch (empty where there were none), and whether reading last failed. */
+@Stable
+private class FineReadings {
+    val byStretch = mutableStateMapOf<Int, List<HeartPoint>>()
+    var failed by mutableStateOf(false)
+}
+
+/**
+ * [fine]'s readings of [day], read once zoomed in to [Fine.within] minutes across: a moment after
+ * the view settles, the stretches in view and one either side. A stretch that couldn't be read is
+ * tried again when the view moves on to another.
+ */
+@Composable
+private fun rememberFineReadings(
+    day: HeartDay,
+    fine: Fine,
+    view: SpanView,
+    load: suspend (Instant, Instant, Duration) -> List<HeartPoint>,
+): FineReadings {
+    val n = day.minutes
+    val readings = remember(day) { FineReadings() }
+    val wanted by remember(day) {
+        derivedStateOf {
+            if (view.width * n > fine.within) {
+                null
+            } else {
+                val a = (view.left * n / fine.chunk).toInt()
+                val b = ((view.right * n - 0.01f) / fine.chunk).toInt()
+                (a - 1).coerceAtLeast(0)..(b + 1).coerceAtMost((n - 1) / fine.chunk)
+            }
+        }
+    }
+    LaunchedEffect(wanted) {
+        val range = wanted ?: return@LaunchedEffect
+        delay(250)
+        val missing = range.filter { it !in readings.byStretch }
+        if (missing.isEmpty()) return@LaunchedEffect
+        val from = day.start.plus(Duration.ofMinutes(missing.first() * fine.chunk.toLong()))
+        val to = minOf(day.start.plus(Duration.ofMinutes((missing.last() + 1) * fine.chunk.toLong())), day.end, Instant.now())
+        if (!to.isAfter(from)) return@LaunchedEffect
+        val points = try {
+            load(from, to, Duration.ofSeconds(fine.seconds.toLong()))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            readings.failed = true
+            return@LaunchedEffect
+        }
+        readings.failed = false
+        val byStretch = points.groupBy { (Duration.between(day.start, it.at).seconds / 60 / fine.chunk).toInt() }
+        for (c in missing.first()..missing.last()) readings.byStretch[c] = byStretch[c].orEmpty()
+    }
+    return readings
 }
 
 /**
  * A day's heart rate as Google's heart rate page shows it, midnight to midnight, opened up: the
  * day's range and its high, each zone's line, grey bars from each stretch's lowest to its highest
  * and the minute-by-minute line through them, coloured by zone. Zoom in (pinch, double-tap, or −
- * and +) and it closes in, down to a couple of minutes across, read five seconds at a time from 30
- * minutes in; the scale closes in with it. Drag along it to read the heart rate under your finger.
+ * and +) and it closes in, down to half a minute across: read five seconds at a time from 30
+ * minutes across, and a second at a time (every reading, a dot each) from five; the scale closes
+ * in with it. Drag along it to read the heart rate under your finger, to the second close in.
  * The whole day sits below with the part in view framed. ‹ and › go a day back and forward.
  */
 @Composable
 fun HeartExplorer(
     date: LocalDate,
     loadDay: suspend (LocalDate) -> HeartDay?,
-    loadDetail: suspend (Instant, Instant) -> List<HeartPoint>,
+    /** Heart rate from one time to another in windows of the given size (five seconds, or one). */
+    loadDetail: suspend (Instant, Instant, Duration) -> List<HeartPoint>,
     onBack: () -> Unit,
     onSetUp: () -> Unit,
     bottomPadding: Dp,
@@ -316,55 +415,28 @@ fun HeartExplorer(
 @Composable
 private fun HeartChartPanel(
     day: HeartDay,
-    loadDetail: suspend (Instant, Instant) -> List<HeartPoint>,
+    loadDetail: suspend (Instant, Instant, Duration) -> List<HeartPoint>,
     initialView: ClosedFloatingPointRange<Float>?,
     initialSecond: Int?,
     modifier: Modifier,
 ) {
     val n = day.minutes
     val zones = day.zones
-    // As close as two minutes across.
-    val view = remember(day) { SpanView(initialView ?: 0f..1f, (2f / n).coerceAtMost(1f)) }
+    // As close as half a minute across.
+    val view = remember(day) { SpanView(initialView ?: 0f..1f, (CLOSEST_SECONDS / 60f / n).coerceAtMost(1f)) }
     val selection = rememberChartSelection(initialSecond)
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val zone = ZoneId.systemDefault()
     val colors = Palette
-    val useDetail = view.width * n <= DETAIL_WITHIN
 
-    // Five seconds at a time, by 15-minute stretch: read once you're zoomed in close, a moment
-    // after the view settles, the stretches in view and one either side.
-    val detail = remember(day) { mutableStateMapOf<Int, List<HeartPoint>>() }
-    val wanted by remember(day) {
-        derivedStateOf {
-            if (view.width * n > DETAIL_WITHIN) {
-                null
-            } else {
-                val a = (view.left * n / CHUNK).toInt()
-                val b = ((view.right * n - 0.01f) / CHUNK).toInt()
-                (a - 1).coerceAtLeast(0)..(b + 1).coerceAtMost((n - 1) / CHUNK)
-            }
-        }
+    // Closer than a minute at a time, read once zoomed in close enough for each.
+    val fine = Fine.entries.associateWith { key(it) { rememberFineReadings(day, it, view, loadDetail) } }
+    val using = Fine.entries.filter { view.width * n <= it.within }
+    val readings = remember(day, using, fine.values.map { it.byStretch.size }) {
+        heartReadings(day, fine.mapValues { it.value.byStretch }, using)
     }
-    LaunchedEffect(wanted) {
-        val range = wanted ?: return@LaunchedEffect
-        delay(250)
-        val missing = range.filter { it !in detail }
-        if (missing.isEmpty()) return@LaunchedEffect
-        val from = day.start.plus(Duration.ofMinutes(missing.first() * CHUNK.toLong()))
-        val to = minOf(day.start.plus(Duration.ofMinutes((missing.last() + 1) * CHUNK.toLong())), day.end, Instant.now())
-        if (!to.isAfter(from)) return@LaunchedEffect
-        val points = try {
-            loadDetail(from, to)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return@LaunchedEffect
-        }
-        val byStretch = points.groupBy { (Duration.between(day.start, it.at).seconds / 60 / CHUNK).toInt() }
-        for (c in missing.first()..missing.last()) detail[c] = byStretch[c].orEmpty()
-    }
-    val full = remember(day, detail.size, useDetail) { heartLine(day, detail, useDetail) }
+    val full = remember(readings) { heartLine(day, readings) }
     // With more minutes in view than fit a point every 1.5dp, the line is averaged to fit, as
     // Google draws a whole day; the grey bars still show each stretch's lowest and highest.
     // The chart's width: the screen less the page's and the panel's margins and the scale.
@@ -372,11 +444,21 @@ private fun HeartChartPanel(
     val perPoint = view.width * n * 60f / (chartWidth / 1.5.dp)
     val lineSeconds = if (perPoint <= 90f) null else LINE_SECONDS.lastOrNull { it <= perPoint } ?: LINE_SECONDS.first()
     val line = remember(full, lineSeconds) { lineSeconds?.let { full.averaged(it) } ?: full }
-    val inView = useDetail && (view.left * n / CHUNK).toInt().let { detail[it]?.isNotEmpty() == true }
+    // The finest readings in the middle of the view, and whether finer ones are still being read.
+    val middle = (view.left + view.right) / 2f * n
+    fun has(f: Fine) = fine.getValue(f).byStretch[(middle / f.chunk).toInt()]?.isNotEmpty() == true
+    val shownFine = using.lastOrNull { has(it) }
+    val readingCloser = using.lastOrNull()?.let { f ->
+        f != shownFine && (middle / f.chunk).toInt() !in fine.getValue(f).byStretch && !fine.getValue(f).failed
+    } == true
+    // Down to the second: times to the second, and a dot for each reading once they're apart.
+    val toTheSecond = using.isNotEmpty()
 
     val from = day.start.plusMillis((view.left * n * 60_000L).toLong())
     val to = day.start.plusMillis((view.right * n * 60_000L).toLong())
-    val range = heartRange(day.points, from, to)
+    val range = readings
+        .mapNotNull { heartRange(it.points, from, to, Duration.ofSeconds(it.window.toLong())) }
+        .reduceOrNull { a, b -> minOf(a.first, b.first) to maxOf(a.second, b.second) }
     val dayRange = day.range ?: (60 to 100)
 
     // The whole day on Google's scale, from 30 to above the peak zone; zoomed in, the scale closes
@@ -397,16 +479,20 @@ private fun HeartChartPanel(
     val yLo by animateFloatAsState(fullLo + (fitLo - fullLo) * closeIn, tween(320), label = "yLo")
     val yHi by animateFloatAsState(fullHi + (fitHi - fullHi) * closeIn, tween(320), label = "yHi")
 
-    val picked = selection.index?.let { s -> line.nearest(s.toFloat()).takeIf { it >= 0 && abs(line.at[it] - s) <= line.reach(it) } }
+    // The selection is the second under the finger; it's looked up at that second's middle.
+    val picked = selection.index?.let { s ->
+        val at = s + 0.5f
+        line.nearest(at).takeIf { it >= 0 && abs(line.at[it] - at) <= line.reach(it) }
+    }
 
     fun pick(across: Float) {
         val s = (view.left + across.coerceIn(0f, 0.9999f) * view.width) * n * 60f
         val i = line.nearest(s)
-        val before = selection.index?.let { line.nearest(it.toFloat()) }
+        val before = selection.index?.let { line.nearest(it + 0.5f) }
         val moved = when {
             before == null || i < 0 -> true
             // Close in, a tick each reading; further out, each quarter hour crossed or zone changed.
-            useDetail || view.width * n <= 60f -> before != i
+            toTheSecond || view.width * n <= 60f -> before != i
             else -> (line.at[before] / 900f).toInt() != (line.at[i] / 900f).toInt() || zones.of(line.bpm[before]) != zones.of(line.bpm[i])
         }
         if (moved) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
@@ -428,16 +514,25 @@ private fun HeartChartPanel(
                     Caption(stringResource(R.string.heart_bpm), Modifier.padding(bottom = 5.dp))
                 }
                 val s = selection.index
+                // To the nearest second, so a time a few milliseconds short of one isn't a second early.
+                fun time(at: Instant, seconds: Boolean): String {
+                    val t = at.plusMillis(500).truncatedTo(ChronoUnit.SECONDS)
+                    return if (seconds) SECOND_TIME.format(t.atZone(zone)) else Format.time(t)
+                }
                 when {
                     picked != null -> Row {
-                        val start = day.start.plusMillis(((line.at[picked] - if (line.fine[picked]) 2.5f else 30f) * 1000).toLong())
-                        Caption(if (line.fine[picked]) SECOND_TIME.format(start.atZone(zone)) else Format.time(start), color = colors.text)
+                        val start = day.start.plusMillis((line.began(picked) * 1000).toLong())
+                        Caption(time(start, line.window[picked] < 60), color = colors.text)
                         Caption("  ·  ", color = colors.faint)
                         val z = zones.of(line.bpm[picked])
                         Caption(zoneName(z), color = zoneColor(z))
                     }
-                    s != null -> Caption("${Format.time(day.start.plusSeconds(s.toLong()))}  ·  ${stringResource(R.string.heart_no_reading)}")
-                    view.zoomed -> Caption("${Format.time(from)} – ${Format.time(to)}")
+                    s != null -> Caption("${time(day.start.plusSeconds(s.toLong()), toTheSecond)}  ·  ${stringResource(R.string.heart_no_reading)}")
+                    // Under a couple of minutes across, to the second, or both ends could read the same.
+                    view.zoomed -> {
+                        val seconds = view.width * n < 2f
+                        Caption("${time(from, seconds)} – ${time(to, seconds)}")
+                    }
                     range != null -> Caption(stringResource(R.string.heart_high, range.second, zoneName(zones.of(range.second.toFloat())).lowercase()))
                 }
             }
@@ -448,20 +543,33 @@ private fun HeartChartPanel(
         Spacer(Modifier.height(16.dp))
         Eyebrow(
             when {
-                inView -> stringResource(R.string.heart_every_5s)
-                useDetail -> stringResource(R.string.heart_reading_closer)
+                readingCloser -> stringResource(R.string.heart_reading_closer)
+                // A reading every second, or (resting, when the band reads less often) each one it took.
+                shownFine == Fine.ONE -> {
+                    val l = view.left * n * 60f
+                    val r = view.right * n * 60f
+                    val count = line.from(r) - line.from(l)
+                    stringResource(if (count >= (r - l) * 0.6f) R.string.heart_every_second else R.string.heart_every_reading)
+                }
+                shownFine == Fine.FIVE -> stringResource(R.string.heart_every_5s)
                 lineSeconds != null -> stringResource(R.string.steps_every, lineSeconds / 60)
                 else -> stringResource(R.string.steps_minute_by_minute)
             },
-            color = if (inView) colors.accent else colors.muted,
+            color = if (shownFine != null) colors.accent else colors.muted,
         )
         Spacer(Modifier.height(12.dp))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val chartSpace = maxWidth - SCALE
-            val perMinute = chartSpace / (view.width * n)
-            val barMinutes = HEART_BAR_MINUTES.firstOrNull { perMinute * it >= 7.dp } ?: 60
-            val bars = remember(day, barMinutes) { heartBars(day.points, day.start, barMinutes) }
-            val marks = ticks(from, to, zone, maxCount = (chartSpace / 64.dp).toInt().coerceAtLeast(2))
+            val perSecond = chartSpace / (view.width * n * 60f)
+            val barSeconds = HEART_BAR_SECONDS.firstOrNull { perSecond * it >= 7.dp } ?: 3600
+            // Each reading in a bar at least as long as it.
+            val bars = remember(readings, barSeconds) {
+                readings.flatMap { heartBars(it.points, day.start, maxOf(barSeconds, it.window)) }
+            }
+            val marks = ticks(from, to, zone, maxCount = (chartSpace / 64.dp).toInt().coerceAtLeast(2), finest = 5)
+            // Close in, with the readings well apart, a dot for each: every second there is.
+            val inView = line.from(view.right * n * 60f) - line.from(view.left * n * 60f)
+            val dots = toTheSecond && chartSpace / inView.coerceAtLeast(1) >= 5.dp
             val measurer = rememberTextMeasurer()
             val scaleStyle = AppType.number(11f).copy(color = colors.faint)
             Column {
@@ -479,7 +587,7 @@ private fun HeartChartPanel(
                                 onPinch = { focus, factor, pan -> view.pinch(focus, factor, pan) },
                             ),
                     ) {
-                        drawHeart(day, line, bars, view, yLo, yHi, marks, picked)
+                        drawHeart(day, line, bars, view, yLo, yHi, marks, picked, dots)
                     }
                     // Each zone's heart rate beside its line, and the scale's bottom.
                     Canvas(Modifier.width(SCALE).height(240.dp)) {
@@ -549,7 +657,8 @@ private fun zoneLines(zones: HeartZones): List<Pair<Int, HeartZone>> = listOf(
 /**
  * The part of the day in [view]: faint lines at the [marks], each zone's dotted line (and the
  * scale's bottom at 30), the grey [bars] from lowest to highest, the line through each reading
- * coloured by its zone, and the [picked] reading lit.
+ * coloured by its zone, and the [picked] reading lit. With [dots], each reading closer than a
+ * minute has a dot, and the bars are left out: they'd only repeat the readings.
  */
 private fun DrawScope.drawHeart(
     day: HeartDay,
@@ -560,6 +669,7 @@ private fun DrawScope.drawHeart(
     yHi: Float,
     marks: List<Instant>,
     picked: Int?,
+    dots: Boolean,
 ) {
     val n = day.minutes
     val l = view.left * n * 60f
@@ -573,11 +683,11 @@ private fun DrawScope.drawHeart(
         val tx = x(Duration.between(day.start, t).seconds.toFloat())
         drawLine(faintLine, Offset(tx, top), Offset(tx, bottom), 1.dp.toPx())
     }
-    val dots = PathEffect.dashPathEffect(floatArrayOf(0.1f, 7.dp.toPx()))
+    val dotted = PathEffect.dashPathEffect(floatArrayOf(0.1f, 7.dp.toPx()))
     fun dotted(bpm: Float, color: Color) {
         val yy = y(bpm)
         if (yy < top - 1f || yy > bottom + 1f) return
-        drawLine(color, Offset(2.dp.toPx(), yy), Offset(size.width, yy), 2.6.dp.toPx(), cap = StrokeCap.Round, pathEffect = dots)
+        drawLine(color, Offset(2.dp.toPx(), yy), Offset(size.width, yy), 2.6.dp.toPx(), cap = StrokeCap.Round, pathEffect = dotted)
     }
     if (yLo <= 30.5f) dotted(30f, zoneColor(HeartZone.LIGHT).copy(alpha = 0.8f))
     for ((bpm, z) in zoneLines(day.zones)) dotted(bpm.toFloat(), zoneColor(z).copy(alpha = 0.85f))
@@ -585,10 +695,10 @@ private fun DrawScope.drawHeart(
     clipRect {
         // Each stretch's lowest to highest, grey, behind the line.
         val perSecond = size.width / (r - l)
-        for (b in bars) {
-            val mid = (b.from + b.minutes / 2f) * 60f
-            if (mid < l - b.minutes * 60f || mid > r + b.minutes * 60f) continue
-            val w = (b.minutes * 60f * perSecond * 0.5f).coerceIn(2.dp.toPx(), 9.dp.toPx())
+        if (!dots) for (b in bars) {
+            val mid = b.from + b.seconds / 2f
+            if (mid < l - b.seconds || mid > r + b.seconds) continue
+            val w = (b.seconds * perSecond * 0.5f).coerceIn(2.dp.toPx(), 9.dp.toPx())
             val yTop = y(b.max)
             val h = (y(b.min) - yTop).coerceAtLeast(2.dp.toPx())
             drawRoundRect(
@@ -617,7 +727,12 @@ private fun DrawScope.drawHeart(
             }
             val stroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
             for ((z, path) in paths) drawPath(path, zoneColor(z), style = stroke)
-            for (i in loose) drawCircle(zoneColor(day.zones.of(line.bpm[i])), 1.6.dp.toPx(), Offset(x(line.at[i]), y(line.bpm[i])))
+            // A dot for each reading closer than a minute, with [dots]; otherwise only those standing alone have one.
+            fun dot(i: Int) = dots && line.window[i] < 60
+            for (i in loose) if (!dot(i)) drawCircle(zoneColor(day.zones.of(line.bpm[i])), 1.6.dp.toPx(), Offset(x(line.at[i]), y(line.bpm[i])))
+            if (dots) {
+                for (i in first..last) if (dot(i)) drawCircle(zoneColor(day.zones.of(line.bpm[i])), 2.6.dp.toPx(), Offset(x(line.at[i]), y(line.bpm[i])))
+            }
         }
         // The reading under your finger.
         if (picked != null) {
@@ -637,19 +752,19 @@ private fun DrawScope.drawHeart(
 /** The whole day small, in ten-minute bars from lowest to highest, with the part in view framed: drag along it to move, tap to jump. */
 @Composable
 private fun WholeHeartDay(day: HeartDay, view: SpanView, scope: CoroutineScope, modifier: Modifier) {
-    val bars = remember(day) { heartBars(day.points, day.start, 10) }
+    val bars = remember(day) { heartBars(day.points, day.start, 10 * 60) }
     val colors = Palette
     Canvas(modifier.overviewGestures(view, scope)) {
         drawRoundRect(Color.White.copy(alpha = 0.04f), cornerRadius = CornerRadius(10.dp.toPx()))
         val (lo, hi) = day.range ?: return@Canvas
-        val n = day.minutes.toFloat()
+        val n = day.minutes * 60f
         val inset = 6.dp.toPx()
         val room = size.height - inset * 2
         val span = (hi - lo).coerceAtLeast(1).toFloat()
         fun y(bpm: Float) = size.height - inset - (bpm - lo) / span * room
         for (b in bars) {
             val left = b.from / n * size.width
-            val right = (b.from + b.minutes) / n * size.width
+            val right = (b.from + b.seconds) / n * size.width
             val yTop = y(b.max)
             val h = (y(b.min) - yTop).coerceAtLeast(1.5.dp.toPx())
             drawRoundRect(
@@ -670,7 +785,7 @@ private fun WholeHeartDay(day: HeartDay, view: SpanView, scope: CoroutineScope, 
 @Composable
 fun HeartCard(day: HeartDay, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val range = day.range ?: return
-    val bars = remember(day) { heartBars(day.points, day.start, 15) }
+    val bars = remember(day) { heartBars(day.points, day.start, 15 * 60) }
     Panel(modifier.fillMaxWidth(), onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Eyebrow(stringResource(R.string.heart_title), Modifier.weight(1f))
@@ -684,12 +799,12 @@ fun HeartCard(day: HeartDay, onOpen: () -> Unit, modifier: Modifier = Modifier) 
         }
         Spacer(Modifier.height(12.dp))
         Canvas(Modifier.fillMaxWidth().height(40.dp)) {
-            val n = day.minutes.toFloat()
+            val n = day.minutes * 60f
             val span = (range.second - range.first).coerceAtLeast(1).toFloat()
             fun y(bpm: Float) = size.height - (bpm - range.first) / span * size.height
             for (b in bars) {
-                val cx = (b.from + b.minutes / 2f) / n * size.width
-                val w = (b.minutes / n * size.width * 0.55f).coerceAtLeast(1.5.dp.toPx())
+                val cx = (b.from + b.seconds / 2f) / n * size.width
+                val w = (b.seconds / n * size.width * 0.55f).coerceAtLeast(1.5.dp.toPx())
                 val yTop = y(b.max)
                 val h = (y(b.min) - yTop).coerceAtLeast(2.dp.toPx())
                 drawRoundRect(zoneColor(day.zones.of(b.max)), Offset(cx - w / 2, yTop), Size(w, h), CornerRadius(w / 2))

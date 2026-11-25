@@ -4,10 +4,19 @@ Builds before 1.3 were briefly labelled 1.0 and 2.0–2.3. They were renumbered 
 internal `versionCode` kept increasing throughout (1–6), so each build installs over the previous
 one. From 1.4 on it's the version without the dot: 1.4 → 104, 1.5 → 105, 1.10 → 110. Small updates
 get a patch number from 1.12.1 on, with two digits each for minor and patch: 1.12.1 → 11201,
-1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901, 1.19.2 → 11902, 1.19.3 → 11903, 1.19.4 → 11904, 1.20 → 12000, 1.20.1 → 12001, 1.20.2 → 12002, 1.20.3 → 12003, 1.20.4 → 12004, 1.20.5 → 12005, 1.20.6 → 12006, 1.21 → 12100. Builds that
+1.13 → 11300, 1.13.1 → 11301, 1.13.2 → 11302, 1.14 → 11400, 1.14.1 → 11401, 1.15 → 11500, 1.15.1 → 11501, 1.16 → 11600, 1.17 → 11700, 1.18 → 11800, 1.19 → 11900, 1.19.1 → 11901, 1.19.2 → 11902, 1.19.3 → 11903, 1.19.4 → 11904, 1.20 → 12000, 1.20.1 → 12001, 1.20.2 → 12002, 1.20.3 → 12003, 1.20.4 → 12004, 1.20.5 → 12005, 1.20.6 → 12006, 1.21 → 12100, 1.21.1 → 12101. Builds that
 were sent but never installed are folded into the next number (1.8 includes two builds briefly
 labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not the 1.12 below;
 1.16 includes one briefly labelled 1.16.1; 1.19.3 one briefly labelled 1.19.4, not the 1.19.4 below).
+
+## 1.21.1
+- Heart rate zooms in all the way to every second: keep pinching (or tapping +) down to half a
+  minute across. From five minutes across it's read a second at a time, every reading Google has
+  (each second when you're active, every few seconds at rest), with a dot for each once they're
+  apart. The times under the chart go by the second ("3:14:20"), and dragging along it reads the
+  heart rate to the second: "3:14:23 PM · Light".
+- Zoomed in close, the bpm range at the top and the scale come from what's in view even when no
+  minute begins in it, and the grey bars are each a few seconds' lowest to highest.
 
 ## 1.21
 - **Heart rate**, as Google's heart rate page shows it, but you can zoom in. A card on Today (and
