@@ -343,9 +343,11 @@ class ScreenRenderTest {
         val zone = ZoneId.systemDefault()
         return day.points.filter { !it.at.isBefore(from) && it.at.isBefore(to) }.flatMap { p ->
             val every = if (window.seconds >= 5 || p.at.atZone(zone).hour < 14) 5 else 1
+            // A second's window holds one reading, so its lowest and highest are the reading.
+            val spread = if (window.seconds <= 1) 0f else 0.5f
             (0 until 60 / every).map { k ->
                 val v = p.avg + (random.nextGaussian() * if (every == 1) 0.9 else 2.2).toFloat() + 3f * kotlin.math.sin(k * every / 9.0).toFloat()
-                HeartPoint(p.at.plusSeconds(k.toLong() * every), v, v - 0.5f, v + 0.5f)
+                HeartPoint(p.at.plusSeconds(k.toLong() * every), v, v - spread, v + spread)
             }
         }
     }
@@ -375,7 +377,7 @@ class ScreenRenderTest {
         // Three minutes across: a second at a time.
         val closer = (15 * 60 + 13) / 1440f..(15 * 60 + 16) / 1440f
         render("heart_seconds", settings, Tab.TODAY, settle = Duration.ofSeconds(1), screen = explorer(view = closer))
-        // All the way in, half a minute across, a dot each second, one picked.
+        // All the way in, half a minute across, a reading each second, one picked.
         val closest = ((15 * 60 + 14) * 60 + 10) / 86_400f..((15 * 60 + 14) * 60 + 40) / 86_400f
         render("heart_closest", settings, Tab.TODAY, settle = Duration.ofSeconds(1), screen = explorer(view = closest, second = (15 * 60 + 14) * 60 + 23))
         // Resting, half a minute across: a reading every five seconds.

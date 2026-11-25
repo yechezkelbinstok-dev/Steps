@@ -100,7 +100,7 @@ private enum class Fine(val seconds: Int, val within: Float, val chunk: Int) {
     ONE(1, 5f, 5),
 }
 
-/** As close as this many seconds across: a second a few dots wide. */
+/** As close as this many seconds across: each second about 10dp wide. */
 private const val CLOSEST_SECONDS = 30f
 
 /** How many seconds each grey bar can stand for, finest first. */
@@ -312,7 +312,7 @@ private fun rememberFineReadings(
  * day's range and its high, each zone's line, grey bars from each stretch's lowest to its highest
  * and the minute-by-minute line through them, coloured by zone. Zoom in (pinch, double-tap, or −
  * and +) and it closes in, down to half a minute across: read five seconds at a time from 30
- * minutes across, and a second at a time (every reading, a dot each) from five; the scale closes
+ * minutes across, and a second at a time (every reading Google has) from five; the scale closes
  * in with it. Drag along it to read the heart rate under your finger, to the second close in.
  * The whole day sits below with the part in view framed. ‹ and › go a day back and forward.
  */
@@ -451,7 +451,7 @@ private fun HeartChartPanel(
     val readingCloser = using.lastOrNull()?.let { f ->
         f != shownFine && (middle / f.chunk).toInt() !in fine.getValue(f).byStretch && !fine.getValue(f).failed
     } == true
-    // Down to the second: times to the second, and a dot for each reading once they're apart.
+    // Read closer than a minute at a time, times are to the second.
     val toTheSecond = using.isNotEmpty()
 
     val from = day.start.plusMillis((view.left * n * 60_000L).toLong())
@@ -562,14 +562,15 @@ private fun HeartChartPanel(
             val chartSpace = maxWidth - SCALE
             val perSecond = chartSpace / (view.width * n * 60f)
             val barSeconds = HEART_BAR_SECONDS.firstOrNull { perSecond * it >= 7.dp } ?: 3600
-            // Each reading in a bar at least as long as it.
+            // Each reading in a bar at least as long as it. Readings closer than a minute only make a
+            // bar where they spread: a lone one (a bar's worth of seconds at rest, when the band
+            // reads every few) has no range to show, and its bar would sit beside it, not on it.
             val bars = remember(readings, barSeconds) {
-                readings.flatMap { heartBars(it.points, day.start, maxOf(barSeconds, it.window)) }
+                readings.flatMap { r ->
+                    heartBars(r.points, day.start, maxOf(barSeconds, r.window)).filter { r.window >= 60 || it.max > it.min }
+                }
             }
             val marks = ticks(from, to, zone, maxCount = (chartSpace / 64.dp).toInt().coerceAtLeast(2), finest = 5)
-            // Close in, with the readings well apart, a dot for each: every second there is.
-            val inView = line.from(view.right * n * 60f) - line.from(view.left * n * 60f)
-            val dots = toTheSecond && chartSpace / inView.coerceAtLeast(1) >= 5.dp
             val measurer = rememberTextMeasurer()
             val scaleStyle = AppType.number(11f).copy(color = colors.faint)
             Column {
@@ -587,7 +588,7 @@ private fun HeartChartPanel(
                                 onPinch = { focus, factor, pan -> view.pinch(focus, factor, pan) },
                             ),
                     ) {
-                        drawHeart(day, line, bars, view, yLo, yHi, marks, picked, dots)
+                        drawHeart(day, line, bars, view, yLo, yHi, marks, picked)
                     }
                     // Each zone's heart rate beside its line, and the scale's bottom.
                     Canvas(Modifier.width(SCALE).height(240.dp)) {
@@ -657,8 +658,7 @@ private fun zoneLines(zones: HeartZones): List<Pair<Int, HeartZone>> = listOf(
 /**
  * The part of the day in [view]: faint lines at the [marks], each zone's dotted line (and the
  * scale's bottom at 30), the grey [bars] from lowest to highest, the line through each reading
- * coloured by its zone, and the [picked] reading lit. With [dots], each reading closer than a
- * minute has a dot, and the bars are left out: they'd only repeat the readings.
+ * coloured by its zone, and the [picked] reading lit.
  */
 private fun DrawScope.drawHeart(
     day: HeartDay,
@@ -669,7 +669,6 @@ private fun DrawScope.drawHeart(
     yHi: Float,
     marks: List<Instant>,
     picked: Int?,
-    dots: Boolean,
 ) {
     val n = day.minutes
     val l = view.left * n * 60f
@@ -683,11 +682,11 @@ private fun DrawScope.drawHeart(
         val tx = x(Duration.between(day.start, t).seconds.toFloat())
         drawLine(faintLine, Offset(tx, top), Offset(tx, bottom), 1.dp.toPx())
     }
-    val dotted = PathEffect.dashPathEffect(floatArrayOf(0.1f, 7.dp.toPx()))
+    val dots = PathEffect.dashPathEffect(floatArrayOf(0.1f, 7.dp.toPx()))
     fun dotted(bpm: Float, color: Color) {
         val yy = y(bpm)
         if (yy < top - 1f || yy > bottom + 1f) return
-        drawLine(color, Offset(2.dp.toPx(), yy), Offset(size.width, yy), 2.6.dp.toPx(), cap = StrokeCap.Round, pathEffect = dotted)
+        drawLine(color, Offset(2.dp.toPx(), yy), Offset(size.width, yy), 2.6.dp.toPx(), cap = StrokeCap.Round, pathEffect = dots)
     }
     if (yLo <= 30.5f) dotted(30f, zoneColor(HeartZone.LIGHT).copy(alpha = 0.8f))
     for ((bpm, z) in zoneLines(day.zones)) dotted(bpm.toFloat(), zoneColor(z).copy(alpha = 0.85f))
@@ -695,7 +694,7 @@ private fun DrawScope.drawHeart(
     clipRect {
         // Each stretch's lowest to highest, grey, behind the line.
         val perSecond = size.width / (r - l)
-        if (!dots) for (b in bars) {
+        for (b in bars) {
             val mid = b.from + b.seconds / 2f
             if (mid < l - b.seconds || mid > r + b.seconds) continue
             val w = (b.seconds * perSecond * 0.5f).coerceIn(2.dp.toPx(), 9.dp.toPx())
@@ -727,12 +726,7 @@ private fun DrawScope.drawHeart(
             }
             val stroke = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
             for ((z, path) in paths) drawPath(path, zoneColor(z), style = stroke)
-            // A dot for each reading closer than a minute, with [dots]; otherwise only those standing alone have one.
-            fun dot(i: Int) = dots && line.window[i] < 60
-            for (i in loose) if (!dot(i)) drawCircle(zoneColor(day.zones.of(line.bpm[i])), 1.6.dp.toPx(), Offset(x(line.at[i]), y(line.bpm[i])))
-            if (dots) {
-                for (i in first..last) if (dot(i)) drawCircle(zoneColor(day.zones.of(line.bpm[i])), 2.6.dp.toPx(), Offset(x(line.at[i]), y(line.bpm[i])))
-            }
+            for (i in loose) drawCircle(zoneColor(day.zones.of(line.bpm[i])), 1.6.dp.toPx(), Offset(x(line.at[i]), y(line.bpm[i])))
         }
         // The reading under your finger.
         if (picked != null) {

@@ -131,9 +131,8 @@ across; the scale closes in with it, so the rises and falls show. The whole day 
 a few minutes at a time, as Google draws it, then minute by minute; at 30 minutes across or closer
 it's read five seconds at a time, and at five minutes or closer a second at a time, every reading
 Google has (it keeps heart rate to the second; the band reads every second when you're active, every
-few seconds at rest). Close in, each reading is a dot and the times along the chart go by the
-second. Drag a finger along it to read the heart rate, time (to the second, close in) and zone
-under it.
+few seconds at rest). Close in, the times along the chart go by the second. Drag a finger along
+it to read the heart rate, time (to the second, close in) and zone under it.
 
 The zones are Google's, from heart rate reserve (maximum less resting heart rate): moderate from
 40% of it, vigorous from 60%, peak from 85%, light below. Maximum is 200 (Google's lines for you,

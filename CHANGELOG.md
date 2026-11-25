@@ -12,9 +12,9 @@ labelled 1.8 and 1.9; 1.11 includes four, two of them briefly labelled 1.12, not
 ## 1.21.1
 - Heart rate zooms in all the way to every second: keep pinching (or tapping +) down to half a
   minute across. From five minutes across it's read a second at a time, every reading Google has
-  (each second when you're active, every few seconds at rest), with a dot for each once they're
-  apart. The times under the chart go by the second ("3:14:20"), and dragging along it reads the
-  heart rate to the second: "3:14:23 PM · Light".
+  (each second when you're active, every few seconds at rest), the same line as further out. The
+  times under the chart go by the second ("3:14:20"), and dragging along it reads the heart rate
+  to the second: "3:14:23 PM · Light".
 - Zoomed in close, the bpm range at the top and the scale come from what's in view even when no
   minute begins in it, and the grey bars are each a few seconds' lowest to highest.
 
